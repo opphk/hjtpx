@@ -13,18 +13,26 @@ import (
 )
 
 type LianLianKanTile struct {
-	Type  int `json:"type"`
-	X     int `json:"x"`
-	Y     int `json:"y"`
-	Index int `json:"index"`
+	Type      int     `json:"type"`
+	X         int     `json:"x"`
+	Y         int     `json:"y"`
+	Index     int     `json:"index"`
+	Removed   bool    `json:"removed"`
+	Highlight bool    `json:"highlight"`
+	Weight    float64 `json:"weight"`
 }
 
 type LianLianKanBoard struct {
-	Tiles     [][]LianLianKanTile `json:"tiles"`
-	Width     int                 `json:"width"`
-	Height    int                 `json:"height"`
-	PairCount int                 `json:"pair_count"`
-	Shuffled  bool                `json:"shuffled"`
+	Tiles        [][]LianLianKanTile `json:"tiles"`
+	Width        int                 `json:"width"`
+	Height       int                 `json:"height"`
+	PairCount    int                 `json:"pair_count"`
+	Shuffled     bool                `json:"shuffled"`
+	Difficulty   string              `json:"difficulty"`
+	MaxPathLen   int                 `json:"max_path_len"`
+	TimeLimit    int                 `json:"time_limit"`
+	UniqueTypes  int                 `json:"unique_types"`
+	GridPattern  string              `json:"grid_pattern"`
 }
 
 type CreateLianLianKanRequest struct {
@@ -53,7 +61,12 @@ var tileIcons = []string{
 	"🍎", "🍊", "🍋", "🍇", "🍓", "🍒", "🍑", "🥝",
 	"🍌", "🍉", "🥭", "🍐", "🍍", "🥥", "🍈", "🍏",
 	"🍆", "🥑", "🥦", "🌽", "🥕", "🍠", "🥔", "🌶️",
+	"🌸", "🌺", "🌻", "🌹", "🌷", "💐", "🌼", "🌙",
+	"⭐", "🔥", "💧", "⚡", "🌈", "❄️", "☀️", "⭐",
+	"🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼",
 }
+
+var gridPatterns = []string{"square", "rectangle", "staggered", "diamond"}
 
 func NewLianLianKanGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *LianLianKanGeneratorService {
 	return &LianLianKanGeneratorService{
@@ -146,14 +159,12 @@ func generateLianLianKanBoard(width, height, tileTypes int) (*LianLianKanBoard, 
 	tiles := make([]LianLianKanTile, totalTiles)
 	for i := 0; i < pairCount; i++ {
 		tileType := i % tileTypes
-		tiles[i*2] = LianLianKanTile{Type: tileType, Index: i * 2}
-		tiles[i*2+1] = LianLianKanTile{Type: tileType, Index: i*2 + 1}
+		weight := 0.8 + rand.Float64()*0.4
+		tiles[i*2] = LianLianKanTile{Type: tileType, Index: i * 2, Weight: weight}
+		tiles[i*2+1] = LianLianKanTile{Type: tileType, Index: i*2 + 1, Weight: weight}
 	}
 
-	for i := range tiles {
-		j := rand.Intn(i + 1)
-		tiles[i], tiles[j] = tiles[j], tiles[i]
-	}
+	tiles = shuffleTiles(tiles)
 
 	board := make([][]LianLianKanTile, height)
 	for y := 0; y < height; y++ {
@@ -166,13 +177,96 @@ func generateLianLianKanBoard(width, height, tileTypes int) (*LianLianKanBoard, 
 		}
 	}
 
+	difficulty := determineDifficulty(width, height, tileTypes)
+	maxPathLen := getMaxPathLength(difficulty)
+	timeLimit := getTimeLimit(difficulty)
+
 	return &LianLianKanBoard{
-		Tiles:     board,
-		Width:     width,
-		Height:    height,
-		PairCount: pairCount,
-		Shuffled:  true,
+		Tiles:        board,
+		Width:        width,
+		Height:       height,
+		PairCount:    pairCount,
+		Shuffled:     true,
+		Difficulty:   difficulty,
+		MaxPathLen:   maxPathLen,
+		TimeLimit:    timeLimit,
+		UniqueTypes:  tileTypes,
+		GridPattern:  "square",
 	}, nil
+}
+
+func shuffleTiles(tiles []LianLianKanTile) []LianLianKanTile {
+	for i := len(tiles) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		tiles[i], tiles[j] = tiles[j], tiles[i]
+	}
+	return tiles
+}
+
+func determineDifficulty(width, height, tileTypes int) string {
+	totalTiles := width * height
+	complexity := float64(totalTiles) * float64(tileTypes) / 10.0
+
+	switch {
+	case complexity < 10:
+		return "easy"
+	case complexity < 25:
+		return "medium"
+	case complexity < 40:
+		return "hard"
+	default:
+		return "expert"
+	}
+}
+
+func getMaxPathLength(difficulty string) int {
+	switch difficulty {
+	case "easy":
+		return 2
+	case "medium":
+		return 3
+	case "hard":
+		return 4
+	case "expert":
+		return 5
+	default:
+		return 3
+	}
+}
+
+func getTimeLimit(difficulty string) int {
+	switch difficulty {
+	case "easy":
+		return 120
+	case "medium":
+		return 90
+	case "hard":
+		return 60
+	case "expert":
+		return 45
+	default:
+		return 90
+	}
+}
+
+func (s *LianLianKanGeneratorService) GenerateBoardWithDifficulty(ctx context.Context, width, height int, difficulty string) (*LianLianKanBoard, error) {
+	tileTypes := s.getTileTypesByDifficulty(difficulty)
+	return generateLianLianKanBoard(width, height, tileTypes)
+}
+
+func (s *LianLianKanGeneratorService) getTileTypesByDifficulty(difficulty string) int {
+	switch difficulty {
+	case "easy":
+		return 4
+	case "medium":
+		return 8
+	case "hard":
+		return 12
+	case "expert":
+		return 16
+	default:
+		return 8
+	}
 }
 
 func (s *LianLianKanGeneratorService) GetSession(ctx context.Context, sessionID string) (*models.CaptchaSession, error) {

@@ -115,10 +115,41 @@
             border-color: var(--captcha-danger);
         }
 
+        .tile.blocked {
+            animation: pulse-blocked 0.5s ease;
+            border-color: #ff9800;
+        }
+
+        .tile.hint {
+            animation: pulse-hint 1s ease-in-out infinite;
+            border-color: var(--captcha-success);
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
             25% { transform: translateX(-5px); }
             75% { transform: translateX(5px); }
+        }
+
+        @keyframes pulse-blocked {
+            0%, 100% { box-shadow: none; }
+            50% { box-shadow: 0 0 15px rgba(255, 152, 0, 0.6); }
+        }
+
+        @keyframes pulse-hint {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        #timer.warning {
+            color: var(--captcha-danger);
+            animation: pulse-warning 0.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-warning {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .controls {
@@ -267,6 +298,9 @@
                     <button class="btn btn-secondary" id="refresh-btn">
                         <i class="fas fa-redo me-2"></i>刷新
                     </button>
+                    <button class="btn btn-secondary" id="hint-btn">
+                        <i class="fas fa-lightbulb me-2"></i>显示提示 (H)
+                    </button>
                     <button class="btn btn-primary" id="submit-btn">
                         <i class="fas fa-check me-2"></i>提交验证
                     </button>
@@ -293,6 +327,10 @@
                 this.matchedPairs = [];
                 this.timerInterval = null;
                 this.seconds = 0;
+                this.maxPathLen = 3;
+                this.timeLimit = 90;
+                this.hintMode = false;
+                this.suggestedPair = null;
                 this.init();
             }
 
@@ -304,12 +342,25 @@
             bindEvents() {
                 document.getElementById('refresh-btn').addEventListener('click', () => this.refresh());
                 document.getElementById('submit-btn').addEventListener('click', () => this.submit());
+                
+                const hintBtn = document.getElementById('hint-btn');
+                if (hintBtn) {
+                    hintBtn.addEventListener('click', () => this.toggleHintMode());
+                }
+                
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'h' || e.key === 'H') {
+                        this.toggleHintMode();
+                    }
+                });
             }
 
             async refresh() {
                 this.showLoading(true);
                 this.hideResult();
                 this.resetTimer();
+                this.hintMode = false;
+                this.suggestedPair = null;
 
                 try {
                     const response = await fetch('/api/v1/captcha/lianliankan/create', {
@@ -329,6 +380,14 @@
                         this.sessionId = result.data.session_id;
                         this.boardData = result.data.board;
                         this.tileIcons = result.data.tile_icons;
+                        
+                        if (this.boardData.max_path_len) {
+                            this.maxPathLen = this.boardData.max_path_len;
+                        }
+                        if (this.boardData.time_limit) {
+                            this.timeLimit = this.boardData.time_limit;
+                        }
+                        
                         this.renderBoard();
                         this.startTimer();
                     } else {
@@ -377,19 +436,87 @@
                 if (this.selectedTile && this.selectedTile.index === tile.index) {
                     tileEl.classList.remove('selected');
                     this.selectedTile = null;
+                    this.clearHint();
                     return;
                 }
 
                 if (this.selectedTile) {
-                    if (this.selectedTile.type === tile.type) {
+                    const hasPath = this.hasValidPath(this.selectedTile.x, this.selectedTile.y, tile.x, tile.y);
+                    
+                    if (this.selectedTile.type === tile.type && hasPath) {
                         this.matchTiles(this.selectedTile, tile);
+                    } else if (this.selectedTile.type === tile.type && !hasPath) {
+                        this.blockedMatch(this.selectedTile, tile);
                     } else {
                         this.wrongMatch(this.selectedTile, tile);
                     }
                 } else {
                     tileEl.classList.add('selected');
                     this.selectedTile = tile;
+                    this.updateHint();
                 }
+            }
+
+            hasValidPath(x1, y1, x2, y2) {
+                if (x1 === x2 && y1 === y2) {
+                    return false;
+                }
+
+                const visited = new Map();
+                return this.findPath(x1, y1, x2, y2, 0, visited, -1, -1);
+            }
+
+            findPath(x, y, targetX, targetY, pathLen, visited, prevX, prevY) {
+                const key = `${x},${y}`;
+                if (visited.has(key)) {
+                    return false;
+                }
+
+                if (pathLen > this.maxPathLen) {
+                    return false;
+                }
+
+                if (x === targetX && y === targetY) {
+                    return true;
+                }
+
+                visited.set(key, true);
+
+                const directions = [
+                    { dx: -1, dy: 0 },
+                    { dx: 1, dy: 0 },
+                    { dx: 0, dy: -1 },
+                    { dx: 0, dy: 1 }
+                ];
+
+                for (const dir of directions) {
+                    const newX = x + dir.dx;
+                    const newY = y + dir.dy;
+
+                    if (newX === prevX && newY === prevY) {
+                        continue;
+                    }
+
+                    if (newX >= -1 && newX <= this.boardData.width && newY >= -1 && newY <= this.boardData.height) {
+                        let isValid = false;
+
+                        if (newX === -1 || newX === this.boardData.width || newY === -1 || newY === this.boardData.height) {
+                            isValid = true;
+                        } else if (newX >= 0 && newX < this.boardData.width && newY >= 0 && newY < this.boardData.height) {
+                            const tileIndex = newY * this.boardData.width + newX;
+                            isValid = !this.matchedTiles.has(tileIndex);
+                        }
+
+                        if (isValid) {
+                            if (this.findPath(newX, newY, targetX, targetY, pathLen + 1, visited, x, y)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                visited.delete(key);
+                return false;
             }
 
             matchTiles(tile1, tile2) {
@@ -408,11 +535,28 @@
                 });
 
                 this.selectedTile = null;
+                this.clearHint();
                 document.getElementById('match-count').textContent = this.matchedPairs.length;
 
                 if (this.matchedPairs.length === this.boardData.pair_count) {
                     setTimeout(() => this.submit(), 500);
                 }
+            }
+
+            blockedMatch(tile1, tile2) {
+                const tile1El = document.querySelector(`.tile[data-index="${tile1.index}"]`);
+                const tile2El = document.querySelector(`.tile[data-index="${tile2.index}"]`);
+
+                tile1El.classList.remove('selected');
+                tile1El.classList.add('blocked');
+                tile2El.classList.add('blocked');
+
+                this.selectedTile = null;
+
+                setTimeout(() => {
+                    tile1El.classList.remove('blocked');
+                    tile2El.classList.remove('blocked');
+                }, 500);
             }
 
             wrongMatch(tile1, tile2) {
@@ -494,7 +638,84 @@
             updateTimerDisplay() {
                 const minutes = Math.floor(this.seconds / 60).toString().padStart(2, '0');
                 const seconds = (this.seconds % 60).toString().padStart(2, '0');
-                document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+                const timerEl = document.getElementById('timer');
+                timerEl.textContent = `${minutes}:${seconds}`;
+                
+                const remaining = this.timeLimit - this.seconds;
+                if (remaining <= 10) {
+                    timerEl.classList.add('warning');
+                } else {
+                    timerEl.classList.remove('warning');
+                }
+            }
+
+            toggleHintMode() {
+                this.hintMode = !this.hintMode;
+                
+                const hintBtn = document.getElementById('hint-btn');
+                if (hintBtn) {
+                    hintBtn.textContent = this.hintMode ? '隐藏提示 (H)' : '显示提示 (H)';
+                }
+                
+                if (this.hintMode) {
+                    this.updateHint();
+                } else {
+                    this.clearHint();
+                }
+            }
+
+            updateHint() {
+                if (!this.hintMode || !this.selectedTile) {
+                    return;
+                }
+
+                this.clearHint();
+                
+                const pair = this.findMatchablePair(this.selectedTile);
+                if (pair) {
+                    this.suggestedPair = pair;
+                    const tileEl = document.querySelector(`.tile[data-index="${pair.index}"]`);
+                    if (tileEl) {
+                        tileEl.classList.add('hint');
+                    }
+                }
+            }
+
+            findMatchablePair(tile) {
+                for (let y = 0; y < this.boardData.height; y++) {
+                    for (let x = 0; x < this.boardData.width; x++) {
+                        const otherTile = this.boardData.tiles[y][x];
+                        if (otherTile.index !== tile.index && 
+                            otherTile.type === tile.type && 
+                            !this.matchedTiles.has(otherTile.index) &&
+                            this.hasValidPath(tile.x, tile.y, x, y)) {
+                            return { ...otherTile, x, y };
+                        }
+                    }
+                }
+                return null;
+            }
+
+            clearHint() {
+                document.querySelectorAll('.tile.hint').forEach(el => {
+                    el.classList.remove('hint');
+                });
+                this.suggestedPair = null;
+            }
+
+            hasValidMoves() {
+                for (let y = 0; y < this.boardData.height; y++) {
+                    for (let x = 0; x < this.boardData.width; x++) {
+                        const tileIndex = y * this.boardData.width + x;
+                        if (!this.matchedTiles.has(tileIndex)) {
+                            const tile = this.boardData.tiles[y][x];
+                            if (this.findMatchablePair({ ...tile, x, y })) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
             }
 
             showResult(success, message) {

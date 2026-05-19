@@ -1,6 +1,7 @@
 package captcha
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -9,7 +10,6 @@ import (
 	"image/color"
 	"image/png"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/repository/cache"
@@ -104,6 +104,12 @@ func NewSemanticGeneratorService(sessionCache *cache.SessionCache, captchaRepo *
 	return &SemanticGeneratorService{
 		sessionCache: sessionCache,
 		captchaRepo:  captchaRepo,
+		questionBank: NewSemanticQuestionBank(),
+	}
+}
+
+func NewSemanticGeneratorServiceSimple() *SemanticGeneratorService {
+	return &SemanticGeneratorService{
 		questionBank: NewSemanticQuestionBank(),
 	}
 }
@@ -520,7 +526,6 @@ func (qb *SemanticQuestionBank) initializeQuestions() {
 
 func (qb *SemanticQuestionBank) convertTemplate(template SemanticQuestionTemplate) SemanticQuestion {
 	qt := template.En
-	lang := "en"
 
 	return SemanticQuestion{
 		ID:         template.ID,
@@ -1130,12 +1135,12 @@ func drawSimpleChar(img *image.RGBA, x, y int, ch string, col color.RGBA) {
 func encodeImageToBase64(img *image.RGBA) string {
 	imgBase64 := "data:image/png;base64,"
 	
-	pngData, err := png.Encode(nil, img)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
 		return imgBase64
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(pngData)
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
 	imgBase64 += encoded
 	
 	return imgBase64

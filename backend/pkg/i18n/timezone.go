@@ -804,10 +804,10 @@ func CompareTimezones(tz1, tz2 string) string {
 	}
 	
 	if minutes == 0 {
-		return fmt.Sprintf("%s%s hours", sign, hours)
+		return fmt.Sprintf("%s%d hours", sign, hours)
 	}
 	
-	return fmt.Sprintf("%s%s:%02d hours", sign, hours, minutes)
+	return fmt.Sprintf("%s%d:%02d hours", sign, hours, minutes)
 }
 
 func IsTimezoneAhead(tz1, tz2 string) bool {

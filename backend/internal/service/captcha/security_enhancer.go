@@ -31,10 +31,17 @@ type EnhancedTrajectoryAnalysis struct {
 }
 
 type TrajectoryPoint struct {
-	X         float64
-	Y         float64
+	X            float64
+	Y            float64
+	Timestamp    int64
+	Speed        float64
+	Acceleration float64
+}
+
+type SliderPoint struct {
+	X         int
+	Y         int
 	Timestamp int64
-	Speed     float64
 }
 
 type SpeedProfile struct {
@@ -140,6 +147,7 @@ func (e *SliderSecurityEnhancer) calculateSpeedAndAcceleration(points []Trajecto
 		if i > 1 {
 			prevSpeed := points[i-1].Speed
 			acceleration := (speed - prevSpeed) / dt * 1000
+			points[i].Acceleration = acceleration
 		}
 	}
 	

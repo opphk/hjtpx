@@ -1,23 +1,29 @@
 package handler
 
 import (
+	"sync"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-var emojiGeneratorService *captcha.EmojiGeneratorService
-var emojiVerifierService *captcha.EmojiVerifierService
+var (
+	emojiGeneratorService *captcha.EmojiGeneratorService
+	emojiVerifierService  *captcha.EmojiVerifierService
+	emojiInitOnce         sync.Once
+)
 
-func InitEmojiCaptchaHandler(
-	gen *captcha.EmojiGeneratorService,
-	ver *captcha.EmojiVerifierService,
-) {
-	emojiGeneratorService = gen
-	emojiVerifierService = ver
+func initEmojiServices() {
+	emojiInitOnce.Do(func() {
+		emojiGeneratorService = captcha.NewEmojiGeneratorServiceSimple()
+		emojiVerifierService = captcha.NewEmojiVerifierServiceSimple()
+	})
 }
 
 func CreateEmojiCaptcha(c *gin.Context) {
+	initEmojiServices()
+	
 	createReq := &captcha.CreateEmojiCaptchaRequest{
 		ClientIP:    c.ClientIP(),
 		UserAgent:   c.GetHeader("User-Agent"),
@@ -34,6 +40,8 @@ func CreateEmojiCaptcha(c *gin.Context) {
 }
 
 func VerifyEmojiCaptcha(c *gin.Context) {
+	initEmojiServices()
+	
 	var req struct {
 		SessionID      string                  `json:"session_id" binding:"required"`
 		SelectedEmojis []string                `json:"selected_emojis" binding:"required"`

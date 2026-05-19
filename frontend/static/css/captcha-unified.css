@@ -1,0 +1,898 @@
+/**
+ * HJTPX 验证码统一样式
+ * 基于 Bootstrap 5 和 Font Awesome 6
+ */
+
+:root {
+    --captcha-primary: #667eea;
+    --captcha-primary-dark: #5a6fd6;
+    --captcha-success: #28a745;
+    --captcha-error: #dc3545;
+    --captcha-warning: #ffc107;
+    --captcha-bg: #ffffff;
+    --captcha-border: #e9ecef;
+    --captcha-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    --captcha-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
+    --captcha-radius: 8px;
+    --captcha-radius-lg: 12px;
+    --captcha-transition: all 0.3s ease;
+}
+
+/* 基础容器样式 */
+.captcha-container {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* 验证码卡片 */
+.captcha-card {
+    background: var(--captcha-bg);
+    border-radius: var(--captcha-radius-lg);
+    box-shadow: var(--captcha-shadow);
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid var(--captcha-border);
+    transition: var(--captcha-transition);
+}
+
+.captcha-card:hover {
+    box-shadow: var(--captcha-shadow-hover);
+}
+
+/* 头部样式 */
+.captcha-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.captcha-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+
+.captcha-title .target-word {
+    color: var(--captcha-primary);
+    font-weight: 600;
+}
+
+/* 刷新按钮 */
+.captcha-refresh-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: #f8f9fa;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--captcha-transition);
+}
+
+.captcha-refresh-btn:hover {
+    background: var(--captcha-primary);
+    color: #fff;
+}
+
+.captcha-refresh-btn:active {
+    transform: scale(0.95);
+}
+
+.captcha-refresh-btn i {
+    font-size: 14px;
+}
+
+/* 图片包装器 */
+.captcha-image-wrapper {
+    position: relative;
+    margin-bottom: 16px;
+    border-radius: var(--captcha-radius);
+    overflow: hidden;
+}
+
+.captcha-image {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* 反馈信息 */
+.captcha-feedback {
+    height: 24px;
+    line-height: 24px;
+    font-size: 14px;
+    margin-bottom: 12px;
+    padding-left: 8px;
+}
+
+.captcha-feedback.success {
+    color: var(--captcha-success);
+}
+
+.captcha-feedback.error {
+    color: var(--captcha-error);
+}
+
+/* 操作按钮 */
+.captcha-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.btn-reset,
+.btn-verify {
+    flex: 1;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--captcha-radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--captcha-transition);
+}
+
+.btn-reset {
+    background: #f8f9fa;
+    color: #666;
+}
+
+.btn-reset:hover {
+    background: #e9ecef;
+}
+
+.btn-verify {
+    background: var(--captcha-primary);
+    color: #fff;
+}
+
+.btn-verify:hover {
+    background: var(--captcha-primary-dark);
+}
+
+.btn-verify:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 骨架屏 */
+.captcha-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius);
+    display: none;
+}
+
+.captcha-skeleton.active {
+    display: block;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 点击涟漪动画 */
+@keyframes ripple {
+    to {
+        transform: translate(-50%, -50%) scale(3);
+        opacity: 0;
+    }
+}
+
+.click-ripple {
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* 成功粒子动画 */
+.success-particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* ==================== 滑块验证码样式 ==================== */
+
+.slider-captcha {
+    user-select: none;
+}
+
+.slider-image-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto 16px;
+    border-radius: var(--captcha-radius);
+    overflow: hidden;
+}
+
+.slider-canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: var(--captcha-radius);
+}
+
+.slider-puzzle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 50px;
+    height: 50px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.puzzle-shape {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid var(--captcha-primary);
+}
+
+.puzzle-shape.square {
+    border-radius: 4px;
+}
+
+.puzzle-shape.circle {
+    border-radius: 50%;
+}
+
+.puzzle-shape.triangle {
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+
+.puzzle-shape.diamond {
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.slider-container {
+    position: relative;
+    width: 100%;
+    height: 44px;
+    background: #f8f9fa;
+    border-radius: 22px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: var(--captcha-transition);
+}
+
+.slider-container:hover {
+    background: #e9ecef;
+}
+
+.slider-container:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.slider-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, var(--captcha-primary), var(--captcha-primary-dark));
+    border-radius: 22px;
+    transition: width 0.05s linear;
+}
+
+.slider-button {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 40px;
+    height: 40px;
+    background: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--captcha-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: var(--captcha-transition);
+    z-index: 10;
+}
+
+.slider-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+.slider-button.dragging {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.slider-button.success {
+    background: var(--captcha-success);
+    color: #fff;
+}
+
+.slider-button.error {
+    background: var(--captcha-error);
+    color: #fff;
+}
+
+.slider-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    color: #666;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.slider-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius);
+    display: none;
+}
+
+.slider-skeleton.active {
+    display: block;
+}
+
+/* ==================== 点选验证码样式 ==================== */
+
+.point-captcha {
+    user-select: none;
+}
+
+.point-captcha .captcha-image-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+}
+
+.point-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    border-radius: var(--captcha-radius);
+    border: 2px solid transparent;
+    transition: var(--captcha-transition);
+}
+
+.point-layer.success {
+    border-color: var(--captcha-success);
+}
+
+.point-layer:hover {
+    border-color: var(--captcha-primary);
+}
+
+.point-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius);
+    display: none;
+}
+
+.point-skeleton.active {
+    display: block;
+}
+
+/* ==================== 图形验证码样式 ==================== */
+
+.image-captcha {
+    user-select: none;
+}
+
+.captcha-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.image-captcha .captcha-image-wrapper {
+    width: 120px;
+    height: 40px;
+    margin: 0;
+}
+
+.captcha-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--captcha-radius);
+}
+
+.image-captcha .captcha-refresh-btn {
+    flex-shrink: 0;
+}
+
+.input-group {
+    margin-bottom: 16px;
+}
+
+.captcha-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--captcha-border);
+    border-radius: var(--captcha-radius);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 8px;
+    text-align: center;
+    transition: var(--captcha-transition);
+    box-sizing: border-box;
+}
+
+.captcha-input:focus {
+    outline: none;
+    border-color: var(--captcha-primary);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.captcha-input::placeholder {
+    letter-spacing: normal;
+    color: #999;
+}
+
+/* ==================== 旋转验证码样式 ==================== */
+
+.rotate-captcha {
+    user-select: none;
+}
+
+.rotate-image-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.rotate-container {
+    width: 200px;
+    height: 200px;
+    border-radius: var(--captcha-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--captcha-shadow);
+    position: relative;
+}
+
+.rotate-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.1s linear;
+}
+
+.rotation-indicator {
+    background: #f8f9fa;
+    padding: 12px 20px;
+    border-radius: 20px;
+    min-width: 80px;
+    text-align: center;
+}
+
+.rotation-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--captcha-primary);
+}
+
+.rotate-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.btn-rotate {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--captcha-primary);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--captcha-transition);
+}
+
+.btn-rotate:hover {
+    background: var(--captcha-primary-dark);
+    transform: scale(1.05);
+}
+
+.btn-rotate:active {
+    transform: scale(0.95);
+}
+
+.rotate-slider {
+    flex: 1;
+    max-width: 200px;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #e9ecef;
+    border-radius: 3px;
+    outline: none;
+}
+
+.rotate-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--captcha-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: var(--captcha-transition);
+}
+
+.rotate-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+}
+
+.rotate-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius-lg);
+    display: none;
+}
+
+.rotate-skeleton.active {
+    display: block;
+}
+
+/* ==================== 手势验证码样式 ==================== */
+
+.gesture-captcha {
+    user-select: none;
+}
+
+.gesture-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto 16px;
+}
+
+.gesture-canvas {
+    width: 100%;
+    height: 200px;
+    background: #f8f9fa;
+    border: 2px dashed var(--captcha-border);
+    border-radius: var(--captcha-radius);
+    cursor: crosshair;
+    transition: var(--captcha-transition);
+}
+
+.gesture-canvas:hover {
+    border-color: var(--captcha-primary);
+}
+
+.gesture-canvas:focus {
+    outline: none;
+    border-color: var(--captcha-primary);
+}
+
+.gesture-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.gesture-hint span {
+    font-size: 14px;
+    color: #999;
+}
+
+.gesture-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius);
+    display: none;
+}
+
+.gesture-skeleton.active {
+    display: block;
+}
+
+/* ==================== 拼图验证码样式 ==================== */
+
+.puzzle-captcha {
+    user-select: none;
+}
+
+.puzzle-image-wrapper {
+    margin-bottom: 16px;
+}
+
+.puzzle-main {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    height: 160px;
+    border-radius: var(--captcha-radius);
+    overflow: hidden;
+}
+
+.puzzle-bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.puzzle-hole {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    width: 60px;
+    height: 80px;
+    border: 2px dashed rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
+}
+
+.puzzle-slider-container {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    margin: 12px auto 0;
+    height: 40px;
+    background: #f8f9fa;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.puzzle-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, var(--captcha-primary), var(--captcha-primary-dark));
+    border-radius: 20px;
+    transition: width 0.05s linear;
+}
+
+.puzzle-piece {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 80px;
+    margin-top: -20px;
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.1s ease;
+}
+
+.puzzle-piece.dragging {
+    transform: translateY(-50%) scale(1.05);
+    z-index: 20;
+}
+
+.piece-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.puzzle-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--captcha-radius);
+    display: none;
+}
+
+.puzzle-skeleton.active {
+    display: block;
+}
+
+/* ==================== 响应式设计 ==================== */
+
+@media (max-width: 480px) {
+    .captcha-card {
+        padding: 16px;
+    }
+
+    .captcha-header {
+        margin-bottom: 12px;
+    }
+
+    .captcha-title {
+        font-size: 14px;
+    }
+
+    .slider-container {
+        height: 40px;
+    }
+
+    .slider-button {
+        width: 36px;
+        height: 36px;
+    }
+
+    .rotate-container {
+        width: 160px;
+        height: 160px;
+    }
+
+    .btn-rotate {
+        width: 36px;
+        height: 36px;
+    }
+
+    .rotate-slider {
+        max-width: 150px;
+    }
+
+    .puzzle-main {
+        height: 120px;
+    }
+
+    .puzzle-hole,
+    .puzzle-piece {
+        width: 50px;
+        height: 60px;
+    }
+
+    .puzzle-slider-container {
+        height: 34px;
+    }
+
+    .puzzle-piece {
+        margin-top: -13px;
+    }
+}
+
+/* ==================== 暗色模式支持 ==================== */
+
+[data-theme="dark"] {
+    --captcha-bg: #2d3748;
+    --captcha-border: #4a5568;
+    --captcha-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .captcha-card {
+    background: var(--captcha-bg);
+    border-color: var(--captcha-border);
+}
+
+[data-theme="dark"] .captcha-title {
+    color: #fff;
+}
+
+[data-theme="dark"] .captcha-refresh-btn {
+    background: #4a5568;
+    color: #ccc;
+}
+
+[data-theme="dark"] .captcha-refresh-btn:hover {
+    background: var(--captcha-primary);
+    color: #fff;
+}
+
+[data-theme="dark"] .slider-container,
+[data-theme="dark"] .puzzle-slider-container {
+    background: #4a5568;
+}
+
+[data-theme="dark"] .slider-text,
+[data-theme="dark"] .captcha-feedback {
+    color: #ccc;
+}
+
+[data-theme="dark"] .captcha-input {
+    background: #4a5568;
+    border-color: #4a5568;
+    color: #fff;
+}
+
+[data-theme="dark"] .captcha-input::placeholder {
+    color: #666;
+}
+
+[data-theme="dark"] .btn-reset {
+    background: #4a5568;
+    color: #ccc;
+}
+
+[data-theme="dark"] .btn-reset:hover {
+    background: #5a6678;
+}
+
+[data-theme="dark"] .gesture-canvas {
+    background: #4a5568;
+    border-color: #5a6678;
+}
+
+[data-theme="dark"] .gesture-hint span {
+    color: #666;
+}
+
+[data-theme="dark"] .rotation-indicator {
+    background: #4a5568;
+}
+
+/* ==================== 高对比度模式 ==================== */
+
+@media (prefers-contrast: high) {
+    :root {
+        --captcha-primary: #0000ff;
+        --captcha-success: #008000;
+        --captcha-error: #ff0000;
+        --captcha-border: #000;
+    }
+
+    .captcha-card {
+        border-width: 2px;
+    }
+
+    .captcha-refresh-btn {
+        border: 2px solid currentColor;
+    }
+
+    .slider-button,
+    .btn-verify,
+    .btn-rotate {
+        border: 2px solid currentColor;
+    }
+}

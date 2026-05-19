@@ -67,6 +67,10 @@ func NewEmojiGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.
 	}
 }
 
+func NewEmojiGeneratorServiceSimple() *EmojiGeneratorService {
+	return &EmojiGeneratorService{}
+}
+
 func (s *EmojiGeneratorService) Create(ctx context.Context, req *CreateEmojiCaptchaRequest) (*CreateEmojiCaptchaResponse, error) {
 	sessionID := generateEmojiSessionID()
 	expiresAt := time.Now().Add(5 * time.Minute)

@@ -575,7 +575,7 @@ function showDetail(id) {
     });
 }
 
-function exportLogs() {
+function exportLogs(format) {
     const params = [];
     const status = $('#filterStatus').val();
     if (status) params.push('status=' + encodeURIComponent(status));
@@ -589,8 +589,18 @@ function exportLogs() {
     const endDate = $('#filterEndDate').val();
     if (endDate) params.push('end_date=' + encodeURIComponent(endDate));
 
+    const captchaType = $('#filterCaptchaType').val();
+    if (captchaType) params.push('captcha_type=' + encodeURIComponent(captchaType));
+
+    const appId = $('#filterAppId').val();
+    if (appId) params.push('application_id=' + encodeURIComponent(appId));
+
+    if (format) {
+        params.push('format=' + encodeURIComponent(format));
+    }
+
     const queryString = params.length > 0 ? '?' + params.join('&') : '';
-    window.location.href = '/admin/api/logs/export' + queryString;
+    window.location.href = '/api/v1/admin/export/logs' + queryString;
 }
 
 // 高级搜索辅助函数

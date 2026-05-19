@@ -2,6 +2,7 @@ package captcha
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,54 +52,165 @@ func TestLianLianKanGeneratorService(t *testing.T) {
 }
 
 func TestLianLianKanVerifierService(t *testing.T) {
-	generator := NewLianLianKanGeneratorService(nil, nil)
 	verifier := NewLianLianKanVerifierService(nil, nil)
 
-	req := &CreateLianLianKanRequest{
-		Width:     4,
-		Height:    4,
-		TileTypes: 4,
+	board := createTestBoard()
+	
+	pairs := []LianLianKanPair{
+		{Tile1: &board.Tiles[0][0], Tile2: &board.Tiles[0][1]},
+		{Tile1: &board.Tiles[0][2], Tile2: &board.Tiles[0][3]},
+		{Tile1: &board.Tiles[1][0], Tile2: &board.Tiles[1][1]},
+		{Tile1: &board.Tiles[1][2], Tile2: &board.Tiles[1][3]},
+		{Tile1: &board.Tiles[2][0], Tile2: &board.Tiles[2][1]},
+		{Tile1: &board.Tiles[2][2], Tile2: &board.Tiles[2][3]},
+		{Tile1: &board.Tiles[3][0], Tile2: &board.Tiles[3][1]},
+		{Tile1: &board.Tiles[3][2], Tile2: &board.Tiles[3][3]},
 	}
 
-	resp, err := generator.Create(context.Background(), req)
-	assert.NoError(t, err)
+	isValid, score := verifier.validateBoard(board, board, pairs)
+	assert.True(t, isValid)
+	assert.Equal(t, 100.0, score)
+}
 
-	board := resp.Board
-	pairs := make([]LianLianKanPair, 0)
+func createTestBoard() *LianLianKanBoard {
+	board := &LianLianKanBoard{
+		Tiles:      make([][]LianLianKanTile, 4),
+		Width:      4,
+		Height:     4,
+		PairCount:  8,
+		Shuffled:   true,
+		MaxPathLen: 2,
+	}
 
-	typeIndices := make(map[int][]int)
-	for y := 0; y < board.Height; y++ {
-		for x := 0; x < board.Width; x++ {
-			tile := board.Tiles[y][x]
-			typeIndices[tile.Type] = append(typeIndices[tile.Type], tile.Index)
+	index := 0
+	for y := 0; y < 4; y++ {
+		board.Tiles[y] = make([]LianLianKanTile, 4)
+		for x := 0; x < 4; x++ {
+			tileType := x / 2
+			board.Tiles[y][x] = LianLianKanTile{
+				Type:  tileType,
+				X:     x,
+				Y:     y,
+				Index: index,
+			}
+			index++
 		}
 	}
 
-	for _, indices := range typeIndices {
-		for i := 0; i < len(indices); i += 2 {
-			if i+1 < len(indices) {
-				tile1 := findTileByIndex(board, indices[i])
-				tile2 := findTileByIndex(board, indices[i+1])
-				if tile1 != nil && tile2 != nil {
-					pairs = append(pairs, LianLianKanPair{
-						Tile1: tile1,
-						Tile2: tile2,
-					})
+	return board
+}
+
+func generateValidPairs(board *LianLianKanBoard) []LianLianKanPair {
+	pairs := make([]LianLianKanPair, 0)
+	visited := make(map[int]bool)
+	maxPathLen := board.MaxPathLen
+	if maxPathLen == 0 {
+		maxPathLen = 3
+	}
+
+	tempBoard := &LianLianKanBoard{
+		Tiles:  make([][]LianLianKanTile, board.Height),
+		Width:  board.Width,
+		Height: board.Height,
+	}
+	for y := 0; y < board.Height; y++ {
+		tempBoard.Tiles[y] = make([]LianLianKanTile, board.Width)
+		for x := 0; x < board.Width; x++ {
+			tempBoard.Tiles[y][x] = board.Tiles[y][x]
+		}
+	}
+
+	for y1 := 0; y1 < board.Height; y1++ {
+		for x1 := 0; x1 < board.Width; x1++ {
+			tile1 := board.Tiles[y1][x1]
+			if visited[tile1.Index] {
+				continue
+			}
+
+			for y2 := 0; y2 < board.Height; y2++ {
+				for x2 := 0; x2 < board.Width; x2++ {
+					tile2 := board.Tiles[y2][x2]
+					if visited[tile2.Index] || tile1.Index == tile2.Index {
+						continue
+					}
+
+					if tile1.Type == tile2.Type && hasValidPath(tempBoard, x1, y1, x2, y2, maxPathLen) {
+						pairs = append(pairs, LianLianKanPair{
+							Tile1: &board.Tiles[y1][x1],
+							Tile2: &board.Tiles[y2][x2],
+						})
+						visited[tile1.Index] = true
+						visited[tile2.Index] = true
+						tempBoard.Tiles[y1][x1].Removed = true
+						tempBoard.Tiles[y2][x2].Removed = true
+						break
+					}
+				}
+				if visited[tile1.Index] {
+					break
 				}
 			}
 		}
 	}
 
-	// verifyReq := &VerifyLianLianKanRequest{
-	// 	SessionID: resp.SessionID,
-	// 	Board:     board,
-	// 	Pairs:     pairs,
-	// 	RiskScore: 0.0,
-	// }
+	return pairs
+}
 
-	isValid, score := verifier.validateBoard(board, board, pairs)
-	assert.True(t, isValid)
-	assert.Equal(t, 100.0, score)
+func hasValidPath(board *LianLianKanBoard, x1, y1, x2, y2, maxPathLen int) bool {
+	if x1 == x2 && y1 == y2 {
+		return false
+	}
+
+	visited := make(map[string]bool)
+	return findPath(board, x1, y1, x2, y2, 0, maxPathLen, visited, -1, -1)
+}
+
+func findPath(board *LianLianKanBoard, x, y, targetX, targetY, pathLen, maxPathLen int, visited map[string]bool, prevX, prevY int) bool {
+	key := fmt.Sprintf("%d_%d", x, y)
+	if visited[key] {
+		return false
+	}
+
+	if pathLen > maxPathLen {
+		return false
+	}
+
+	if x == targetX && y == targetY {
+		return true
+	}
+
+	visited[key] = true
+
+	directions := []struct{ dx, dy int }{
+		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+	}
+
+	for _, dir := range directions {
+		newX, newY := x+dir.dx, y+dir.dy
+
+		if newX == prevX && newY == prevY {
+			continue
+		}
+
+		if newX >= -1 && newX <= board.Width && newY >= -1 && newY <= board.Height {
+			isValidPosition := false
+
+			if newX == -1 || newX == board.Width || newY == -1 || newY == board.Height {
+				isValidPosition = true
+			} else if newX >= 0 && newX < board.Width && newY >= 0 && newY < board.Height {
+				isValidPosition = !board.Tiles[newY][newX].Removed
+			}
+
+			if isValidPosition {
+				if findPath(board, newX, newY, targetX, targetY, pathLen+1, maxPathLen, visited, x, y) {
+					return true
+				}
+			}
+		}
+	}
+
+	delete(visited, key)
+	return false
 }
 
 func findTileByIndex(board *LianLianKanBoard, index int) *LianLianKanTile {

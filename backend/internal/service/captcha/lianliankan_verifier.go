@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/repository/cache"
@@ -153,8 +154,16 @@ func (v *LianLianKanVerifierService) validateBoard(userBoard, originalBoard *Lia
 
 	totalPairs := originalBoard.PairCount
 	matchedPairs := 0
+	validPairs := 0
 
 	visited := make(map[int]bool)
+
+	maxPathLen := originalBoard.MaxPathLen
+	if maxPathLen == 0 {
+		maxPathLen = 3
+	}
+
+	tempBoard := v.createTempBoard(userBoard)
 
 	for _, pair := range pairs {
 		if pair.Tile1 == nil || pair.Tile2 == nil {
@@ -168,16 +177,139 @@ func (v *LianLianKanVerifierService) validateBoard(userBoard, originalBoard *Lia
 			continue
 		}
 
-		if tile1.Type == tile2.Type && tile1.Index != tile2.Index {
-			visited[tile1.Index] = true
-			visited[tile2.Index] = true
-			matchedPairs++
+		if tile1.Index == tile2.Index {
+			continue
+		}
+
+		originalTile1 := v.getTileAt(originalBoard, tile1.X, tile1.Y)
+		originalTile2 := v.getTileAt(originalBoard, tile2.X, tile2.Y)
+
+		if originalTile1 == nil || originalTile2 == nil {
+			continue
+		}
+
+		isValidPair := originalTile1.Type == originalTile2.Type
+		
+		if isValidPair {
+			isValidPath := v.hasValidPath(tempBoard, tile1.X, tile1.Y, tile2.X, tile2.Y, maxPathLen)
+
+			if isValidPath {
+				visited[tile1.Index] = true
+				visited[tile2.Index] = true
+				matchedPairs++
+				validPairs++
+				
+				v.markTileRemoved(tempBoard, tile1.X, tile1.Y)
+				v.markTileRemoved(tempBoard, tile2.X, tile2.Y)
+			} else {
+				validPairs++
+			}
 		}
 	}
 
-	score := float64(matchedPairs) / float64(totalPairs) * 100
+	baseScore := float64(matchedPairs) / float64(totalPairs) * 100
+	pathPenalty := float64(validPairs-matchedPairs) * 5
+	finalScore := math.Max(0, baseScore-pathPenalty)
 
-	return matchedPairs == totalPairs, score
+	return matchedPairs == totalPairs, finalScore
+}
+
+func (v *LianLianKanVerifierService) createTempBoard(original *LianLianKanBoard) *LianLianKanBoard {
+	tiles := make([][]LianLianKanTile, original.Height)
+	for y := 0; y < original.Height; y++ {
+		tiles[y] = make([]LianLianKanTile, original.Width)
+		for x := 0; x < original.Width; x++ {
+			tiles[y][x] = original.Tiles[y][x]
+		}
+	}
+	return &LianLianKanBoard{
+		Tiles:    tiles,
+		Width:    original.Width,
+		Height:   original.Height,
+	}
+}
+
+func (v *LianLianKanVerifierService) markTileRemoved(board *LianLianKanBoard, x, y int) {
+	if x >= 0 && x < board.Width && y >= 0 && y < board.Height {
+		board.Tiles[y][x].Removed = true
+	}
+}
+
+func (v *LianLianKanVerifierService) getTileAt(board *LianLianKanBoard, x, y int) *LianLianKanTile {
+	if x < 0 || x >= board.Width || y < 0 || y >= board.Height {
+		return nil
+	}
+	return &board.Tiles[y][x]
+}
+
+func (v *LianLianKanVerifierService) hasValidPath(board *LianLianKanBoard, x1, y1, x2, y2 int, maxPathLen int) bool {
+	if x1 == x2 && y1 == y2 {
+		return false
+	}
+
+	visited := make(map[string]bool)
+	return v.findPath(board, x1, y1, x2, y2, 0, maxPathLen, visited, -1, -1)
+}
+
+func (v *LianLianKanVerifierService) findPath(board *LianLianKanBoard, x, y, targetX, targetY, pathLen, maxPathLen int, visited map[string]bool, prevX, prevY int) bool {
+	key := fmt.Sprintf("%d_%d", x, y)
+	if visited[key] {
+		return false
+	}
+
+	if pathLen > maxPathLen {
+		return false
+	}
+
+	if x == targetX && y == targetY {
+		return true
+	}
+
+	visited[key] = true
+
+	directions := []struct{ dx, dy int }{
+		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+	}
+
+	for _, dir := range directions {
+		newX, newY := x+dir.dx, y+dir.dy
+
+		if newX == prevX && newY == prevY {
+			continue
+		}
+
+		if newX >= -1 && newX <= board.Width && newY >= -1 && newY <= board.Height {
+			isValidPosition := false
+			
+			if newX == -1 || newX == board.Width || newY == -1 || newY == board.Height {
+				isValidPosition = true
+			} else if newX >= 0 && newX < board.Width && newY >= 0 && newY < board.Height {
+				isValidPosition = !board.Tiles[newY][newX].Removed
+			}
+
+			if isValidPosition {
+				if v.findPath(board, newX, newY, targetX, targetY, pathLen+1, maxPathLen, visited, x, y) {
+					return true
+				}
+			}
+		}
+	}
+
+	delete(visited, key)
+	return false
+}
+
+func (v *LianLianKanVerifierService) CalculatePathComplexity(x1, y1, x2, y2 int) int {
+	dx := absInt(x1 - x2)
+	dy := absInt(y1 - y2)
+	return dx + dy
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func (v *LianLianKanVerifierService) GetSessionStatus(ctx context.Context, sessionID string) (*models.CaptchaSession, error) {

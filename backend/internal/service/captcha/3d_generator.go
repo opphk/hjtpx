@@ -12,26 +12,55 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/models"
 )
 
+var pieceColors = []string{
+	"#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6",
+	"#1abc9c", "#e91e63", "#00bcd4", "#8bc34a", "#ff9800",
+	"#607d8b", "#ff5722", "#795548", "#673ab7", "#009688",
+}
+
+var pieceTypes = []string{
+	"cube", "cylinder", "sphere", "cone", "torus",
+	"octahedron", "tetrahedron", "dodecahedron", "icosahedron", "box",
+}
+
+var edgeTypes = []string{"smooth", "sharp", "rounded"}
+
 type ThreeDPuzzle struct {
-	Pieces     []ThreeDPiece `json:"pieces"`
-	GridSize   int           `json:"gridSize"`
-	Difficulty string        `json:"difficulty"`
-	TargetRotX float64       `json:"targetRotX"`
-	TargetRotY float64       `json:"targetRotY"`
-	TargetRotZ float64       `json:"targetRotZ"`
+	Pieces         []ThreeDPiece `json:"pieces"`
+	GridSize       int           `json:"gridSize"`
+	Difficulty     string        `json:"difficulty"`
+	TargetRotX     float64       `json:"targetRotX"`
+	TargetRotY     float64       `json:"targetRotY"`
+	TargetRotZ     float64       `json:"targetRotZ"`
+	LightIntensity float64       `json:"lightIntensity"`
+	AmbientColor   string        `json:"ambientColor"`
+	BackgroundColor string       `json:"backgroundColor"`
+	AntiAlias      bool          `json:"antiAlias"`
+	ShadowEnabled  bool          `json:"shadowEnabled"`
+	RenderQuality  string        `json:"renderQuality"`
 }
 
 type ThreeDPiece struct {
-	ID        int     `json:"id"`
-	Type      string  `json:"type"`
-	Color     string  `json:"color"`
-	PositionX float64 `json:"positionX"`
-	PositionY float64 `json:"positionY"`
-	PositionZ float64 `json:"positionZ"`
-	RotationX float64 `json:"rotationX"`
-	RotationY float64 `json:"rotationY"`
-	RotationZ float64 `json:"rotationZ"`
-	Scale     float64 `json:"scale"`
+	ID              int     `json:"id"`
+	Type            string  `json:"type"`
+	Color           string  `json:"color"`
+	PositionX       float64 `json:"positionX"`
+	PositionY       float64 `json:"positionY"`
+	PositionZ       float64 `json:"positionZ"`
+	RotationX       float64 `json:"rotationX"`
+	RotationY       float64 `json:"rotationY"`
+	RotationZ       float64 `json:"rotationZ"`
+	Scale           float64 `json:"scale"`
+	EdgeType        string  `json:"edgeType"`
+	Opacity         float64 `json:"opacity"`
+	Shininess       int     `json:"shininess"`
+	EmissiveColor   string  `json:"emissiveColor"`
+	Wireframe       bool    `json:"wireframe"`
+	OriginalRotX    float64 `json:"originalRotX"`
+	OriginalRotY    float64 `json:"originalRotY"`
+	OriginalRotZ    float64 `json:"originalRotZ"`
+	TargetRotation  bool    `json:"targetRotation"`
+	AnimationSpeed  float64 `json:"animationSpeed"`
 }
 
 type CreateThreeDRequest struct {
@@ -60,13 +89,8 @@ func NewThreeDGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db
 	}
 }
 
-var pieceColors = []string{
-	"#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6",
-	"#1abc9c", "#e91e63", "#00bcd4", "#8bc34a", "#ff9800",
-}
-
-var pieceTypes = []string{
-	"cube", "cylinder", "sphere", "cone", "torus",
+func NewThreeDGeneratorServiceSimple() *ThreeDGeneratorService {
+	return &ThreeDGeneratorService{}
 }
 
 func (s *ThreeDGeneratorService) Create(ctx context.Context, req *CreateThreeDRequest) (*CreateThreeDResponse, error) {
@@ -145,44 +169,131 @@ func (s *ThreeDGeneratorService) generatePuzzle(gridSize int, difficulty string)
 	pieces := make([]ThreeDPiece, 0, pieceCount)
 
 	for i := 0; i < pieceCount; i++ {
+		rotationX, rotationY, rotationZ := s.generateRotations(difficulty)
+		
 		piece := ThreeDPiece{
-			ID:        i,
-			Type:      pieceTypes[rand.Intn(len(pieceTypes))],
-			Color:     pieceColors[rand.Intn(len(pieceColors))],
-			PositionX: float64(i%gridSize) - float64(gridSize-1)/2,
-			PositionY: float64(i/gridSize) - float64(gridSize-1)/2,
-			PositionZ: 0,
-			Scale:     0.8,
-		}
-
-		switch difficulty {
-		case "easy":
-			piece.RotationX = rand.Float64() * 90
-			piece.RotationY = rand.Float64() * 90
-		case "medium":
-			piece.RotationX = rand.Float64() * 180
-			piece.RotationY = rand.Float64() * 180
-			piece.RotationZ = rand.Float64() * 90
-		case "hard":
-			piece.RotationX = rand.Float64() * 360
-			piece.RotationY = rand.Float64() * 360
-			piece.RotationZ = rand.Float64() * 180
-		case "expert":
-			piece.RotationX = rand.Float64() * 360
-			piece.RotationY = rand.Float64() * 360
-			piece.RotationZ = rand.Float64() * 360
+			ID:             i,
+			Type:           pieceTypes[rand.Intn(len(pieceTypes))],
+			Color:          pieceColors[rand.Intn(len(pieceColors))],
+			PositionX:      float64(i%gridSize) - float64(gridSize-1)/2,
+			PositionY:      float64(i/gridSize) - float64(gridSize-1)/2,
+			PositionZ:      s.getRandomZOffset(difficulty),
+			RotationX:      rotationX,
+			RotationY:      rotationY,
+			RotationZ:      rotationZ,
+			Scale:          s.getRandomScale(difficulty),
+			EdgeType:       edgeTypes[rand.Intn(len(edgeTypes))],
+			Opacity:        s.getRandomOpacity(),
+			Shininess:      rand.Intn(100) + 50,
+			EmissiveColor:  s.getEmissiveColor(),
+			Wireframe:      rand.Float64() > 0.9,
+			OriginalRotX:   rotationX,
+			OriginalRotY:   rotationY,
+			OriginalRotZ:   rotationZ,
+			TargetRotation: rand.Float64() > 0.5,
+			AnimationSpeed: s.getAnimationSpeed(difficulty),
 		}
 
 		pieces = append(pieces, piece)
 	}
 
+	renderQuality := s.getRenderQuality(difficulty)
+
 	return &ThreeDPuzzle{
-		Pieces:     pieces,
-		GridSize:   gridSize,
-		Difficulty: difficulty,
-		TargetRotX: targetRotX,
-		TargetRotY: targetRotY,
-		TargetRotZ: targetRotZ,
+		Pieces:         pieces,
+		GridSize:       gridSize,
+		Difficulty:     difficulty,
+		TargetRotX:     targetRotX,
+		TargetRotY:     targetRotY,
+		TargetRotZ:     targetRotZ,
+		LightIntensity: 0.8 + rand.Float64()*0.4,
+		AmbientColor:   "#444444",
+		BackgroundColor: "#f5f5f5",
+		AntiAlias:      renderQuality != "low",
+		ShadowEnabled:  renderQuality == "high",
+		RenderQuality:  renderQuality,
+	}
+}
+
+func (s *ThreeDGeneratorService) getRenderQuality(difficulty string) string {
+	switch difficulty {
+	case "easy":
+		return "high"
+	case "medium":
+		return "medium"
+	case "hard":
+		return "medium"
+	case "expert":
+		return "low"
+	default:
+		return "medium"
+	}
+}
+
+func (s *ThreeDGeneratorService) generateRotations(difficulty string) (float64, float64, float64) {
+	switch difficulty {
+	case "easy":
+		return rand.Float64() * 90, rand.Float64() * 90, 0
+	case "medium":
+		return rand.Float64() * 180, rand.Float64() * 180, rand.Float64() * 90
+	case "hard":
+		return rand.Float64() * 360, rand.Float64() * 360, rand.Float64() * 180
+	case "expert":
+		return rand.Float64() * 360, rand.Float64() * 360, rand.Float64() * 360
+	default:
+		return rand.Float64() * 180, rand.Float64() * 180, rand.Float64() * 90
+	}
+}
+
+func (s *ThreeDGeneratorService) getRandomZOffset(difficulty string) float64 {
+	maxOffset := 0.0
+	switch difficulty {
+	case "easy":
+		maxOffset = 0.2
+	case "medium":
+		maxOffset = 0.4
+	case "hard":
+		maxOffset = 0.6
+	case "expert":
+		maxOffset = 0.8
+	}
+	return (rand.Float64() - 0.5) * maxOffset * 2
+}
+
+func (s *ThreeDGeneratorService) getRandomScale(difficulty string) float64 {
+	minScale, maxScale := 0.7, 0.9
+	switch difficulty {
+	case "expert":
+		minScale, maxScale = 0.6, 1.0
+	case "hard":
+		minScale, maxScale = 0.65, 0.95
+	}
+	return minScale + rand.Float64()*(maxScale-minScale)
+}
+
+func (s *ThreeDGeneratorService) getRandomOpacity() float64 {
+	return 0.85 + rand.Float64()*0.15
+}
+
+func (s *ThreeDGeneratorService) getEmissiveColor() string {
+	if rand.Float64() > 0.7 {
+		return pieceColors[rand.Intn(len(pieceColors))]
+	}
+	return "#000000"
+}
+
+func (s *ThreeDGeneratorService) getAnimationSpeed(difficulty string) float64 {
+	switch difficulty {
+	case "easy":
+		return 0.0
+	case "medium":
+		return rand.Float64() * 0.005
+	case "hard":
+		return rand.Float64() * 0.01
+	case "expert":
+		return rand.Float64() * 0.015
+	default:
+		return 0.0
 	}
 }
 

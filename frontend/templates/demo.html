@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="HJTPX行为验证系统演示">
+    <title>HJTPX行为验证系统演示</title>
+    
+    <!-- Bootstrap 5 CSS from bootcdn.cn -->
+    <link href="https://cdn.bootcdn.cn/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 CSS from bootcdn.cn -->
+    <link href="https://cdn.bootcdn.cn/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    
+    <!-- 统一验证码样式 -->
+    <link rel="stylesheet" href="/static/css/captcha-unified.css">
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .page-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .page-header p {
+            opacity: 0.9;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .card-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .card-header i {
+            font-size: 1.25rem;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .captcha-container {
+            max-width: 360px;
+            margin: 0 auto;
+        }
+        
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .card-body {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="page-header">
+            <h1><i class="fas fa-shield-alt me-2"></i>HJTPX行为验证系统</h1>
+            <p>完善的前端验证组件演示</p>
+        </div>
+        
+        <div class="row g-4">
+            <!-- 滑块验证 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-arrows-alt-h"></i>
+                        <h3>滑块验证</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="slider-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 点选验证 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <h3>点选验证</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="point-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 图形验证码 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-image"></i>
+                        <h3>图形验证码</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="image-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 旋转验证 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-undo-alt"></i>
+                        <h3>旋转验证</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="rotate-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 手势验证 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-paint-brush"></i>
+                        <h3>手势验证</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="gesture-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 拼图验证 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-puzzle-piece"></i>
+                        <h3>拼图验证</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="captcha-container" id="puzzle-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast通知容器 -->
+    <div class="captcha-toast-container" id="toastContainer"></div>
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.bootcdn.cn/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 验证码组件 -->
+    <script src="/static/js/components/slider-captcha.js"></script>
+    <script src="/static/js/components/point-captcha.js"></script>
+    <script src="/static/js/components/image-captcha.js"></script>
+    <script src="/static/js/components/rotate-gesture-captcha.js"></script>
+    
+    <script>
+        // Toast通知系统
+        const toastContainer = document.getElementById('toastContainer');
+        
+        const showToast = (message, type = 'info', duration = 3000) => {
+            const toast = document.createElement('div');
+            toast.className = `captcha-toast ${type}`;
+            toast.setAttribute('role', 'alert');
+            
+            const iconClass = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            }[type];
+            
+            const titleText = {
+                success: '成功',
+                error: '错误',
+                warning: '警告',
+                info: '提示'
+            }[type];
+            
+            toast.innerHTML = `
+                <div class="captcha-toast-icon"><i class="fas ${iconClass}"></i></div>
+                <div class="captcha-toast-content">
+                    <div class="captcha-toast-title">${titleText}</div>
+                    <div class="captcha-toast-message">${message}</div>
+                </div>
+                <button class="captcha-toast-close" onclick="removeToast(this.parentElement)">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            if (duration > 0) {
+                setTimeout(() => removeToast(toast), duration);
+            }
+        };
+        
+        const removeToast = (toast) => {
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+        };
+        
+        // 初始化所有验证码组件
+        document.addEventListener('DOMContentLoaded', () => {
+            // 滑块验证
+            new SliderCaptcha(document.getElementById('slider-container'), {
+                onSuccess: (result) => {
+                    showToast('滑块验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+            
+            // 点选验证
+            new PointCaptcha(document.getElementById('point-container'), {
+                onSuccess: (result) => {
+                    showToast('点选验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+            
+            // 图形验证码
+            new ImageCaptcha(document.getElementById('image-container'), {
+                onSuccess: (result) => {
+                    showToast('图形验证码验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+            
+            // 旋转验证
+            new RotateGestureCaptcha(document.getElementById('rotate-container'), {
+                type: 'rotate',
+                onSuccess: (result) => {
+                    showToast('旋转验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+            
+            // 手势验证
+            new RotateGestureCaptcha(document.getElementById('gesture-container'), {
+                type: 'gesture',
+                onSuccess: (result) => {
+                    showToast('手势验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+            
+            // 拼图验证
+            new RotateGestureCaptcha(document.getElementById('puzzle-container'), {
+                type: 'puzzle',
+                onSuccess: (result) => {
+                    showToast('拼图验证成功！', 'success');
+                },
+                onError: (error) => {
+                    showToast(error.error, 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

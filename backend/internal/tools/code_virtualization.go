@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -507,17 +506,6 @@ func (cv *CodeVirtualizer) Virtualize(code string) (*VirtualizedCode, error) {
 		instructions = append(instructions, byte(constantIndex))
 	}
 
-	simpleOperations := map[string]byte{
-		"+":  0x04,
-		"-":  0x05,
-		"*":  0x06,
-		"/":  0x07,
-		"&&": 0x10,
-		"||": 0x11,
-		"!":  0x12,
-		"^":  0x13,
-	}
-
 	encryptedInstructions := make([]byte, len(instructions))
 	for i, b := range instructions {
 		encryptedInstructions[i] = b ^ cv.key[i%len(cv.key)]
@@ -834,15 +822,4 @@ func (cv *CodeVirtualizer) obfuscateMaximum(code string) (string, error) {
 	return cv.GenerateObfuscatedCode(code, 3)
 }
 
-func GenerateRandomKey(length int) ([]byte, error) {
-	key := make([]byte, length)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return nil, err
-	}
-	return key, nil
-}
-
-func HashCode(code string) string {
-	hash := sha256.Sum256([]byte(code))
-	return base64.URLEncoding.EncodeToString(hash[:])
-}
+// GenerateRandomKey and HashCode are defined in javascript_obfuscator.go

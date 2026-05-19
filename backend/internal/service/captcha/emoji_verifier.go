@@ -34,6 +34,12 @@ func NewEmojiVerifierService(generatorService *EmojiGeneratorService) *EmojiVeri
 	}
 }
 
+func NewEmojiVerifierServiceSimple() *EmojiVerifierService {
+	return &EmojiVerifierService{
+		generatorService: NewEmojiGeneratorServiceSimple(),
+	}
+}
+
 func (s *EmojiVerifierService) Verify(ctx context.Context, req *VerifyEmojiCaptchaRequest) (*VerifyEmojiCaptchaResponse, error) {
 	// 获取会话
 	session, err := s.generatorService.GetSession(ctx, req.SessionID)

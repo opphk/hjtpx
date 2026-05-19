@@ -1,23 +1,26 @@
 package handler
 
 import (
+	"sync"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-var semanticGeneratorService *captcha.SemanticGeneratorService
-var semanticVerifierService *captcha.SemanticVerifierService
-var comboGeneratorService *captcha.ComboGeneratorService
+var (
+	semanticGeneratorService *captcha.SemanticGeneratorService
+	semanticVerifierService  *captcha.SemanticVerifierService
+	comboGeneratorService    *captcha.ComboGeneratorService
+	semanticInitOnce         sync.Once
+)
 
-func InitSemanticCaptchaHandler(
-	semanticGen *captcha.SemanticGeneratorService,
-	semanticVer *captcha.SemanticVerifierService,
-	comboGen *captcha.ComboGeneratorService,
-) {
-	semanticGeneratorService = semanticGen
-	semanticVerifierService = semanticVer
-	comboGeneratorService = comboGen
+func initSemanticServices() {
+	semanticInitOnce.Do(func() {
+		semanticGeneratorService = captcha.NewSemanticGeneratorServiceSimple()
+		semanticVerifierService = captcha.NewSemanticVerifierServiceSimple()
+		comboGeneratorService = captcha.NewComboGeneratorServiceSimple()
+	})
 }
 
 type SemanticCaptchaRequest struct {
@@ -53,6 +56,8 @@ type ComboCaptchaAnswerItem struct {
 }
 
 func CreateSemanticCaptcha(c *gin.Context) {
+	initSemanticServices()
+	
 	var req SemanticCaptchaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req = SemanticCaptchaRequest{}
@@ -83,6 +88,8 @@ func CreateSemanticCaptcha(c *gin.Context) {
 }
 
 func VerifySemanticCaptcha(c *gin.Context) {
+	initSemanticServices()
+	
 	var req SemanticVerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Fail(c, response.CodeInvalidParams, "参数错误")
@@ -94,7 +101,6 @@ func VerifySemanticCaptcha(c *gin.Context) {
 		DecisionTime: req.DecisionTime,
 		TotalTime:    req.TotalTime,
 		IsMobile:     req.IsMobile,
-		ClickCount:   req.ClickCount,
 	}
 
 	verifyReq := &captcha.VerifySemanticCaptchaRequest{
@@ -113,6 +119,8 @@ func VerifySemanticCaptcha(c *gin.Context) {
 }
 
 func GetSemanticCaptchaStatus(c *gin.Context) {
+	initSemanticServices()
+	
 	sessionID := c.Param("session_id")
 	if sessionID == "" {
 		response.Fail(c, response.CodeInvalidParams, "session_id不能为空")
@@ -129,6 +137,8 @@ func GetSemanticCaptchaStatus(c *gin.Context) {
 }
 
 func CreateComboCaptcha(c *gin.Context) {
+	initSemanticServices()
+	
 	var req ComboCaptchaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req = ComboCaptchaRequest{}
@@ -162,6 +172,8 @@ func CreateComboCaptcha(c *gin.Context) {
 }
 
 func VerifyComboCaptcha(c *gin.Context) {
+	initSemanticServices()
+	
 	var req ComboVerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Fail(c, response.CodeInvalidParams, "参数错误")

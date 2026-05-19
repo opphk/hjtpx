@@ -74,6 +74,18 @@ func NewSemanticVerifierService(generatorService *SemanticGeneratorService) *Sem
 	}
 }
 
+func NewSemanticVerifierServiceSimple() *SemanticVerifierService {
+	return &SemanticVerifierService{
+		generatorService: NewSemanticGeneratorServiceSimple(),
+		languageAnalyzers: map[string]SemanticLanguageAnalyzer{
+			"zh":    &ChineseAnalyzer{},
+			"ja":    &JapaneseAnalyzer{},
+			"es":    &SpanishAnalyzer{},
+			"en":    &EnglishAnalyzer{},
+		},
+	}
+}
+
 func (s *SemanticVerifierService) Verify(ctx context.Context, req *VerifySemanticCaptchaRequest) (*VerifySemanticCaptchaResponse, error) {
 	session, err := s.generatorService.GetSession(ctx, req.SessionID)
 	if err != nil {

@@ -107,6 +107,14 @@ func NewComboGeneratorService(
 	}
 }
 
+func NewComboGeneratorServiceSimple() *ComboGeneratorService {
+	return &ComboGeneratorService{
+		semanticGenerator: NewSemanticGeneratorServiceSimple(),
+		emojiGenerator:    NewEmojiGeneratorServiceSimple(),
+		threeDGenerator:   NewThreeDGeneratorServiceSimple(),
+	}
+}
+
 func (s *ComboGeneratorService) Create(ctx context.Context, req *CreateComboCaptchaRequest) (*CreateComboCaptchaResponse, error) {
 	sessionID := generateComboSessionID()
 	expiresAt := time.Now().Add(5 * time.Minute)

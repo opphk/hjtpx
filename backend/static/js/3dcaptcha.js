@@ -13,6 +13,10 @@ class ThreeDCaptcha {
         this.mouse = new THREE.Vector2();
         this.timerInterval = null;
         this.seconds = 0;
+        this.animationFrameId = null;
+        this.isAnimating = false;
+        this.qualitySettings = null;
+        this.devicePixelRatio = Math.min(window.devicePixelRatio, 2);
         
         this.init();
     }
@@ -81,21 +85,50 @@ class ThreeDCaptcha {
         const height = container.clientHeight;
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xf0f0f0);
+        
+        const bgColor = this.puzzle.backgroundColor || '#f5f5f5';
+        this.scene.background = new THREE.Color(bgColor);
 
         this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
         this.camera.position.z = 8;
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        const antiAlias = this.puzzle.antiAlias !== false;
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: antiAlias,
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
         this.renderer.setSize(width, height);
+        this.renderer.setPixelRatio(this.devicePixelRatio);
+        
+        const shadowEnabled = this.puzzle.shadowEnabled === true;
+        this.renderer.shadowMap.enabled = shadowEnabled;
+        if (shadowEnabled) {
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
+        
         container.appendChild(this.renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const lightIntensity = this.puzzle.lightIntensity || 0.8;
+        const ambientColor = this.puzzle.ambientColor || '#444444';
+        
+        const ambientLight = new THREE.AmbientLight(ambientColor, lightIntensity * 0.5);
         this.scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, lightIntensity);
         directionalLight.position.set(5, 5, 5);
+        directionalLight.castShadow = shadowEnabled;
+        if (shadowEnabled) {
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+        }
         this.scene.add(directionalLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, lightIntensity * 0.3);
+        pointLight.position.set(-5, -5, 5);
+        this.scene.add(pointLight);
 
         this.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
         this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
@@ -104,38 +137,36 @@ class ThreeDCaptcha {
 
         window.addEventListener('resize', () => this.onWindowResize());
 
+        this.applyQualitySettings();
         this.animate();
+    }
+
+    applyQualitySettings() {
+        const quality = this.puzzle.renderQuality || 'medium';
+        
+        switch (quality) {
+            case 'low':
+                this.renderer.setPixelRatio(1);
+                break;
+            case 'medium':
+                this.renderer.setPixelRatio(Math.min(this.devicePixelRatio, 1.5));
+                break;
+            case 'high':
+                this.renderer.setPixelRatio(this.devicePixelRatio);
+                break;
+        }
     }
 
     renderPuzzle() {
         this.pieces = [];
 
-        this.puzzle.pieces.forEach((pieceData, index) => {
-            let geometry;
-            switch (pieceData.type) {
-                case 'cube':
-                    geometry = new THREE.BoxGeometry(1, 1, 1);
-                    break;
-                case 'cylinder':
-                    geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-                    break;
-                case 'sphere':
-                    geometry = new THREE.SphereGeometry(0.6, 32, 32);
-                    break;
-                case 'cone':
-                    geometry = new THREE.ConeGeometry(0.5, 1, 32);
-                    break;
-                case 'torus':
-                    geometry = new THREE.TorusGeometry(0.4, 0.2, 16, 100);
-                    break;
-                default:
-                    geometry = new THREE.BoxGeometry(1, 1, 1);
-            }
+        const quality = this.puzzle.renderQuality || 'medium';
+        const geometryDetail = this.getGeometryDetail(quality);
 
-            const material = new THREE.MeshPhongMaterial({
-                color: pieceData.color,
-                shininess: 100
-            });
+        this.puzzle.pieces.forEach((pieceData, index) => {
+            let geometry = this.createGeometry(pieceData.type, geometryDetail);
+
+            const material = this.createMaterial(pieceData);
 
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(pieceData.positionX, pieceData.positionY, pieceData.positionZ);
@@ -143,11 +174,77 @@ class ThreeDCaptcha {
             mesh.rotation.y = THREE.MathUtils.degToRad(pieceData.rotationY);
             mesh.rotation.z = THREE.MathUtils.degToRad(pieceData.rotationZ);
             mesh.scale.set(pieceData.scale, pieceData.scale, pieceData.scale);
-            mesh.userData = { id: pieceData.id, index };
+            mesh.castShadow = this.puzzle.shadowEnabled === true;
+            mesh.receiveShadow = this.puzzle.shadowEnabled === true;
+            mesh.userData = { 
+                id: pieceData.id, 
+                index,
+                originalRotX: pieceData.originalRotX,
+                originalRotY: pieceData.originalRotY,
+                originalRotZ: pieceData.originalRotZ,
+                animationSpeed: pieceData.animationSpeed || 0
+            };
 
             this.scene.add(mesh);
             this.pieces.push(mesh);
         });
+    }
+
+    getGeometryDetail(quality) {
+        switch (quality) {
+            case 'low':
+                return { sphere: 16, cylinder: 16, torus: { radial: 8, tubular: 32 } };
+            case 'medium':
+                return { sphere: 24, cylinder: 24, torus: { radial: 12, tubular: 64 } };
+            case 'high':
+                return { sphere: 32, cylinder: 32, torus: { radial: 16, tubular: 100 } };
+            default:
+                return { sphere: 24, cylinder: 24, torus: { radial: 12, tubular: 64 } };
+        }
+    }
+
+    createGeometry(type, detail) {
+        switch (type) {
+            case 'cube':
+            case 'box':
+                return new THREE.BoxGeometry(1, 1, 1);
+            case 'cylinder':
+                return new THREE.CylinderGeometry(0.5, 0.5, 1, detail.cylinder);
+            case 'sphere':
+                return new THREE.SphereGeometry(0.6, detail.sphere, detail.sphere);
+            case 'cone':
+                return new THREE.ConeGeometry(0.5, 1, detail.cylinder);
+            case 'torus':
+                return new THREE.TorusGeometry(0.4, 0.2, detail.torus.radial, detail.torus.tubular);
+            case 'octahedron':
+                return new THREE.OctahedronGeometry(0.6);
+            case 'tetrahedron':
+                return new THREE.TetrahedronGeometry(0.6);
+            case 'dodecahedron':
+                return new THREE.DodecahedronGeometry(0.5);
+            case 'icosahedron':
+                return new THREE.IcosahedronGeometry(0.6);
+            default:
+                return new THREE.BoxGeometry(1, 1, 1);
+        }
+    }
+
+    createMaterial(pieceData) {
+        const materialParams = {
+            color: pieceData.color,
+            shininess: pieceData.shininess || 100,
+            transparent: pieceData.opacity !== undefined && pieceData.opacity < 1,
+            opacity: pieceData.opacity !== undefined ? pieceData.opacity : 1,
+            wireframe: pieceData.wireframe === true,
+            emissive: new THREE.Color(pieceData.emissiveColor || '#000000'),
+            emissiveIntensity: pieceData.emissiveColor ? 0.3 : 0
+        };
+
+        if (pieceData.edgeType === 'smooth') {
+            materialParams.side = THREE.DoubleSide;
+        }
+
+        return new THREE.MeshPhongMaterial(materialParams);
     }
 
     onMouseDown(event) {
@@ -205,11 +302,39 @@ class ThreeDCaptcha {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
+        
+        if (!this.isDragging) {
+            this.autoRotatePieces();
+        }
+        
         this.renderer.render(this.scene, this.camera);
     }
 
+    autoRotatePieces() {
+        this.pieces.forEach(piece => {
+            const speed = piece.userData.animationSpeed || 0;
+            if (speed > 0) {
+                piece.rotation.y += speed;
+                piece.rotation.z += speed * 0.5;
+            }
+        });
+    }
+
     cleanup() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        
+        if (this.pieces) {
+            this.pieces.forEach(piece => {
+                piece.geometry.dispose();
+                piece.material.dispose();
+            });
+            this.pieces = [];
+        }
+        
         if (this.renderer) {
             const container = document.getElementById('canvas-container');
             if (container && this.renderer.domElement) {
@@ -217,10 +342,10 @@ class ThreeDCaptcha {
             }
             this.renderer.dispose();
         }
+        
         this.scene = null;
         this.camera = null;
         this.renderer = null;
-        this.pieces = [];
         this.selectedPiece = null;
     }
 

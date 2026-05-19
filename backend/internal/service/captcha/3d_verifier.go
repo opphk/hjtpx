@@ -129,26 +129,89 @@ func (v *ThreeDVerifierService) validatePuzzle(userPuzzle, originalPuzzle *Three
 }
 
 func (v *ThreeDVerifierService) calculatePieceScore(userPiece, originalPiece *ThreeDPiece, difficulty string) float64 {
+	maxDiff := v.getMaxAllowedDiff(difficulty)
+	
 	rotXDiff := v.normalizeAngleDiff(userPiece.RotationX, originalPiece.RotationX)
 	rotYDiff := v.normalizeAngleDiff(userPiece.RotationY, originalPiece.RotationY)
 	rotZDiff := v.normalizeAngleDiff(userPiece.RotationZ, originalPiece.RotationZ)
 
-	maxDiff := v.getMaxAllowedDiff(difficulty)
-
-	rotXScore := math.Max(0, 1-rotXDiff/maxDiff)
-	rotYScore := math.Max(0, 1-rotYDiff/maxDiff)
-	rotZScore := math.Max(0, 1-rotZDiff/maxDiff)
+	rotXScore := v.calculateRotationScore(rotXDiff, maxDiff)
+	rotYScore := v.calculateRotationScore(rotYDiff, maxDiff)
+	rotZScore := v.calculateRotationScore(rotZDiff, maxDiff)
 
 	posXDiff := math.Abs(userPiece.PositionX - originalPiece.PositionX)
 	posYDiff := math.Abs(userPiece.PositionY - originalPiece.PositionY)
 	posZDiff := math.Abs(userPiece.PositionZ - originalPiece.PositionZ)
 
-	posXScore := math.Max(0, 1-posXDiff/2)
-	posYScore := math.Max(0, 1-posYDiff/2)
-	posZScore := math.Max(0, 1-posZDiff/2)
+	posXScore := v.calculatePositionScore(posXDiff)
+	posYScore := v.calculatePositionScore(posYDiff)
+	posZScore := v.calculatePositionScore(posZDiff)
 
-	totalScore := (rotXScore + rotYScore + rotZScore + posXScore + posYScore + posZScore) / 6
+	scaleDiff := math.Abs(userPiece.Scale - originalPiece.Scale)
+	scaleScore := v.calculateScaleScore(scaleDiff)
+
+	weights := v.getScoreWeights(difficulty)
+	totalScore := weights.Rotation*(rotXScore+rotYScore+rotZScore)/3 +
+		weights.Position*(posXScore+posYScore+posZScore)/3 +
+		weights.Scale*scaleScore
+
 	return totalScore * 100
+}
+
+func (v *ThreeDVerifierService) calculateRotationScore(diff, maxDiff float64) float64 {
+	if diff <= 5 {
+		return 1.0
+	}
+	if diff <= 15 {
+		return 0.9 + (15-diff)/15*0.1
+	}
+	if diff >= maxDiff {
+		return 0.0
+	}
+	return math.Max(0, 1-diff/maxDiff)
+}
+
+func (v *ThreeDVerifierService) calculatePositionScore(diff float64) float64 {
+	maxPosDiff := 0.5
+	if diff <= 0.1 {
+		return 1.0
+	}
+	if diff >= maxPosDiff {
+		return 0.0
+	}
+	return math.Max(0, 1-diff/maxPosDiff)
+}
+
+func (v *ThreeDVerifierService) calculateScaleScore(diff float64) float64 {
+	maxScaleDiff := 0.3
+	if diff <= 0.05 {
+		return 1.0
+	}
+	if diff >= maxScaleDiff {
+		return 0.0
+	}
+	return math.Max(0, 1-diff/maxScaleDiff)
+}
+
+type ScoreWeights struct {
+	Rotation float64
+	Position float64
+	Scale    float64
+}
+
+func (v *ThreeDVerifierService) getScoreWeights(difficulty string) ScoreWeights {
+	switch difficulty {
+	case "easy":
+		return ScoreWeights{Rotation: 0.7, Position: 0.2, Scale: 0.1}
+	case "medium":
+		return ScoreWeights{Rotation: 0.75, Position: 0.15, Scale: 0.1}
+	case "hard":
+		return ScoreWeights{Rotation: 0.8, Position: 0.12, Scale: 0.08}
+	case "expert":
+		return ScoreWeights{Rotation: 0.85, Position: 0.1, Scale: 0.05}
+	default:
+		return ScoreWeights{Rotation: 0.75, Position: 0.15, Scale: 0.1}
+	}
 }
 
 func (v *ThreeDVerifierService) normalizeAngleDiff(angle1, angle2 float64) float64 {

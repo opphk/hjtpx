@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
@@ -34,12 +36,42 @@ type SliderVerifyRequest struct {
 	TraceScore    float64         `json:"trace_score"`                   // 轨迹评分
 	EnvScore      float64         `json:"env_score"`                     // 环境评分
 	Trajectory    []TrajectoryPoint `json:"trajectory"`                  // 轨迹数据
+	BehaviorData  SliderBehaviorData `json:"behavior_data"`              // 行为数据
 }
 
 type TrajectoryPoint struct {
 	X         int   `json:"x"`
 	Y         int   `json:"y"`
 	Timestamp int64 `json:"timestamp"`
+	Pressure  int   `json:"pressure"`  // 压力值（移动端）
+	VelocityX int   `json:"velocity_x"` // X方向速度
+	VelocityY int   `json:"velocity_y"` // Y方向速度
+}
+
+type SliderBehaviorData struct {
+	StartTime       int64   `json:"start_time"`        // 开始时间
+	EndTime         int64   `json:"end_time"`          // 结束时间
+	Duration        int64   `json:"duration"`          // 总耗时(ms)
+	RetryCount      int     `json:"retry_count"`       // 重试次数
+	IsMobile        bool    `json:"is_mobile"`         // 是否移动端
+	DeviceType      string  `json:"device_type"`       // 设备类型
+	OsType          string  `json:"os_type"`           // 操作系统
+	BrowserType     string  `json:"browser_type"`      // 浏览器类型
+	ScreenWidth     int     `json:"screen_width"`      // 屏幕宽度
+	ScreenHeight    int     `json:"screen_height"`     // 屏幕高度
+	PixelRatio      float64 `json:"pixel_ratio"`       // 像素比
+	NetworkType     string  `json:"network_type"`      // 网络类型
+	Latency         int     `json:"latency"`          // 网络延迟(ms)
+	ClickCount      int     `json:"click_count"`      // 点击次数
+	MouseDownCount  int     `json:"mouse_down_count"` // 鼠标按下次数
+	MouseUpCount    int     `json:"mouse_up_count"`   // 鼠标松开次数
+	PathLength      float64 `json:"path_length"`      // 路径长度
+	MaxVelocity     float64 `json:"max_velocity"`     // 最大速度
+	AvgVelocity     float64 `json:"avg_velocity"`     // 平均速度
+	Acceleration    float64 `json:"acceleration"`     // 加速度
+	DirectionChanges int    `json:"direction_changes"` // 方向改变次数
+	IsTouchDevice   bool    `json:"is_touch_device"`   // 是否触摸设备
+	TouchPoints     int     `json:"touch_points"`     // 触摸点数
 }
 
 // CreateSliderCaptcha 创建滑动验证码
@@ -50,12 +82,14 @@ type TrajectoryPoint struct {
 // @Produce json
 // @Param body body SliderCaptchaRequest false "验证码参数"
 // @Success 200 {object} map[string]interface{} "成功返回验证码数据"
+// @Failure 400 {object} map[string]interface{} "参数错误"
 // @Failure 500 {object} map[string]interface{} "生成失败"
-// @Router /api/v1/captcha/create [post]
+// @Router /api/v1/captcha/slider/create [post]
 func CreateSliderCaptcha(c *gin.Context) {
 	var req SliderCaptchaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		req = SliderCaptchaRequest{}
+		response.Fail(c, response.CodeInvalidParams, "参数解析失败")
+		return
 	}
 
 	createReq := &captcha.CreateCaptchaRequest{
@@ -70,7 +104,7 @@ func CreateSliderCaptcha(c *gin.Context) {
 
 	result, err := sliderGeneratorService.Create(c.Request.Context(), createReq)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, "生成验证码失败")
+		response.Fail(c, response.CodeServerError, "生成验证码失败: "+err.Error())
 		return
 	}
 
@@ -79,19 +113,20 @@ func CreateSliderCaptcha(c *gin.Context) {
 
 // VerifySliderCaptcha 验证滑动验证码
 // @Summary 验证滑动验证码
-// @Description 验证用户对滑动验证码的操作
+// @Description 验证用户对滑动验证码的操作，包含行为分析
 // @Tags 验证码
 // @Accept json
 // @Produce json
 // @Param body body SliderVerifyRequest true "验证请求"
 // @Success 200 {object} map[string]interface{} "验证结果"
 // @Failure 400 {object} map[string]interface{} "参数错误"
+// @Failure 404 {object} map[string]interface{} "会话不存在"
 // @Failure 500 {object} map[string]interface{} "验证失败"
-// @Router /api/v1/captcha/verify-v2 [post]
+// @Router /api/v1/captcha/slider/verify [post]
 func VerifySliderCaptcha(c *gin.Context) {
 	var req SliderVerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeInvalidParams, "参数错误")
+		response.Fail(c, response.CodeInvalidParams, "参数错误: "+err.Error())
 		return
 	}
 
@@ -101,7 +136,21 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
-	analysisResult := analyzeTrajectory(req.Trajectory, req.PositionX)
+	var analysisResult *service.SliderAnalysisResult
+	if len(req.Trajectory) >= 3 && sliderAnalyzer != nil {
+		sliderPoints := make([]service.SliderPoint, len(req.Trajectory))
+		for i, p := range req.Trajectory {
+			sliderPoints[i] = service.SliderPoint{
+				X:         p.X,
+				Y:         p.Y,
+				Timestamp: p.Timestamp,
+			}
+		}
+		analysisResult, err = sliderAnalyzer.AnalyzeWithHighSamplingSupport(sliderPoints, req.PositionX)
+		if err != nil {
+			analysisResult = nil
+		}
+	}
 
 	adjustedRiskScore := req.RiskScore
 	if analysisResult != nil {
@@ -123,28 +172,31 @@ func VerifySliderCaptcha(c *gin.Context) {
 
 	result, err := sliderVerifierService.Verify(c.Request.Context(), verifyReq)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, "验证失败")
+		response.Fail(c, response.CodeServerError, "验证失败: "+err.Error())
 		return
 	}
 
 	resultData := map[string]interface{}{
-		"success":       result.Success,
-		"message":        result.Message,
-		"score":          result.Score,
-		"position_diff":  result.PositionDiff,
+		"success":            result.Success,
+		"message":            result.Message,
+		"score":              result.Score,
+		"position_diff":      result.PositionDiff,
 		"trajectory_analysis": nil,
+		"behavior_summary":   nil,
 	}
 
 	if analysisResult != nil {
 		resultData["trajectory_analysis"] = map[string]interface{}{
-			"is_bot":          analysisResult.IsBot,
-			"confidence":      analysisResult.Confidence,
-			"anomaly_score":   analysisResult.AnomalyScore,
-			"risk_indicators": analysisResult.RiskIndicators,
-			"overall_score":   analysisResult.OverallRiskScore,
-			"pattern":         analysisResult.TrajectoryPattern,
-			"speed_profile":  analysisResult.SpeedProfile,
-			"sampling_rate":   nil,
+			"is_bot":            analysisResult.IsBot,
+			"confidence":        analysisResult.Confidence,
+			"anomaly_score":     analysisResult.AnomalyScore,
+			"risk_indicators":   analysisResult.RiskIndicators,
+			"overall_score":     analysisResult.OverallRiskScore,
+			"pattern":           analysisResult.TrajectoryPattern,
+			"speed_profile":     analysisResult.SpeedProfile,
+			"sampling_rate":     calculateSamplingRate(req.Trajectory),
+			"direction_changes": countDirectionChanges(req.Trajectory),
+			"path_length":       calculatePathLength(req.Trajectory),
 		}
 	}
 
@@ -152,7 +204,55 @@ func VerifySliderCaptcha(c *gin.Context) {
 		resultData["trajectory_analysis"].(map[string]interface{})["sampling_rate"] = calculateSamplingRate(req.Trajectory)
 	}
 
+	if req.BehaviorData.Duration > 0 {
+		resultData["behavior_summary"] = map[string]interface{}{
+			"duration_ms":   req.BehaviorData.Duration,
+			"retry_count":   req.BehaviorData.RetryCount,
+			"is_mobile":     req.BehaviorData.IsMobile,
+			"device_type":   req.BehaviorData.DeviceType,
+			"avg_velocity":  req.BehaviorData.AvgVelocity,
+			"max_velocity":  req.BehaviorData.MaxVelocity,
+			"path_length":   req.BehaviorData.PathLength,
+			"network_type":  req.BehaviorData.NetworkType,
+			"latency_ms":    req.BehaviorData.Latency,
+		}
+	}
+
 	response.Success(c, resultData)
+}
+
+func countDirectionChanges(trajectory []TrajectoryPoint) int {
+	if len(trajectory) < 3 {
+		return 0
+	}
+	count := 0
+	for i := 1; i < len(trajectory)-1; i++ {
+		dx1 := trajectory[i].X - trajectory[i-1].X
+		dy1 := trajectory[i].Y - trajectory[i-1].Y
+		dx2 := trajectory[i+1].X - trajectory[i].X
+		dy2 := trajectory[i+1].Y - trajectory[i].Y
+
+		if (dx1 >= 0 && dx2 < 0) || (dx1 < 0 && dx2 >= 0) {
+			count++
+		}
+		if (dy1 >= 0 && dy2 < 0) || (dy1 < 0 && dy2 >= 0) {
+			count++
+		}
+	}
+	return count
+}
+
+func calculatePathLength(trajectory []TrajectoryPoint) float64 {
+	if len(trajectory) < 2 {
+		return 0
+	}
+	var length float64
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		length += float64(time.Duration(trajectory[i].Timestamp-trajectory[i-1].Timestamp).Seconds()) * (dx*dx + dy*dy)
+	}
+	return length
 }
 
 func analyzeTrajectory(trajectory []TrajectoryPoint, targetPosition int) *service.SliderAnalysisResult {
@@ -200,7 +300,7 @@ func calculateSamplingRate(trajectory []TrajectoryPoint) float64 {
 // @Success 200 {object} map[string]interface{} "会话状态"
 // @Failure 400 {object} map[string]interface{} "参数错误"
 // @Failure 404 {object} map[string]interface{} "会话不存在"
-// @Router /api/v1/captcha/status/{session_id} [get]
+// @Router /api/v1/captcha/slider/status/{session_id} [get]
 func GetSliderCaptchaStatus(c *gin.Context) {
 	sessionID := c.Param("session_id")
 	if sessionID == "" {
@@ -226,7 +326,7 @@ func GetSliderCaptchaStatus(c *gin.Context) {
 // @Param session_id path string true "会话 ID"
 // @Success 200 {object} map[string]interface{} "检查结果"
 // @Failure 400 {object} map[string]interface{} "参数错误"
-// @Router /api/v1/captcha/check/{session_id} [get]
+// @Router /api/v1/captcha/slider/check/{session_id} [get]
 func CheckSliderCaptchaValid(c *gin.Context) {
 	sessionID := c.Param("session_id")
 	if sessionID == "" {
