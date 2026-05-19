@@ -60,6 +60,22 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/combo/verify", handler.VerifyComboCaptcha)
 		api.GET("/captcha/combo/status/:session_id", handler.GetComboCaptchaStatus)
 
+		// ============ v17.0 新增验证码路由 ============
+		// 视频验证码
+		api.POST("/captcha/video/generate", handler.VideoCaptchaGenerate)
+		api.POST("/captcha/video/verify", handler.VideoCaptchaVerify)
+		api.GET("/captcha/video/options", handler.VideoCaptchaOptions)
+
+		// AR验证码
+		api.POST("/captcha/ar/generate", handler.ARCaptchaGenerate)
+		api.POST("/captcha/ar/verify", handler.ARCaptchaVerify)
+		api.GET("/captcha/ar/options", handler.ARCaptchaOptions)
+
+		// 增强的组合验证码系统
+		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)
+		api.POST("/captcha/combo/verify", handler.ComboCaptchaVerify)
+		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
+
 		// 统一验证码验证接口
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
 
