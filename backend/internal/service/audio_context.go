@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"backend/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 type AudioContextService struct {

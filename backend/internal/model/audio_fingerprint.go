@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -407,8 +408,6 @@ type AudioFingerprintDatabase struct {
 	mu              sync.RWMutex
 }
 
-type sync struct{}
-
 func NewAudioFingerprintDatabase() *AudioFingerprintDatabase {
 	return &AudioFingerprintDatabase{
 		Fingerprints:    make(map[string]*AudioFingerprint),
@@ -618,7 +617,6 @@ func (db *AudioFingerprintDatabase) CalculateStats() *AudioFingerprintStats {
 
 	var totalLatency float64
 	var totalConsistency float64
-	var totalUniqueness float64
 	var suspiciousCount int64
 
 	for _, fp := range db.Fingerprints {
