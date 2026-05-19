@@ -404,7 +404,7 @@ func (dd *DebugDetector) detectDebugger(sessionID, clientIP, userAgent string, h
 			{"debugger; ", model.SeverityHigh, "debugger; with space in request body"},
 			{"debugger;\n", model.SeverityHigh, "debugger; with newline in request body"},
 			{"debugger;\r\n", model.SeverityHigh, "debugger; with CRLF in request body"},
-			{"debugger;", model.SeverityMedium, "compressed debugger statement detected"},
+			{`debugger;`, model.SeverityMedium, "compressed debugger statement detected"},
 		}
 
 		for _, dp := range debugPatterns {

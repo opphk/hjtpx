@@ -1274,6 +1274,10 @@
                 <i class="fas fa-plug" aria-hidden="true"></i>
                 <span>实时双向验证</span>
             </button>
+            <button class="nav-link" data-type="slider-enhanced" role="tab" aria-selected="false" aria-controls="demoSliderEnhanced" tabindex="0" onclick="switchCaptchaType('slider-enhanced')">
+                <i class="fas fa-magic" aria-hidden="true"></i>
+                <span>增强版滑块</span>
+            </button>
         </div>
 
         <div class="row g-4">
@@ -1522,6 +1526,40 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="col-lg-4">
+                    <div class="demo-card h-100 shadow-sm fade-in" id="demoSliderEnhanced" role="region" aria-labelledby="slider-enhanced-title">
+                        <div class="demo-card-header">
+                            <div class="icon-wrap">
+                                <i class="fas fa-magic" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="slider-enhanced-title">增强版滑块</h5>
+                                <small style="color: #6c757d;">优化拖动手感与动画</small>
+                            </div>
+                        </div>
+                        <div class="demo-card-body">
+                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;">
+                                全新优化的滑块验证交互体验。流畅的拖动手感、丰富的动画效果、渐进式图片加载，以及多种错误反馈动画。
+                            </p>
+                            <div class="captcha-demo-area" id="sliderEnhancedDemoArea" role="application" aria-label="增强版滑块验证区域" aria-live="polite">
+                                <div id="slider-enhanced-container"></div>
+                            </div>
+                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('slider-enhanced')" aria-label="开始体验增强版滑块验证">
+                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                </button>
+                                <button class="btn btn-dark btn-sm" onclick="refreshSliderEnhanced()" aria-label="刷新验证码">
+                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                </button>
+                                <div class="result-banner" id="sliderEnhancedResult" role="status" aria-live="polite">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                    <span id="sliderEnhancedResultText"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1686,7 +1724,9 @@
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/mobile-optimization.js"></script>
+    <script src="/static/js/mobile_enhanced.js"></script>
     <script src="/static/js/captcha.js"></script>
+    <script src="/static/js/slider_enhanced.js"></script>
     <script>
         (function() {
             var container = document.getElementById('heroParticles');
@@ -1706,6 +1746,7 @@
         var currentCaptcha = null;
         var currentType = 'slider';
         var langManager = null;
+        var sliderEnhancedCaptcha = null;
         var rotationState = {
             isDragging: false,
             startX: 0,
@@ -1773,7 +1814,10 @@
                 return;
             }
             if (type === 'websocket') {
-                // WebSocket 验证模式，由 initWebSocketDemo 处理
+                return;
+            }
+            if (type === 'slider-enhanced') {
+                initSliderEnhancedCaptcha();
                 return;
             }
             initCaptcha(type);
@@ -1825,6 +1869,7 @@
             hideResult('passive');
             hideResult('rotation');
             hideResult('websocket');
+            hideResult('slider-enhanced');
             if (currentType === 'rotation') {
                 refreshRotationCaptcha();
                 return;
@@ -1832,6 +1877,12 @@
             if (currentType === 'websocket') {
                 if (websocketClient && typeof websocketClient.reset === 'function') {
                     websocketClient.reset();
+                }
+                return;
+            }
+            if (currentType === 'slider-enhanced') {
+                if (sliderEnhancedCaptcha) {
+                    sliderEnhancedCaptcha.refresh();
                 }
                 return;
             }
@@ -1907,6 +1958,55 @@
                 }
             };
             xhr.send();
+        }
+
+        function initSliderEnhancedCaptcha() {
+            var container = document.getElementById('slider-enhanced-container');
+            if (!container) return;
+            
+            if (sliderEnhancedCaptcha) {
+                sliderEnhancedCaptcha.destroy();
+            }
+            
+            try {
+                sliderEnhancedCaptcha = new SliderCaptchaEnhanced('slider-enhanced-container', {
+                    apiBase: '/api/v1',
+                    enableParticles: true,
+                    enableHaptic: true,
+                    animationDuration: 300,
+                    dragSmoothing: 0.85,
+                    onSuccess: function(result) {
+                        showResult('slider-enhanced', true, '验证成功！会话ID: ' + result.session_id);
+                        console.log('增强版滑块验证成功:', result);
+                    },
+                    onError: function(error) {
+                        showResult('slider-enhanced', false, '验证失败，请重试');
+                        console.log('增强版滑块验证失败:', error);
+                    },
+                    onReady: function(captcha) {
+                        console.log('增强版滑块验证码已就绪');
+                    }
+                });
+                
+                var targetCard = document.getElementById('demoSliderEnhanced');
+                if (targetCard) {
+                    document.querySelectorAll('.demo-card').forEach(function(c) {
+                        c.classList.remove('captcha-active');
+                    });
+                    targetCard.classList.add('captcha-active');
+                }
+            } catch (e) {
+                console.error('SliderCaptchaEnhanced init error:', e);
+            }
+        }
+
+        function refreshSliderEnhanced() {
+            hideResult('slider-enhanced');
+            if (sliderEnhancedCaptcha) {
+                sliderEnhancedCaptcha.refresh();
+            } else {
+                initSliderEnhancedCaptcha();
+            }
         }
 
         function initRotationSlider() {

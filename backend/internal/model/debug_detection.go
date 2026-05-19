@@ -98,10 +98,10 @@ type DebugStats struct {
 	MaxResponseTimeMs   int64                          `json:"max_response_time_ms"`
 	LastDetectionAt     *time.Time                    `json:"last_detection_at,omitempty"`
 	LastBlockedAt       *time.Time                    `json:"last_blocked_at,omitempty"`
-	TopOffenders        []IPStat                       `json:"top_offenders"`
+	TopOffenders        []DebugIPStat                 `json:"top_offenders"`
 }
 
-type IPStat struct {
+type DebugIPStat struct {
 	IPAddress       string    `json:"ip_address"`
 	DetectionCount  int64     `json:"detection_count"`
 	BlockCount      int64     `json:"block_count"`
@@ -322,7 +322,7 @@ func NewDebugStats() *DebugStats {
 	return &DebugStats{
 		DetectionsByType:     make(map[DebugDetectionType]int64),
 		DetectionsBySeverity: make(map[DebugSeverity]int64),
-		TopOffenders:         make([]IPStat, 0),
+		TopOffenders:         make([]DebugIPStat, 0),
 	}
 }
 

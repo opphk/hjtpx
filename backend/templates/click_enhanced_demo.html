@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="墨盾验证 - 增强版点选验证码演示">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>增强版点选验证码演示 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+            padding-top: 80px;
+        }
+
+        .demo-header {
+            background: linear-gradient(135deg, var(--captcha-dark) 0%, #2d2d44 100%);
+            color: white;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid rgba(201,169,110,0.1);
+        }
+
+        .demo-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(201,169,110,0.1);
+            background: linear-gradient(135deg, rgba(201,169,110,0.03) 0%, rgba(201,169,110,0.06) 100%);
+        }
+
+        .demo-card-body {
+            padding: 2rem;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-list li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(201,169,110,0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--captcha-primary);
+            flex-shrink: 0;
+        }
+
+        .result-display {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.875rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--captcha-primary);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <span class="fw-bold small text-uppercase" style="border: 1px solid #c9a96e; color: #c9a96e; padding: 1px 4px; font-size: 0.7rem;">墨盾</span>
+                <span class="fw-bold fs-5" style="color: #c9a96e;">墨盾验证</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/captcha">在线体验</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <header class="demo-header">
+        <div class="container text-center">
+            <h1 class="display-5 fw-bold mb-3">增强版点选验证码</h1>
+            <p class="lead" style="color: rgba(255,255,255,0.7);">
+                优化的交互体验，更快的响应速度，更丰富的动画反馈
+            </p>
+        </div>
+    </header>
+
+    <main class="container pb-5">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="demo-card">
+                    <div class="demo-card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-hand-pointer me-2" style="color: #c9a96e;"></i>
+                            验证码演示
+                        </h5>
+                    </div>
+                    <div class="demo-card-body">
+                        <div id="captcha-container" style="max-width: 480px; margin: 0 auto;"></div>
+                        
+                        <div class="result-display" id="resultDisplay">
+                            <div class="text-muted">验证结果将在此处显示...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="demo-card mb-4">
+                    <div class="demo-card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-star me-2" style="color: #c9a96e;"></i>
+                            功能特性
+                        </h5>
+                    </div>
+                    <div class="demo-card-body">
+                        <ul class="feature-list">
+                            <li>
+                                <div class="feature-icon"><i class="fas fa-bolt"></i></div>
+                                <div>
+                                    <strong>点击响应优化</strong>
+                                    <p class="mb-0 text-muted small">使用 requestAnimationFrame 和事件委托，毫秒级响应</p>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="feature-icon"><i class="fas fa-magic"></i></div>
+                                <div>
+                                    <strong>选中动画</strong>
+                                    <p class="mb-0 text-muted small">涟漪效果、弹跳标记、成功/失败动画</p>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="feature-icon"><i class="fas fa-image"></i></div>
+                                <div>
+                                    <strong>图片加载优化</strong>
+                                    <p class="mb-0 text-muted small">预加载、图片缓存、骨架屏、渐进显示</p>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                                <div>
+                                    <strong>进度显示</strong>
+                                    <p class="mb-0 text-muted small">实时进度条、点状指示器、状态提示</p>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="feature-icon"><i class="fas fa-universal-access"></i></div>
+                                <div>
+                                    <strong>无障碍支持</strong>
+                                    <p class="mb-0 text-muted small">ARIA 标签、键盘导航、屏幕阅读器支持</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="demo-card">
+                    <div class="demo-card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tachometer-alt me-2" style="color: #c9a96e;"></i>
+                            性能指标
+                        </h5>
+                    </div>
+                    <div class="demo-card-body">
+                        <div class="metrics-grid" id="metricsGrid">
+                            <div class="metric-card">
+                                <div class="metric-value" id="metricClickResponse">--</div>
+                                <div class="metric-label">点击响应 (ms)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="metricImageLoad">--</div>
+                                <div class="metric-label">图片加载 (ms)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="metricVerify">--</div>
+                                <div class="metric-label">验证耗时 (ms)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="metricClickCount">0</div>
+                                <div class="metric-label">点击次数</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/click_enhanced.js"></script>
+    <script>
+        (function() {
+            const resultDisplay = document.getElementById('resultDisplay');
+            
+            function logResult(message, isSuccess) {
+                const timestamp = new Date().toLocaleTimeString();
+                const className = isSuccess ? 'text-success' : (isSuccess === false ? 'text-danger' : 'text-muted');
+                const html = `
+                    <div class="${className}" style="margin-bottom: 0.5rem;">
+                        <span class="text-secondary">[${timestamp}]</span> ${message}
+                    </div>
+                `;
+                
+                const currentContent = resultDisplay.innerHTML;
+                if (currentContent.indexOf('验证结果将在此处显示') !== -1) {
+                    resultDisplay.innerHTML = html;
+                } else {
+                    resultDisplay.innerHTML = currentContent + html;
+                }
+                
+                resultDisplay.scrollTop = resultDisplay.scrollHeight;
+            }
+
+            const captcha = new ClickEnhancedCaptcha('#captcha-container', {
+                apiBase: '/api/v1',
+                maxPoints: 3,
+                enablePreload: true,
+                enableAnimation: true,
+                enableHaptic: true,
+                language: 'zh-CN',
+                onSuccess: function(result) {
+                    logResult('✓ 验证成功！会话ID: ' + result.session_id, true);
+                    updateMetrics(result.metrics);
+                },
+                onError: function(error) {
+                    logResult('✗ 验证失败: ' + error.error, false);
+                },
+                onRefresh: function() {
+                    logResult('验证码已刷新', null);
+                },
+                onPointSelected: function(point, points) {
+                    logResult('选择了第 ' + points.length + ' 个点 (x: ' + point.x + ', y: ' + point.y + ')', null);
+                    document.getElementById('metricClickCount').textContent = points.length;
+                },
+                onPointRemoved: function(index, points) {
+                    logResult('移除了第 ' + (index + 1) + ' 个点，剩余 ' + points.length + ' 个点', null);
+                    document.getElementById('metricClickCount').textContent = points.length;
+                }
+            });
+
+            function updateMetrics(metrics) {
+                if (metrics) {
+                    if (metrics.clickResponseAvg) {
+                        document.getElementById('metricClickResponse').textContent = 
+                            metrics.clickResponseAvg.toFixed(2);
+                    }
+                    if (metrics.imageLoadTime) {
+                        document.getElementById('metricImageLoad').textContent = 
+                            Math.round(metrics.imageLoadTime);
+                    }
+                    if (metrics.verifyTime) {
+                        document.getElementById('metricVerify').textContent = 
+                            Math.round(metrics.verifyTime);
+                    }
+                }
+            }
+
+            window.captchaDemo = {
+                getCaptcha: function() { return captcha; },
+                getState: function() { return captcha.getState(); },
+                refresh: function() { captcha.refresh(); },
+                log: logResult
+            };
+
+            logResult('增强版点选验证码已初始化', null);
+        })();
+    </script>
+</body>
+</html>
