@@ -360,3 +360,70 @@ func TrackEvent(c *gin.Context) {
 
 	response.Success(c, gin.H{"message": "event tracked successfully"})
 }
+
+func CompareVariants(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid ab test id")
+		return
+	}
+
+	report, err := service.NewABTestService().CompareVariants(uint(id))
+	if err != nil {
+		if err == service.ErrABTestNotFound {
+			response.NotFound(c, "ab test not found")
+			return
+		}
+		response.InternalServerError(c, "failed to compare variants: "+err.Error())
+		return
+	}
+
+	response.Success(c, report)
+}
+
+func GetVariantAnalytics(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid ab test id")
+		return
+	}
+
+	variantIDStr := c.Param("variantId")
+	variantID, err := strconv.ParseUint(variantIDStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid variant id")
+		return
+	}
+
+	period := c.DefaultQuery("period", "7d")
+	analytics, err := service.NewABTestService().GetVariantAnalytics(uint(id), uint(variantID), period)
+	if err != nil {
+		response.InternalServerError(c, "failed to get variant analytics: "+err.Error())
+		return
+	}
+
+	response.Success(c, analytics)
+}
+
+func GetTestRecommendations(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid ab test id")
+		return
+	}
+
+	recommendations, err := service.NewABTestService().GetTestRecommendations(uint(id))
+	if err != nil {
+		if err == service.ErrABTestNotFound {
+			response.NotFound(c, "ab test not found")
+			return
+		}
+		response.InternalServerError(c, "failed to get recommendations: "+err.Error())
+		return
+	}
+
+	response.Success(c, recommendations)
+}

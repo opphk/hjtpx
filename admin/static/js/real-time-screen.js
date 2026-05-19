@@ -4,18 +4,44 @@ let realtimeChart = null;
 let captchaTypeChart = null;
 let riskDistributionChart = null;
 let topAppsChart = null;
+let heatmapChart = null;
+let geoMapChart = null;
 let realtimeData = [];
 const MAX_DATA_POINTS = 60;
 let chartsInitialized = false;
 const WS_RECONNECT_DELAY = 3000;
+let updateThrottle = false;
+const UPDATE_INTERVAL = 1000;
+let lastUpdateTime = 0;
+let chartUpdateQueue = [];
+let performanceMode = 'normal';
+let dataBuffer = [];
 
 document.addEventListener('DOMContentLoaded', function() {
+    detectPerformanceMode();
     initECharts();
     initWebSocket();
     updateTime();
     setInterval(updateTime, 1000);
     loadInitialData();
+    setupAutoRefresh();
 });
+
+function detectPerformanceMode() {
+    const cores = navigator.hardwareConcurrency || 4;
+    const memory = navigator.deviceMemory || 4;
+    
+    if (cores >= 8 && memory >= 8) {
+        performanceMode = 'high';
+        console.log('High performance mode detected');
+    } else if (cores >= 4 && memory >= 4) {
+        performanceMode = 'normal';
+        console.log('Normal performance mode');
+    } else {
+        performanceMode = 'low';
+        console.log('Low performance mode - some features disabled');
+    }
+}
 
 function updateTime() {
     const now = new Date();
@@ -41,7 +67,155 @@ function initECharts() {
     initCaptchaTypeChart();
     initRiskDistributionChart();
     initTopAppsChart();
+    
+    if (performanceMode !== 'low') {
+        initHeatmapChart();
+        initGeoMapChart();
+    }
+    
     chartsInitialized = true;
+}
+
+function initHeatmapChart() {
+    const container = document.getElementById('heatmapChart');
+    if (!container) return;
+
+    heatmapChart = echarts.init(container);
+    window.addEventListener('resize', () => {
+        if (heatmapChart) heatmapChart.resize();
+    });
+
+    const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
+    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const data = [];
+    
+    for (let i = 0; i < 7; i++) {
+        for (let j = 0; j < 24; j++) {
+            data.push([j, i, Math.floor(Math.random() * 100)]);
+        }
+    }
+
+    heatmapChart.setOption({
+        title: {
+            text: '访问热度',
+            textStyle: { color: '#fff', fontSize: 14 }
+        },
+        tooltip: {
+            position: 'top',
+            formatter: (params) => `${days[params.value[1]]} ${hours[params.value[0]]}<br/>访问量: ${params.value[2]}`
+        },
+        grid: { left: '3%', right: '8%', bottom: '15%', top: '15%' },
+        xAxis: {
+            type: 'category',
+            data: hours,
+            axisLabel: { color: 'rgba(255,255,255,0.5)', interval: 3 },
+            splitArea: { show: true }
+        },
+        yAxis: {
+            type: 'category',
+            data: days,
+            axisLabel: { color: 'rgba(255,255,255,0.5)' },
+            splitArea: { show: true }
+        },
+        visualMap: {
+            min: 0,
+            max: 100,
+            calculable: true,
+            orient: 'horizontal',
+            left: 'center',
+            bottom: '0%',
+            textStyle: { color: '#fff' },
+            inRange: {
+                color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+            }
+        },
+        series: [{
+            name: '访问量',
+            type: 'heatmap',
+            data: data,
+            label: { show: false },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            }
+        }]
+    });
+}
+
+function initGeoMapChart() {
+    const container = document.getElementById('geoMapChart');
+    if (!container) return;
+
+    geoMapChart = echarts.init(container);
+    window.addEventListener('resize', () => {
+        if (geoMapChart) geoMapChart.resize();
+    });
+
+    const regions = [
+        { name: '北京', value: Math.floor(Math.random() * 1000) },
+        { name: '上海', value: Math.floor(Math.random() * 1000) },
+        { name: '广东', value: Math.floor(Math.random() * 1000) },
+        { name: '浙江', value: Math.floor(Math.random() * 1000) },
+        { name: '江苏', value: Math.floor(Math.random() * 1000) }
+    ];
+
+    geoMapChart.setOption({
+        title: {
+            text: '地理分布',
+            textStyle: { color: '#fff', fontSize: 14 }
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c}'
+        },
+        series: [{
+            type: 'map',
+            map: 'china',
+            roam: true,
+            label: {
+                show: true,
+                color: '#fff'
+            },
+            emphasis: {
+                label: {
+                    show: true
+                },
+                itemStyle: {
+                    areaColor: '#00d4ff'
+                }
+            },
+            data: regions
+        }]
+    });
+}
+
+function setupAutoRefresh() {
+    if (performanceMode === 'low') {
+        setInterval(() => {
+            loadInitialData();
+        }, 30000);
+    } else {
+        setInterval(() => {
+            refreshDashboard();
+        }, UPDATE_INTERVAL * 5);
+    }
+}
+
+function refreshDashboard() {
+    fetchDashboardStats();
+}
+
+async function fetchDashboardStats() {
+    try {
+        const data = await auth.request('/api/v1/admin/dashboard/extended');
+        if (data.code === 0 && data.data) {
+            updateMetricsThrottled(data.data);
+        }
+    } catch (error) {
+        console.error('Failed to fetch dashboard stats:', error);
+    }
 }
 
 function initRealtimeChart() {
@@ -327,6 +501,27 @@ function handleWebSocketData(data) {
 }
 
 function updateMetrics(data) {
+    dataBuffer.push(data);
+}
+
+function updateMetricsThrottled(data) {
+    const now = Date.now();
+    if (now - lastUpdateTime < UPDATE_INTERVAL && performanceMode === 'low') {
+        dataBuffer.push(data);
+        return;
+    }
+    
+    if (dataBuffer.length > 0) {
+        const latestData = dataBuffer[dataBuffer.length - 1];
+        dataBuffer = [];
+        applyMetricsUpdate(latestData);
+        lastUpdateTime = now;
+    }
+}
+
+function applyMetricsUpdate(data) {
+    if (!data) return;
+    
     document.getElementById('totalRequests').textContent = formatNumber(data.total_requests || 0);
     document.getElementById('successCount').textContent = formatNumber(data.success_count || 0);
     document.getElementById('failCount').textContent = formatNumber(data.fail_count || 0);

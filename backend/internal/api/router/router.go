@@ -190,6 +190,9 @@ func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, 
 	adminRouter.GET("/ab-test", func(c *gin.Context) {
 		c.HTML(200, "ab-test.html", gin.H{"title": "A/B 测试管理"})
 	})
+	adminRouter.GET("/user-profile", func(c *gin.Context) {
+		c.HTML(200, "user-profile.html", gin.H{"title": "用户画像分析"})
+	})
 
 	adminRouter.GET("/api/dashboard", handler.GetDashboardData)
 	adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
@@ -483,4 +486,14 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 	admin.POST("/ab-tests/:id/start", handler.StartABTest)
 	admin.POST("/ab-tests/:id/stop", handler.StopABTest)
 	admin.GET("/ab-tests/:id/report", handler.GetTestReport)
+	admin.GET("/ab-tests/:id/compare", handler.CompareVariants)
+	admin.GET("/ab-tests/:id/variant/:variantId/analytics", handler.GetVariantAnalytics)
+	admin.GET("/ab-tests/:id/recommendations", handler.GetTestRecommendations)
+
+	userProfileHandler := handler.GetUserProfileHandler()
+	admin.GET("/user-profiles", userProfileHandler.ListUserProfiles)
+	admin.GET("/user-profiles/:id", userProfileHandler.GetUserProfile)
+	admin.GET("/user-profiles/:id/summary", userProfileHandler.GetUserProfileSummary)
+	admin.GET("/user-profiles/:id/export", userProfileHandler.ExportUserProfile)
+	admin.GET("/user-profiles/compare/:id1/:id2", userProfileHandler.CompareUserProfiles)
 }

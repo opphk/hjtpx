@@ -5,6 +5,10 @@ class AntiDebug {
         this.threshold = config.threshold || 160;
         this.actions = config.actions || ['hide', 'log', 'block'];
         this.debugDetected = false;
+        this.debugAttempts = 0;
+        this.maxAttempts = config.maxAttempts || 3;
+        this.antiTampering = config.antiTampering !== false;
+        this.codeObfuscation = config.codeObfuscation !== false;
         this.init();
     }
 
@@ -16,6 +20,260 @@ class AntiDebug {
         this.obfuscateErrors();
         this.detectDebugging();
         this.protectPrototype();
+        
+        if (this.antiTampering) {
+            this.setupAntiTampering();
+        }
+        
+        if (this.codeObfuscation) {
+            this.setupCodeObfuscation();
+        }
+        
+        this.setupDynamicDetection();
+    }
+
+    setupDynamicDetection() {
+        const self = this;
+        
+        setInterval(() => {
+            self.checkFunctionIntegrity();
+            self.detectMemoryInspection();
+            self.checkTimingAnomalies();
+        }, 3000);
+    }
+    
+    checkFunctionIntegrity() {
+        const criticalFunctions = [
+            'authenticate',
+            'verifyCaptcha',
+            'submitChallenge',
+            'generateToken'
+        ];
+        
+        criticalFunctions.forEach(fnName => {
+            if (typeof window[fnName] === 'function') {
+                const originalLength = window[fnName].toString().length;
+                if (this.functionLengths[fnName] && 
+                    Math.abs(originalLength - this.functionLengths[fnName]) > 5) {
+                    this.onDebugDetected('function_tampered');
+                }
+            }
+        });
+    }
+    
+    functionLengths: {},
+    
+    detectMemoryInspection() {
+        const testKey = '__security_check__' + Math.random().toString(36).substring(7);
+        const testValue = Date.now();
+        
+        try {
+            localStorage.setItem(testKey, testValue);
+            const retrieved = localStorage.getItem(testKey);
+            
+            if (retrieved !== testValue.toString()) {
+                this.onDebugDetected('storage_inspection');
+            }
+            
+            sessionStorage.setItem(testKey, testValue);
+            const sessionRetrieved = sessionStorage.getItem(testKey);
+            
+            if (sessionRetrieved !== testValue.toString()) {
+                this.onDebugDetected('session_inspection');
+            }
+            
+            localStorage.removeItem(testKey);
+            sessionStorage.removeItem(testKey);
+        } catch (e) {
+            this.onDebugDetected('storage_protection_bypass');
+        }
+    }
+    
+    checkTimingAnomalies() {
+        const start = performance.now();
+        const iterations = 1000;
+        
+        for (let i = 0; i < iterations; i++) {
+            Math.sqrt(i);
+        }
+        
+        const elapsed = performance.now() - start;
+        
+        if (elapsed > 100) {
+            this.onDebugDetected('timing_anomaly');
+        }
+        
+        const dateNow = Date.now();
+        const performanceNow = performance.now();
+        const diff = Math.abs(dateNow - performanceNow);
+        
+        if (diff > 10000) {
+            this.onDebugDetected('time_manipulation');
+        }
+    }
+    
+    setupAntiTampering() {
+        this.detectCodeModification();
+        this.monitorVariableChanges();
+        this.checkSourceIntegrity();
+    }
+    
+    detectCodeModification() {
+        const originalEval = window.eval;
+        const self = this;
+        
+        window.eval = function(code) {
+            if (code && typeof code === 'string') {
+                const suspiciousPatterns = [
+                    /debugger/i,
+                    /void\s*0/i,
+                    /breakpoint/i
+                ];
+                
+                for (const pattern of suspiciousPatterns) {
+                    if (pattern.test(code)) {
+                        self.onDebugDetected('eval_injection');
+                        return undefined;
+                    }
+                }
+            }
+            
+            return originalEval.apply(window, arguments);
+        };
+        
+        Object.defineProperty(window, 'eval', {
+            get: function() {
+                return window.eval;
+            },
+            configurable: false
+        });
+    }
+    
+    monitorVariableChanges() {
+        const monitoredVars = ['location', 'navigator', 'document'];
+        
+        monitoredVars.forEach(varName => {
+            const original = window[varName];
+            
+            if (original && typeof original === 'object') {
+                const handler = {
+                    get(target, prop) {
+                        if (prop === 'toString') {
+                            return original.toString.bind(original);
+                        }
+                        return target[prop];
+                    },
+                    set(target, prop, value) {
+                        self.onDebugDetected('variable_modification');
+                        target[prop] = value;
+                        return true;
+                    }
+                };
+                
+                window[varName] = new Proxy(original, handler);
+            }
+        });
+    }
+    
+    checkSourceIntegrity() {
+        const scripts = document.querySelectorAll('script[src]');
+        const scriptHashes = {};
+        
+        scripts.forEach(script => {
+            const src = script.src;
+            scriptHashes[src] = true;
+        });
+        
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.tagName === 'SCRIPT') {
+                        if (!scriptHashes[node.src]) {
+                            this.onDebugDetected('script_injection');
+                        }
+                    }
+                    
+                    if (node.tagName === 'IFRAME') {
+                        this.onDebugDetected('iframe_injection');
+                    }
+                });
+            });
+        });
+        
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    setupCodeObfuscation() {
+        this.obfuscateStrings();
+        this.obfuscateFunctions();
+    }
+    
+    obfuscateStrings() {
+        const originalAlert = window.alert;
+        const self = this;
+        
+        window.alert = function(message) {
+            if (message && typeof message === 'string') {
+                const obfuscated = self.xorEncrypt(message, 0x5A);
+                message = obfuscated;
+            }
+            return originalAlert.apply(window, [message]);
+        };
+        
+        const originalPrompt = window.prompt;
+        window.prompt = function(message, defaultValue) {
+            if (message && typeof message === 'string') {
+                const obfuscated = self.xorEncrypt(message, 0x5A);
+                message = obfuscated;
+            }
+            return originalPrompt.apply(window, [message, defaultValue]);
+        };
+        
+        const originalConfirm = window.confirm;
+        window.confirm = function(message) {
+            if (message && typeof message === 'string') {
+                const obfuscated = self.xorEncrypt(message, 0x5A);
+                message = obfuscated;
+            }
+            return originalConfirm.apply(window, [message]);
+        };
+    }
+    
+    xorEncrypt(str, key) {
+        let result = '';
+        for (let i = 0; i < str.length; i++) {
+            result += String.fromCharCode(str.charCodeAt(i) ^ key);
+        }
+        return result;
+    }
+    
+    obfuscateFunctions() {
+        const self = this;
+        
+        if (typeof window.authenticate === 'function') {
+            const originalAuth = window.authenticate;
+            window.authenticate = function(...args) {
+                if (self.debugDetected) {
+                    console.warn('Authentication blocked due to debug detection');
+                    return Promise.reject(new Error('Security check failed'));
+                }
+                return originalAuth.apply(this, args);
+            };
+        }
+        
+        if (typeof window.verifyCaptcha === 'function') {
+            const originalVerify = window.verifyCaptcha;
+            window.verifyCaptcha = function(...args) {
+                if (self.debugDetected) {
+                    console.warn('Verification blocked due to debug detection');
+                    return Promise.reject(new Error('Security check failed'));
+                }
+                return originalVerify.apply(this, args);
+            };
+        }
     }
 
     detectDevTools() {
