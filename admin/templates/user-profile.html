@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 用户画像</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        .profile-nav {
+            border-bottom: 2px solid #e9ecef;
+        }
+        .profile-nav .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 1rem 1.5rem;
+            position: relative;
+        }
+        .profile-nav .nav-link:hover {
+            color: #c23a2b;
+        }
+        .profile-nav .nav-link.active {
+            color: #c23a2b;
+            background: transparent;
+        }
+        .profile-nav .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #c23a2b;
+        }
+        .metric-card {
+            border-left: 4px solid;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .metric-card.primary { border-left-color: #3b82f6; }
+        .metric-card.success { border-left-color: #10b981; }
+        .metric-card.warning { border-left-color: #f59e0b; }
+        .metric-card.danger { border-left-color: #ef4444; }
+        
+        .profile-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .profile-card:hover {
+            border-color: #c23a2b;
+            background: #fff5f5;
+        }
+        
+        .risk-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .risk-very-high { background: #dc3545; color: white; }
+        .risk-high { background: #fd7e14; color: white; }
+        .risk-medium { background: #ffc107; color: #000; }
+        .risk-low { background: #28a745; color: white; }
+        .risk-very-low { background: #20c997; color: white; }
+        
+        .trust-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .trust-very-high { background: #0d6efd; color: white; }
+        .trust-high { background: #0dcaf0; color: #000; }
+        .trust-medium { background: #6c757d; color: white; }
+        .trust-low { background: #ffc107; color: #000; }
+        .trust-very-low { background: #dc3545; color: white; }
+        
+        .device-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding-left: 30px;
+            padding-bottom: 20px;
+            border-left: 2px solid #e9ecef;
+            margin-left: 10px;
+        }
+        .timeline-item:last-child {
+            border-left: none;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #c23a2b;
+        }
+        .timeline-item.high::before { background: #dc3545; }
+        .timeline-item.medium::before { background: #ffc107; }
+        .timeline-item.low::before { background: #28a745; }
+        
+        .tab-content {
+            min-height: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="bg-dark d-flex flex-column" style="width: 260px; min-height: 100vh;">
+            <div class="d-flex align-items-center gap-3 p-3 border-bottom border-secondary">
+                <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div>
+                    <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
+                    <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+                </div>
+            </div>
+            <nav class="d-flex flex-column p-3 gap-1 flex-grow-1">
+                <a class="nav-link" href="/admin/">
+                    <i class="fas fa-chart-bar"></i><span>仪表盘</span>
+                </a>
+                <a class="nav-link" href="/admin/stats">
+                    <i class="fas fa-chart-line"></i><span>统计分析</span>
+                </a>
+                <a class="nav-link" href="/admin/advanced-analytics">
+                    <i class="fas fa-chart-pie"></i><span>高级分析</span>
+                </a>
+                <a class="nav-link" href="/admin/applications">
+                    <i class="fas fa-mobile-alt"></i><span>应用管理</span>
+                </a>
+                <a class="nav-link" href="/admin/logs">
+                    <i class="fas fa-clipboard-list"></i><span>日志查询</span>
+                </a>
+                <a class="nav-link" href="/admin/risk-rules">
+                    <i class="fas fa-shield-alt"></i><span>风控规则</span>
+                </a>
+                <a class="nav-link" href="/admin/blacklist">
+                    <i class="fas fa-ban"></i><span>黑名单</span>
+                </a>
+                <a class="nav-link" href="/admin/monitoring">
+                    <i class="fas fa-tachometer-alt"></i><span>实时监控</span>
+                </a>
+                <a class="nav-link" href="/admin/ab-testing">
+                    <i class="fas fa-flask"></i><span>A/B测试</span>
+                </a>
+                <a class="nav-link active" href="/admin/user-profile">
+                    <i class="fas fa-user-circle"></i><span>用户画像</span>
+                </a>
+            </nav>
+            <div class="border-top border-secondary p-3 mt-auto">
+                <a href="#" id="logoutBtn" class="nav-link">
+                    <i class="fas fa-sign-out-alt"></i><span>退出登录</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-grow-1">
+            <!-- Header -->
+            <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <h1 style="font-size:20px;font-weight:700;margin:0;padding-left:16px;position:relative;">用户画像分析</h1>
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);flex-shrink:0;">墨盾</span>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <button id="refreshBtn" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-sync me-1"></i>刷新
+                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary" id="usernameDisplay">管理员</span>
+                        <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
+                    </div>
+                </div>
+            </header>
+            <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
+
+            <!-- User Profile Navigation -->
+            <div class="px-4">
+                <ul class="nav profile-nav mb-4" id="profileTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                            <i class="fas fa-user me-2"></i>用户总览
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="detail-tab" data-bs-toggle="tab" data-bs-target="#detail" type="button" role="tab">
+                            <i class="fas fa-id-card me-2"></i>详细画像
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="behavior-tab" data-bs-toggle="tab" data-bs-target="#behavior" type="button" role="tab">
+                            <i class="fas fa-brain me-2"></i>行为分析
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="compare-tab" data-bs-toggle="tab" data-bs-target="#compare" type="button" role="tab">
+                            <i class="fas fa-balance-scale me-2"></i>用户对比
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="profileTabContent">
+                    <!-- 用户总览 -->
+                    <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                        <!-- 搜索和过滤 -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="searchInput" placeholder="搜索用户名或邮箱...">
+                                    <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="trustLevelFilter">
+                                    <option value="">全部信任等级</option>
+                                    <option value="非常高">非常高</option>
+                                    <option value="高">高</option>
+                                    <option value="中">中</option>
+                                    <option value="低">低</option>
+                                    <option value="非常低">非常低</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="riskLevelFilter">
+                                    <option value="">全部风险等级</option>
+                                    <option value="极高">极高</option>
+                                    <option value="高">高</option>
+                                    <option value="中">中</option>
+                                    <option value="低">低</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 摘要指标 -->
+                        <div class="row g-4 mb-4" id="summaryMetrics">
+                        </div>
+
+                        <!-- 用户列表 -->
+                        <div id="profileList">
+                        </div>
+
+                        <!-- 分页 -->
+                        <nav id="profilePagination" class="mt-4">
+                        </nav>
+                    </div>
+
+                    <!-- 详细画像 -->
+                    <div class="tab-pane fade" id="detail" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-user me-2" style="color:#b8924e;"></i>基本信息</h5>
+                                    </div>
+                                    <div class="card-body" id="basicInfo">
+                                        <p class="text-muted">选择一个用户查看详情</p>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-shield-alt me-2" style="color:#b8924e;"></i>风险评估</h5>
+                                    </div>
+                                    <div class="card-body" id="riskProfile">
+                                        <p class="text-muted">选择一个用户查看详情</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-8">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:#b8924e;"></i>活动指标</h5>
+                                    </div>
+                                    <div class="card-body" id="activityMetrics">
+                                        <p class="text-muted">选择一个用户查看详情</p>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-desktop me-2" style="color:#b8924e;"></i>设备信息</h5>
+                                    </div>
+                                    <div class="card-body" id="deviceProfile">
+                                        <p class="text-muted">选择一个用户查看详情</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 行为分析 -->
+                    <div class="tab-pane fade" id="behavior" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-clock me-2" style="color:#b8924e;"></i>活跃时段分布</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="activityHoursChart" height="300"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0"><i class="fas fa-calendar me-2" style="color:#b8924e;"></i>活跃日期分布</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="activityDaysChart" height="300"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-history me-2" style="color:#b8924e;"></i>活动时间线</h5>
+                            </div>
+                            <div class="card-body" id="activityTimeline">
+                                <p class="text-muted">选择一个用户查看活动时间线</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 用户对比 -->
+                    <div class="tab-pane fade" id="compare" role="tabpanel">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-5">
+                                <label class="form-label">选择用户1</label>
+                                <select class="form-select" id="compareUser1">
+                                    <option value="">选择第一个用户</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end justify-content-center">
+                                <i class="fas fa-arrows-alt-h fa-2x text-muted"></i>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">选择用户2</label>
+                                <select class="form-select" id="compareUser2">
+                                    <option value="">选择第二个用户</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary mb-4" id="compareBtn">
+                            <i class="fas fa-balance-scale me-2"></i>开始对比
+                        </button>
+
+                        <div id="comparisonResult">
+                            <p class="text-muted">选择两个用户后点击"开始对比"查看对比结果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/user-profile.js"></script>
+</body>
+</html>
