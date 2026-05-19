@@ -1,0 +1,883 @@
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 租户管理{% endblock %}
+{% block page_title %}租户管理{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-primary" id="createTenantBtn">
+        <i class="fas fa-plus"></i> 创建租户
+    </button>
+</div>
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+        <i class="fas fa-filter"></i> 筛选
+    </button>
+    <div class="dropdown-menu" role="menu">
+        <a class="dropdown-item" href="#" data-filter="all">全部</a>
+        <a class="dropdown-item" href="#" data-filter="active">活跃</a>
+        <a class="dropdown-item" href="#" data-filter="suspended">已暂停</a>
+        <a class="dropdown-item" href="#" data-filter="inactive">未激活</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">租户列表</h3>
+                <div class="card-tools">
+                    <div class="input-group input-group-sm" style="width: 250px;">
+                        <input type="text" name="table_search" class="form-control float-right" placeholder="搜索租户..." id="searchInput">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-default" id="searchBtn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap" id="tenantTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>租户名称</th>
+                            <th>代码</th>
+                            <th>套餐</th>
+                            <th>用户数</th>
+                            <th>应用数</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tenantTableBody">
+                        <tr>
+                            <td colspan="9" class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="sr-only">加载中...</span>
+                                </div>
+                                加载中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="dataTables_info" id="tableInfo">显示 0 条记录</div>
+                    <div class="dataTables_paginate paging_simple_numbers" id="pagination"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="small-box bg-primary">
+            <div class="inner">
+                <h3 id="totalTenants">0</h3>
+                <p>总租户数</p>
+            </div>
+            <div class="icon"><i class="fas fa-building"></i></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3 id="activeTenants">0</h3>
+                <p>活跃租户</p>
+            </div>
+            <div class="icon"><i class="fas fa-check-circle"></i></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h3 id="totalRevenue">¥0</h3>
+                <p>总收益</p>
+            </div>
+            <div class="icon"><i class="fas fa-dollar-sign"></i></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/admin/static/js/tenant-management.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadTenants();
+    loadStats();
+    
+    $('#createTenantBtn').on('click', function() {
+        showCreateTenantModal();
+    });
+    
+    $('#searchBtn').on('click', function() {
+        const search = $('#searchInput').val();
+        loadTenants(1, search);
+    });
+    
+    $('#searchInput').on('keypress', function(e) {
+        if (e.which === 13) {
+            const search = $(this).val();
+            loadTenants(1, search);
+        }
+    });
+    
+    $('[data-filter]').on('click', function(e) {
+        e.preventDefault();
+        const filter = $(this).data('filter');
+        loadTenants(1, '', filter);
+    });
+});
+
+async function loadTenants(page = 1, search = '', status = '') {
+    try {
+        const params = new URLSearchParams({
+            page: page,
+            page_size: 20
+        });
+        if (search) params.append('search', search);
+        if (status && status !== 'all') params.append('status', status);
+        
+        const response = await fetch('/admin/api/tenants?' + params.toString());
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            renderTenantTable(result.data.items);
+            renderPagination(result.data);
+            updateTableInfo(result.data);
+        } else {
+            showAdminToast('加载租户列表失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to load tenants:', error);
+        showAdminToast('加载租户列表失败', 'error');
+    }
+}
+
+function renderTenantTable(tenants) {
+    const tbody = $('#tenantTableBody');
+    if (!tenants || tenants.length === 0) {
+        tbody.html('<tr><td colspan="9" class="text-center text-muted">暂无数据</td></tr>');
+        return;
+    }
+    
+    tbody.html(tenants.map(tenant => {
+        const planBadge = getPlanBadge(tenant.plan);
+        const statusBadge = getStatusBadge(tenant.status);
+        const quota = tenant.quota || {};
+        const users = quota.current_users || 0;
+        const maxUsers = quota.max_users || 0;
+        const apps = quota.current_apps || 0;
+        const maxApps = quota.max_applications || 0;
+        
+        return `
+            <tr data-id="${tenant.id}">
+                <td>${tenant.id}</td>
+                <td>
+                    <strong>${escapeHtml(tenant.name)}</strong>
+                    ${tenant.domain ? '<br><small class="text-muted">' + escapeHtml(tenant.domain) + '</small>' : ''}
+                </td>
+                <td><code>${escapeHtml(tenant.code)}</code></td>
+                <td>${planBadge}</td>
+                <td>
+                    <span class="badge badge-info">${users} / ${maxUsers === -1 ? '∞' : maxUsers}</span>
+                </td>
+                <td>
+                    <span class="badge badge-secondary">${apps} / ${maxApps === -1 ? '∞' : maxApps}</span>
+                </td>
+                <td>${statusBadge}</td>
+                <td>${formatDate(tenant.created_at)}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-default" onclick="viewTenant(${tenant.id})" title="查看详情">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-default" onclick="editTenant(${tenant.id})" title="编辑">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-default" onclick="manageUsers(${tenant.id})" title="管理用户">
+                            <i class="fas fa-users"></i>
+                        </button>
+                        <button class="btn btn-default" onclick="showQuotaModal(${tenant.id})" title="配额管理">
+                            <i class="fas fa-chart-pie"></i>
+                        </button>
+                        <button class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" href="#" onclick="inviteUser(${tenant.id})">
+                                <i class="fas fa-user-plus"></i> 邀请用户
+                            </a>
+                            <a class="dropdown-item" href="#" onclick="changePlan(${tenant.id})">
+                                <i class="fas fa-exchange-alt"></i> 更换套餐
+                            </a>
+                            <a class="dropdown-item" href="#" onclick="viewAuditLogs(${tenant.id})">
+                                <i class="fas fa-history"></i> 审计日志
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            ${tenant.status === 'active' ? 
+                                '<a class="dropdown-item text-warning" href="#" onclick="suspendTenant(' + tenant.id + ')"><i class="fas fa-pause"></i> 暂停</a>' :
+                                '<a class="dropdown-item text-success" href="#" onclick="activateTenant(' + tenant.id + ')"><i class="fas fa-play"></i> 激活</a>'
+                            }
+                            <a class="dropdown-item text-danger" href="#" onclick="deleteTenant(' + tenant.id + ')">
+                                <i class="fas fa-trash"></i> 删除
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join(''));
+}
+
+function getPlanBadge(plan) {
+    const badges = {
+        'free': '<span class="badge badge-secondary">Free</span>',
+        'starter': '<span class="badge badge-info">Starter</span>',
+        'professional': '<span class="badge badge-primary">Professional</span>',
+        'enterprise': '<span class="badge badge-danger">Enterprise</span>'
+    };
+    return badges[plan] || '<span class="badge badge-secondary">Unknown</span>';
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'active': '<span class="badge badge-success">活跃</span>',
+        'suspended': '<span class="badge badge-warning">已暂停</span>',
+        'inactive': '<span class="badge badge-secondary">未激活</span>'
+    };
+    return badges[status] || '<span class="badge badge-secondary">Unknown</span>';
+}
+
+function renderPagination(data) {
+    const pagination = $('#pagination');
+    if (data.total_pages <= 1) {
+        pagination.html('');
+        return;
+    }
+    
+    let html = '<ul class="pagination">';
+    
+    if (data.page > 1) {
+        html += '<li class="paginate_button page-item"><a class="page-link" href="#" onclick="loadTenants(' + (data.page - 1) + ')">上一页</a></li>';
+    }
+    
+    const start = Math.max(1, data.page - 2);
+    const end = Math.min(data.total_pages, data.page + 2);
+    
+    if (start > 1) {
+        html += '<li class="paginate_button page-item"><a class="page-link" href="#" onclick="loadTenants(1)">1</a></li>';
+        if (start > 2) {
+            html += '<li class="paginate_button page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+    
+    for (let i = start; i <= end; i++) {
+        const active = i === data.page ? 'active' : '';
+        html += '<li class="paginate_button page-item ' + active + '"><a class="page-link" href="#" onclick="loadTenants(' + i + ')">' + i + '</a></li>';
+    }
+    
+    if (end < data.total_pages) {
+        if (end < data.total_pages - 1) {
+            html += '<li class="paginate_button page-item disabled"><span class="page-link">...</span></li>';
+        }
+        html += '<li class="paginate_button page-item"><a class="page-link" href="#" onclick="loadTenants(' + data.total_pages + ')">' + data.total_pages + '</a></li>';
+    }
+    
+    if (data.page < data.total_pages) {
+        html += '<li class="paginate_button page-item"><a class="page-link" href="#" onclick="loadTenants(' + (data.page + 1) + ')">下一页</a></li>';
+    }
+    
+    html += '</ul>';
+    pagination.html(html);
+}
+
+function updateTableInfo(data) {
+    const start = (data.page - 1) * data.page_size + 1;
+    const end = Math.min(data.page * data.page_size, data.total);
+    $('#tableInfo').text(`显示 ${start} - ${end} 条记录，共 ${data.total} 条`);
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/admin/api/tenants/stats');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            $('#totalTenants').text(result.data.total || 0);
+            $('#activeTenants').text(result.data.active || 0);
+            $('#totalRevenue').text('¥' + (result.data.total_revenue || 0).toLocaleString());
+        }
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+    }
+}
+
+function showCreateTenantModal() {
+    const modalHtml = `
+    <div class="modal fade" id="createTenantModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-building"></i> 创建租户</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="createTenantForm">
+                        <div class="form-group">
+                            <label>租户名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" required placeholder="输入租户名称">
+                        </div>
+                        <div class="form-group">
+                            <label>租户代码 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="code" required placeholder="唯一标识，如 mycompany" pattern="[a-z0-9-]+">
+                            <small class="text-muted">只能包含小写字母、数字和连字符</small>
+                        </div>
+                        <div class="form-group">
+                            <label>套餐</label>
+                            <select class="form-control" name="plan">
+                                <option value="free">Free</option>
+                                <option value="starter">Starter</option>
+                                <option value="professional">Professional</option>
+                                <option value="enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>联系邮箱</label>
+                            <input type="email" class="form-control" name="contact_email" placeholder="contact@company.com">
+                        </div>
+                        <div class="form-group">
+                            <label>联系电话</label>
+                            <input type="text" class="form-control" name="contact_phone" placeholder="+86 1234567890">
+                        </div>
+                        <div class="form-group">
+                            <label>域名</label>
+                            <input type="text" class="form-control" name="domain" placeholder="app.example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>描述</label>
+                            <textarea class="form-control" name="description" rows="3" placeholder="租户描述..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="submitCreateTenant">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    $('body').append(modalHtml);
+    $('#createTenantModal').modal('show');
+    
+    $('#submitCreateTenant').on('click', async function() {
+        const form = document.getElementById('createTenantForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+            const response = await fetch('/admin/api/tenants', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.code === 0) {
+                showAdminToast('租户创建成功', 'success');
+                $('#createTenantModal').modal('hide');
+                loadTenants();
+                loadStats();
+            } else {
+                showAdminToast(result.message || '创建失败', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to create tenant:', error);
+            showAdminToast('创建失败', 'error');
+        }
+    });
+    
+    $('#createTenantModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+async function viewTenant(id) {
+    try {
+        const response = await fetch('/admin/api/tenants/' + id);
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showTenantDetailModal(result.data);
+        } else {
+            showAdminToast('获取租户详情失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to get tenant:', error);
+        showAdminToast('获取租户详情失败', 'error');
+    }
+}
+
+function showTenantDetailModal(tenant) {
+    const quota = tenant.quota || {};
+    const billing = tenant.billing || {};
+    
+    const modalHtml = `
+    <div class="modal fade" id="tenantDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-building"></i> ${escapeHtml(tenant.name)}</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="dl-horizontal">
+                                <dt>租户代码</dt>
+                                <dd><code>${escapeHtml(tenant.code)}</code></dd>
+                                <dt>当前套餐</dt>
+                                <dd>${getPlanBadge(tenant.plan)}</dd>
+                                <dt>状态</dt>
+                                <dd>${getStatusBadge(tenant.status)}</dd>
+                                <dt>联系邮箱</dt>
+                                <dd>${escapeHtml(tenant.contact_email || '-')}</dd>
+                                <dt>联系电话</dt>
+                                <dd>${escapeHtml(tenant.contact_phone || '-')}</dd>
+                                <dt>域名</dt>
+                                <dd>${escapeHtml(tenant.domain || '-')}</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="dl-horizontal">
+                                <dt>创建时间</dt>
+                                <dd>${formatDate(tenant.created_at)}</dd>
+                                <dt>激活时间</dt>
+                                <dd>${tenant.activated_at ? formatDate(tenant.activated_at) : '-'}</dd>
+                                <dt>暂停时间</dt>
+                                <dd>${tenant.suspended_at ? formatDate(tenant.suspended_at) : '-'}</dd>
+                                <dt>到期时间</dt>
+                                <dd>${tenant.expires_at ? formatDate(tenant.expires_at) : '-'}</dd>
+                                <dt>数据隔离</dt>
+                                <dd>${tenant.isolated_db ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-secondary">禁用</span>'}</dd>
+                                <dt>缓存隔离</dt>
+                                <dd>${tenant.isolated_cache ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-secondary">禁用</span>'}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6>配额使用情况</h6>
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-info"><i class="fas fa-users"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">用户数</span>
+                                    <span class="info-box-number">${quota.current_users || 0} / ${quota.max_users === -1 ? '∞' : quota.max_users}</span>
+                                    <div class="progress">
+                                        <div class="progress-bar" style="width: ${calculateWidth(quota.current_users, quota.max_users)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-primary"><i class="fas fa-mobile-alt"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">应用数</span>
+                                    <span class="info-box-number">${quota.current_apps || 0} / ${quota.max_applications === -1 ? '∞' : quota.max_applications}</span>
+                                    <div class="progress">
+                                        <div class="progress-bar" style="width: ${calculateWidth(quota.current_apps, quota.max_applications)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-success"><i class="fas fa-plug"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Webhook数</span>
+                                    <span class="info-box-number">${quota.current_webhooks || 0} / ${quota.max_webhooks === -1 ? '∞' : quota.max_webhooks}</span>
+                                    <div class="progress">
+                                        <div class="progress-bar" style="width: ${calculateWidth(quota.current_webhooks, quota.max_webhooks)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mt-3">账单信息</h6>
+                    <dl class="dl-horizontal">
+                        <dt>计费周期</dt>
+                        <dd>${escapeHtml(billing.billing_cycle || '-')}</dd>
+                        <dt>价格</dt>
+                        <dd>¥${billing.price || 0}</dd>
+                        <dt>付款状态</dt>
+                        <dd><span class="badge badge-${billing.payment_status === 'paid' ? 'success' : 'warning'}">${escapeHtml(billing.payment_status || '-')}</span></dd>
+                        <dt>下次付款日期</dt>
+                        <dd>${billing.next_payment_at ? formatDate(billing.next_payment_at) : '-'}</dd>
+                    </dl>
+                    
+                    ${tenant.description ? '<hr><h6>描述</h6><p>' + escapeHtml(tenant.description) + '</p>' : ''}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="editTenant(${tenant.id})">编辑</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    $('body').append(modalHtml);
+    $('#tenantDetailModal').modal('show');
+    
+    $('#tenantDetailModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+async function editTenant(id) {
+    try {
+        const response = await fetch('/admin/api/tenants/' + id);
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showEditTenantModal(result.data);
+        } else {
+            showAdminToast('获取租户详情失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to get tenant:', error);
+        showAdminToast('获取租户详情失败', 'error');
+    }
+}
+
+function showEditTenantModal(tenant) {
+    const modalHtml = `
+    <div class="modal fade" id="editTenantModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit"></i> 编辑租户</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="editTenantForm">
+                        <input type="hidden" name="id" value="${tenant.id}">
+                        <div class="form-group">
+                            <label>租户名称</label>
+                            <input type="text" class="form-control" name="name" value="${escapeHtml(tenant.name)}">
+                        </div>
+                        <div class="form-group">
+                            <label>联系邮箱</label>
+                            <input type="email" class="form-control" name="contact_email" value="${escapeHtml(tenant.contact_email || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>联系电话</label>
+                            <input type="text" class="form-control" name="contact_phone" value="${escapeHtml(tenant.contact_phone || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>域名</label>
+                            <input type="text" class="form-control" name="domain" value="${escapeHtml(tenant.domain || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>描述</label>
+                            <textarea class="form-control" name="description" rows="3">${escapeHtml(tenant.description || '')}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select class="form-control" name="status">
+                                <option value="active" ${tenant.status === 'active' ? 'selected' : ''}>活跃</option>
+                                <option value="suspended" ${tenant.status === 'suspended' ? 'selected' : ''}>暂停</option>
+                                <option value="inactive" ${tenant.status === 'inactive' ? 'selected' : ''}>未激活</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="submitEditTenant">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    $('body').append(modalHtml);
+    $('#editTenantModal').modal('show');
+    
+    $('#submitEditTenant').on('click', async function() {
+        const form = document.getElementById('editTenantForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+            const response = await fetch('/admin/api/tenants/' + tenant.id, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.code === 0) {
+                showAdminToast('保存成功', 'success');
+                $('#editTenantModal').modal('hide');
+                loadTenants();
+            } else {
+                showAdminToast(result.message || '保存失败', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to update tenant:', error);
+            showAdminToast('保存失败', 'error');
+        }
+    });
+    
+    $('#editTenantModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+async function manageUsers(tenantId) {
+    window.location.href = '/admin/tenant/' + tenantId + '/users';
+}
+
+function showQuotaModal(tenantId) {
+    window.location.href = '/admin/tenant/' + tenantId + '/quota';
+}
+
+async function inviteUser(tenantId) {
+    const email = prompt('请输入要邀请的邮箱地址:');
+    if (!email) return;
+    
+    const role = prompt('请输入用户角色 (admin/member/viewer):', 'member');
+    if (!role) return;
+    
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/invitations', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email: email, role: role})
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('邀请发送成功', 'success');
+            if (confirm('邀请链接: ' + window.location.origin + '/invite/' + result.data.token)) {
+                copyToClipboard(window.location.origin + '/invite/' + result.data.token);
+            }
+        } else {
+            showAdminToast(result.message || '邀请失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to invite user:', error);
+        showAdminToast('邀请失败', 'error');
+    }
+}
+
+async function changePlan(tenantId) {
+    const plans = [
+        {value: 'free', label: 'Free'},
+        {value: 'starter', label: 'Starter'},
+        {value: 'professional', label: 'Professional'},
+        {value: 'enterprise', label: 'Enterprise'}
+    ];
+    
+    let options = plans.map(p => '<option value="' + p.value + '">' + p.label + '</option>').join('');
+    
+    const modalHtml = `
+    <div class="modal fade" id="changePlanModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> 更换套餐</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePlanForm">
+                        <div class="form-group">
+                            <label>选择新套餐</label>
+                            <select class="form-control" name="plan" id="newPlan">
+                                ${options}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>价格 (每月)</label>
+                            <input type="number" class="form-control" name="price" id="planPrice" value="0" step="0.01">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="submitChangePlan">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    $('body').append(modalHtml);
+    $('#changePlanModal').modal('show');
+    
+    $('#submitChangePlan').on('click', async function() {
+        const plan = $('#newPlan').val();
+        const price = parseFloat($('#planPrice').val()) || 0;
+        
+        try {
+            const response = await fetch('/admin/api/tenants/' + tenantId + '/billing', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plan: plan, price: price})
+            });
+            
+            const result = await response.json();
+            
+            if (result.code === 0) {
+                showAdminToast('套餐更换成功', 'success');
+                $('#changePlanModal').modal('hide');
+                loadTenants();
+            } else {
+                showAdminToast(result.message || '更换失败', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to change plan:', error);
+            showAdminToast('更换失败', 'error');
+        }
+    });
+    
+    $('#changePlanModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+function viewAuditLogs(tenantId) {
+    window.location.href = '/admin/tenant/' + tenantId + '/audit-logs';
+}
+
+async function suspendTenant(tenantId) {
+    if (!confirm('确定要暂停此租户吗？')) return;
+    
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({status: 'suspended'})
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('租户已暂停', 'success');
+            loadTenants();
+        } else {
+            showAdminToast(result.message || '操作失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to suspend tenant:', error);
+        showAdminToast('操作失败', 'error');
+    }
+}
+
+async function activateTenant(tenantId) {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({status: 'active'})
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('租户已激活', 'success');
+            loadTenants();
+        } else {
+            showAdminToast(result.message || '操作失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to activate tenant:', error);
+        showAdminToast('操作失败', 'error');
+    }
+}
+
+async function deleteTenant(tenantId) {
+    if (!confirm('确定要删除此租户吗？此操作不可恢复！')) return;
+    if (!confirm('再次确认删除租户的所有数据将被永久删除！')) return;
+    
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('租户已删除', 'success');
+            loadTenants();
+            loadStats();
+        } else {
+            showAdminToast(result.message || '删除失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to delete tenant:', error);
+        showAdminToast('删除失败', 'error');
+    }
+}
+
+function calculateWidth(used, limit) {
+    if (!limit || limit === -1) return 0;
+    return Math.min((used / limit) * 100, 100);
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN');
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function copyToClipboard(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    showAdminToast('已复制到剪贴板', 'success');
+}
+</script>
+{% endblock %}
