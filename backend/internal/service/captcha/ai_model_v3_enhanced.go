@@ -12,6 +12,26 @@ import (
 	"github.com/hjtpx/hjtpx/internal/model"
 )
 
+type CaptchaThemeType string
+
+const (
+	CaptchaThemeNature   CaptchaThemeType = "nature"
+	CaptchaThemeCity     CaptchaThemeType = "city"
+	CaptchaThemeAbstract CaptchaThemeType = "abstract"
+	CaptchaThemeGame     CaptchaThemeType = "game"
+	CaptchaThemeCustom   CaptchaThemeType = "custom"
+)
+
+type CaptchaSceneType string
+
+const (
+	CaptchaSceneLogin    CaptchaSceneType = "login"
+	CaptchaSceneRegister CaptchaSceneType = "register"
+	CaptchaScenePayment  CaptchaSceneType = "payment"
+	CaptchaSceneComment  CaptchaSceneType = "comment"
+	CaptchaSceneGeneral  CaptchaSceneType = "general"
+)
+
 type EnhancedGPTCaptchaGenerator struct {
 	rng            *rand.Rand
 	initialized    bool
@@ -488,6 +508,73 @@ func (a *EnhancedRiskAssessor) Initialize(ctx context.Context) error {
 	return nil
 }
 
+func (a *EnhancedRiskAssessor) normalizeFeatures(features []float64) []float64 {
+	if len(features) == 0 {
+		return features
+	}
+
+	normalized := make([]float64, len(features))
+	for i, f := range features {
+		if i < len(a.featureStds) && a.featureStds[i] > 0 {
+			normalized[i] = (f - a.featureMeans[i]) / a.featureStds[i]
+			normalized[i] = math.Max(-3, math.Min(3, normalized[i]))
+		} else {
+			normalized[i] = f
+		}
+	}
+	return normalized
+}
+
+func (a *EnhancedRiskAssessor) calculateFeatureScores(normalizedFeatures []float64) map[string]float64 {
+	scores := map[string]float64{
+		"speed_score":      0.0,
+		"accuracy_score":   0.0,
+		"consistency_score": 0.0,
+		"naturalness_score": 0.0,
+	}
+
+	if len(normalizedFeatures) >= 20 {
+		scores["speed_score"] = math.Max(0, math.Min(1, 1-normalizedFeatures[5]/3))
+		scores["accuracy_score"] = math.Max(0, math.Min(1, normalizedFeatures[3]/3+0.5))
+		scores["consistency_score"] = math.Max(0, math.Min(1, 1-math.Abs(normalizedFeatures[6])/3))
+		scores["naturalness_score"] = math.Max(0, math.Min(1, normalizedFeatures[8]/3+0.5))
+	}
+
+	return scores
+}
+
+func (a *EnhancedRiskAssessor) determineRiskLevel(riskScore float64) string {
+	if riskScore > 0.7 {
+		return "high"
+	} else if riskScore > 0.4 {
+		return "medium"
+	}
+	return "low"
+}
+
+func (a *EnhancedRiskAssessor) generateRecommendations(riskScore float64, featureScores map[string]float64) []string {
+	recommendations := []string{}
+
+	if riskScore > 0.7 {
+		recommendations = append(recommendations, "require_additional_verification")
+		recommendations = append(recommendations, "increase_captcha_difficulty")
+	}
+
+	if speed, ok := featureScores["speed_score"]; ok && speed > 0.9 {
+		recommendations = append(recommendations, "check_for_automated_behavior")
+	}
+
+	if consistency, ok := featureScores["consistency_score"]; ok && consistency < 0.3 {
+		recommendations = append(recommendations, "flag_for_review")
+	}
+
+	if len(recommendations) == 0 {
+		recommendations = append(recommendations, "allow_access")
+	}
+
+	return recommendations
+}
+
 func (a *EnhancedRiskAssessor) AssessRisk(ctx context.Context, features []float64, deviceInfo map[string]interface{}, behaviorData *model.TraceData) (*EnhancedRiskResult, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -499,6 +586,7 @@ func (a *EnhancedRiskAssessor) AssessRisk(ctx context.Context, features []float6
 	normalizedFeatures := a.normalizeFeatures(features)
 
 	riskScore := a.forwardPropagateEnhanced(normalizedFeatures)
+
 
 	featureScores := a.calculateFeatureScores(normalizedFeatures)
 
@@ -659,6 +747,53 @@ func (s *EnhancedBehaviorLearningSystem) Initialize(ctx context.Context) error {
 
 	s.lastUpdate = time.Now()
 	return nil
+}
+
+func (s *EnhancedBehaviorLearningSystem) computePatternID(features []float64) string {
+	if len(features) == 0 {
+		return "empty_pattern"
+	}
+
+	hash := 0
+	const prime = 31
+	hash = prime*hash + len(features)
+
+	for i, f := range features {
+		if i >= 20 {
+			break
+		}
+		bin := int(f * 10)
+		hash = prime*hash + i*17 + bin
+	}
+
+	return fmt.Sprintf("pattern_%d_%d", len(features), hash%100000)
+}
+
+func (s *EnhancedBehaviorLearningSystem) computeCosineSimilarity(vec1, vec2 []float64) float64 {
+	if len(vec1) == 0 || len(vec2) == 0 {
+		return 0.0
+	}
+
+	dotProduct := 0.0
+	magnitude1 := 0.0
+	magnitude2 := 0.0
+
+	minLen := len(vec1)
+	if len(vec2) < minLen {
+		minLen = len(vec2)
+	}
+
+	for i := 0; i < minLen; i++ {
+		dotProduct += vec1[i] * vec2[i]
+		magnitude1 += vec1[i] * vec1[i]
+		magnitude2 += vec2[i] * vec2[i]
+	}
+
+	if magnitude1 == 0 || magnitude2 == 0 {
+		return 0.0
+	}
+
+	return dotProduct / (math.Sqrt(magnitude1) * math.Sqrt(magnitude2))
 }
 
 func (s *EnhancedBehaviorLearningSystem) LearnFromExample(ctx context.Context, features []float64, isBot bool, confidence float64, metadata map[string]interface{}) error {

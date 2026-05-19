@@ -550,6 +550,9 @@
             </div>
             <div class="card-body">
                 <div id="realtimeChart" style="min-height: 200px; height: 200px;"></div>
+                <div class="chart-container" style="position: relative; height: 40vh; width: 80%; margin-top: 20px;">
+                    <canvas id="realtimeChartCanvas"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -668,9 +671,54 @@
 {% block scripts %}
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/extension/bmap.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script src="/admin/static/js/dashboard-ext.js"></script>
 <script src="/admin/static/js/dashboard-enhanced.js"></script>
+<script src="/admin/static/js/realtime-analytics.js"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    startRealTimeUpdates();
+    
+    function startRealTimeUpdates() {
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/v1/admin/stats/realtime');
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('实时数据更新失败:', error);
+            }
+        }, 5000);
+    }
+    
+    function updateDashboard(data) {
+        if (data.totalVerifications) {
+            const el = document.getElementById('total-verifications');
+            if (el) el.textContent = data.totalVerifications;
+        }
+        if (data.successRate) {
+            const el = document.getElementById('success-rate');
+            if (el) el.textContent = (data.successRate * 100).toFixed(2) + '%';
+        }
+        if (data.blockedAttempts) {
+            const el = document.getElementById('blocked-attempts');
+            if (el) el.textContent = data.blockedAttempts;
+        }
+        
+        if (window.chartInstance) {
+            window.chartInstance.data.labels.push(new Date().toLocaleTimeString());
+            window.chartInstance.data.datasets[0].data.push(data.currentQPS);
+            
+            if (window.chartInstance.data.labels.length > 20) {
+                window.chartInstance.data.labels.shift();
+                window.chartInstance.data.datasets[0].data.shift();
+            }
+            
+            window.chartInstance.update('none');
+        }
+    }
+});
+
 let trendChart, pieChart, captchaTypeChart, realtimeChart, miniChart;
 let radarChart, geoChart, heatmapChart, stackChart, appUsageChart;
 let ws = null;

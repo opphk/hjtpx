@@ -11,15 +11,21 @@ import (
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/model"
-	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"gorm.io/gorm"
 )
 
+type RiskCacheService interface {
+	Get(ctx context.Context, key string) (int64, error)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Incr(ctx context.Context, key string) (int64, error)
+	Expire(ctx context.Context, key string, duration time.Duration) error
+}
+
 type RiskRuleEngineV2 struct {
 	db              *gorm.DB
 	workflowEngine  *WorkflowEngine
-	cacheService    interface{}
+	cacheService    RiskCacheService
 	ruleMutex       sync.RWMutex
 	compiledRules   map[uint]*CompiledRule
 	ruleConditions  map[string]ConditionEvaluator
@@ -749,10 +755,10 @@ func (e *RiskRuleEngineV2) evalExpression(ctx *model.RiskContext, params map[str
 	if len(ops) < 3 {
 		return false
 	}
-	
-	left := parseFloat(ops[0])
+
+	left, _ := parseFloat(ops[0])
 	op := ops[1]
-	right := parseFloat(ops[2])
+	right, _ := parseFloat(ops[2])
 	
 	switch op {
 	case ">":
@@ -777,8 +783,8 @@ func (e *RiskRuleEngineV2) getIPRequestCount(ip string, windowSeconds int) (int,
 	cacheKey := fmt.Sprintf("ip_count:%s:%d", ip, windowSeconds/60)
 	
 	if e.cacheService != nil {
-		if cached, err := e.cacheService.Get(ctx, cacheKey).Int(); err == nil {
-			return cached, nil
+		if cached, err := e.cacheService.Get(ctx, cacheKey); err == nil {
+			return int(cached), nil
 		}
 	}
 	
@@ -941,7 +947,7 @@ func (e *RiskRuleEngineV2) applyRateLimit(ctx *model.RiskContext, params map[str
 	
 	if e.cacheService != nil {
 		ctx := context.Background()
-		count, _ := e.cacheService.Incr(ctx, ctxKey).Result()
+		count, _ := e.cacheService.Incr(ctx, ctxKey)
 		if count == 1 {
 			e.cacheService.Expire(ctx, ctxKey, time.Duration(window)*time.Second)
 		}
@@ -985,14 +991,7 @@ func (e *RiskRuleEngineV2) sendNotification(ctx *model.RiskContext, params map[s
 
 func (e *RiskRuleEngineV2) triggerWebhook(ctx *model.RiskContext, params map[string]interface{}) {
 	webhookURL := params["url"].(string)
-	payload := map[string]interface{}{
-		"event":      "risk.detected",
-		"risk_score": ctx.RiskScore,
-		"ip_address": ctx.IPAddress,
-		"timestamp":  time.Now(),
-		"context":     ctx,
-	}
-	
+
 	e.db.Create(&models.WebhookConfig{
 		Name:   "automated_webhook",
 		Type:   "risk_event",

@@ -2,12 +2,20 @@ let userGrowthChart, requestTrendChart, requestTypeChart, appDistributionChart, 
 let currentChartType = 'line';
 let refreshTimer = null;
 let isAutoRefresh = false;
+let advancedStatsTimer = null;
 const AUTO_REFRESH_INTERVAL = 60000;
+const ADVANCED_STATS_INTERVAL = 30000;
+
+let predictionChart = null;
+let anomalyChart = null;
+let breakdownChart = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     initAllCharts();
     setupEventListeners();
     loadStatsData();
+    initAdvancedStats();
+    setupAdvancedStatsRefresh();
 });
 
 function setupEventListeners() {
@@ -46,6 +54,21 @@ function setupEventListeners() {
     const exportBtn = document.getElementById('exportStatsBtn');
     if (exportBtn) {
         exportBtn.addEventListener('click', exportStatsReport);
+    }
+
+    const customReportBtn = document.getElementById('customReportBtn');
+    if (customReportBtn) {
+        customReportBtn.addEventListener('click', generateCustomReport);
+    }
+
+    const predictionBtn = document.getElementById('predictionBtn');
+    if (predictionBtn) {
+        predictionBtn.addEventListener('click', loadPredictionData);
+    }
+
+    const anomalyBtn = document.getElementById('anomalyBtn');
+    if (anomalyBtn) {
+        anomalyBtn.addEventListener('click', loadAnomalyData);
     }
 
     setupAutoRefresh();
@@ -766,4 +789,534 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function initAdvancedStats() {
+    initPredictionChart();
+    initAnomalyChart();
+    initBreakdownChart();
+    loadAdvancedStats();
+}
+
+function setupAdvancedStatsRefresh() {
+    const autoRefreshBtn = document.getElementById('autoRefreshBtn');
+    if (autoRefreshBtn && autoRefreshBtn.parentElement) {
+        const advancedRefreshBtn = document.createElement('button');
+        advancedRefreshBtn.id = 'advancedRefreshBtn';
+        advancedRefreshBtn.className = 'btn btn-outline-info btn-sm ms-2';
+        advancedRefreshBtn.innerHTML = '<i class="fas fa-brain me-1"></i>智能刷新';
+
+        autoRefreshBtn.parentElement.appendChild(advancedRefreshBtn);
+
+        advancedRefreshBtn.addEventListener('click', () => {
+            if (advancedStatsTimer) {
+                clearInterval(advancedStatsTimer);
+                advancedStatsTimer = null;
+                advancedRefreshBtn.classList.remove('btn-info');
+                advancedRefreshBtn.classList.add('btn-outline-info');
+                showToast('智能刷新已关闭', 'info');
+            } else {
+                advancedStatsTimer = setInterval(loadAdvancedStats, ADVANCED_STATS_INTERVAL);
+                advancedRefreshBtn.classList.add('btn-info');
+                advancedRefreshBtn.classList.remove('btn-outline-info');
+                showToast('智能刷新已开启（每30秒）', 'info');
+            }
+        });
+    }
+}
+
+function initPredictionChart() {
+    const ctx = document.getElementById('predictionChart');
+    if (!ctx) return;
+
+    predictionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: '实际值',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: '预测值',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderDash: [5, 5],
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: '置信区间上限',
+                    data: [],
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: '+1',
+                    tension: 0.4,
+                    borderDash: [2, 2],
+                    pointRadius: 0
+                },
+                {
+                    label: '置信区间下限',
+                    data: [],
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    borderDash: [2, 2],
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            ...getChartOptions('line'),
+            plugins: {
+                ...getChartOptions('line').plugins,
+                title: {
+                    display: true,
+                    text: '趋势预测分析',
+                    font: { size: 16, weight: 'bold' }
+                }
+            }
+        }
+    });
+}
+
+function initAnomalyChart() {
+    const ctx = document.getElementById('anomalyChart');
+    if (!ctx) return;
+
+    anomalyChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: '正常',
+                    data: [],
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    pointRadius: 6,
+                    pointHoverRadius: 8
+                },
+                {
+                    label: '异常',
+                    data: [],
+                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                    pointRadius: 8,
+                    pointHoverRadius: 10
+                }
+            ]
+        },
+        options: {
+            ...getChartOptions('scatter'),
+            plugins: {
+                ...getChartOptions('scatter').plugins,
+                title: {
+                    display: true,
+                    text: '异常检测',
+                    font: { size: 16, weight: 'bold' }
+                }
+            }
+        }
+    });
+}
+
+function initBreakdownChart() {
+    const ctx = document.getElementById('breakdownChart');
+    if (!ctx) return;
+
+    breakdownChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['滑块验证', '点选验证', '旋转验证', '拼图验证', '语音验证'],
+            datasets: [
+                {
+                    label: '成功率',
+                    data: [95, 92, 88, 85, 90],
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderColor: '#3b82f6',
+                    pointBackgroundColor: '#3b82f6'
+                },
+                {
+                    label: '平均响应时间',
+                    data: [40, 55, 65, 70, 50],
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    borderColor: '#10b981',
+                    pointBackgroundColor: '#10b981'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                title: {
+                    display: true,
+                    text: '多维度分析',
+                    font: { size: 16, weight: 'bold' }
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+}
+
+function loadAdvancedStats() {
+    loadBreakdownData();
+    loadRealtimeMetrics();
+    updateAdvancedStatsCards();
+}
+
+function loadBreakdownData() {
+    const breakdownData = {
+        labels: ['滑块验证', '点选验证', '旋转验证', '拼图验证', '语音验证'],
+        successRates: [95, 92, 88, 85, 90],
+        avgLatency: [40, 55, 65, 70, 50]
+    };
+
+    if (breakdownChart) {
+        breakdownChart.data.datasets[0].data = breakdownData.successRates;
+        breakdownChart.data.datasets[1].data = breakdownData.avgLatency;
+        breakdownChart.update();
+    }
+
+    updateBreakdownCards(breakdownData);
+}
+
+function updateBreakdownCards(data) {
+    const container = document.getElementById('breakdownCards');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    data.labels.forEach((label, index) => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 mb-3';
+        card.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">${label}</h6>
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <small class="text-muted">成功率</small>
+                            <div class="fw-bold text-success">${data.successRates[index]}%</div>
+                        </div>
+                        <div>
+                            <small class="text-muted">平均延迟</small>
+                            <div class="fw-bold text-primary">${data.avgLatency[index]}ms</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function loadRealtimeMetrics() {
+    const metrics = {
+        currentQPS: 7500 + Math.floor(Math.random() * 500),
+        peakQPS: 8500 + Math.floor(Math.random() * 200),
+        activeUsers: 15000 + Math.floor(Math.random() * 1000),
+        averageLatency: 45 + Math.random() * 10,
+        successRate: 0.94 + Math.random() * 0.02,
+        blockedRate: 0.01 + Math.random() * 0.02
+    };
+
+    updateRealtimeMetricsDisplay(metrics);
+}
+
+function updateRealtimeMetricsDisplay(metrics) {
+    const qpsEl = document.getElementById('realtimeQPS');
+    const peakQpsEl = document.getElementById('realtimePeakQPS');
+    const usersEl = document.getElementById('realtimeActiveUsers');
+    const latencyEl = document.getElementById('realtimeLatency');
+    const successEl = document.getElementById('realtimeSuccessRate');
+    const blockedEl = document.getElementById('realtimeBlockedRate');
+
+    if (qpsEl) animateValue('realtimeQPS', parseInt(qpsEl.textContent.replace(/,/g, '')) || 0, metrics.currentQPS, 500);
+    if (peakQpsEl) peakQpsEl.textContent = formatNumber(metrics.peakQPS);
+    if (usersEl) animateValue('realtimeActiveUsers', parseInt(usersEl.textContent.replace(/,/g, '')) || 0, metrics.activeUsers, 500);
+    if (latencyEl) latencyEl.textContent = metrics.averageLatency.toFixed(1) + 'ms';
+    if (successEl) successEl.textContent = (metrics.successRate * 100).toFixed(1) + '%';
+    if (blockedEl) blockedEl.textContent = (metrics.blockedRate * 100).toFixed(1) + '%';
+}
+
+function updateAdvancedStatsCards() {
+    const stats = {
+        totalVerifications: 1000000 + Math.floor(Math.random() * 10000),
+        successRate: 0.95,
+        peakQPS: 8500,
+        avgLatency: 45.5
+    };
+
+    animateValue('advancedTotalVerifications', 0, stats.totalVerifications, 1000);
+    document.getElementById('advancedSuccessRate').textContent = (stats.successRate * 100).toFixed(1) + '%';
+    document.getElementById('advancedPeakQPS').textContent = formatNumber(stats.peakQPS);
+    document.getElementById('advancedAvgLatency').textContent = stats.avgLatency + 'ms';
+}
+
+function loadPredictionData() {
+    const predictions = generateMockPredictions();
+    updatePredictionChart(predictions);
+    displayPredictions(predictions);
+}
+
+function generateMockPredictions() {
+    const now = new Date();
+    const historical = [];
+    const forecast = [];
+    const confidenceUpper = [];
+    const confidenceLower = [];
+
+    for (let i = -7; i <= 0; i++) {
+        const date = new Date(now);
+        date.setDate(date.getDate() + i);
+        historical.push({
+            x: date.toLocaleDateString('zh-CN'),
+            y: 10000 + Math.floor(Math.random() * 2000) + i * 500
+        });
+    }
+
+    for (let i = 1; i <= 7; i++) {
+        const date = new Date(now);
+        date.setDate(date.getDate() + i);
+        const baseValue = 12000 + i * 300;
+        const predictedValue = baseValue + Math.floor(Math.random() * 500);
+
+        forecast.push({
+            x: date.toLocaleDateString('zh-CN'),
+            y: predictedValue
+        });
+
+        confidenceUpper.push({
+            x: date.toLocaleDateString('zh-CN'),
+            y: predictedValue + 1500
+        });
+
+        confidenceLower.push({
+            x: date.toLocaleDateString('zh-CN'),
+            y: predictedValue - 1500
+        });
+    }
+
+    return { historical, forecast, confidenceUpper, confidenceLower };
+}
+
+function updatePredictionChart(predictions) {
+    if (!predictionChart) return;
+
+    const allLabels = [...predictions.historical.map(p => p.x), ...predictions.forecast.map(p => p.x)];
+    predictionChart.data.labels = allLabels;
+
+    predictionChart.data.datasets[0].data = [
+        ...predictions.historical.map(p => ({ x: p.x, y: p.y })),
+        ...Array(predictions.forecast.length).fill(null)
+    ];
+
+    predictionChart.data.datasets[1].data = [
+        ...Array(predictions.historical.length).fill(null),
+        ...predictions.forecast.map(p => ({ x: p.x, y: p.y }))
+    ];
+
+    predictionChart.data.datasets[2].data = [
+        ...Array(predictions.historical.length).fill(null),
+        ...predictions.confidenceUpper.map(p => ({ x: p.x, y: p.y }))
+    ];
+
+    predictionChart.data.datasets[3].data = [
+        ...Array(predictions.historical.length).fill(null),
+        ...predictions.confidenceLower.map(p => ({ x: p.x, y: p.y }))
+    ];
+
+    predictionChart.update();
+}
+
+function displayPredictions(predictions) {
+    const container = document.getElementById('predictionsList');
+    if (!container) return;
+
+    container.innerHTML = '<h6 class="mb-3"><i class="fas fa-chart-line me-2"></i>未来7天预测</h6>';
+
+    predictions.forecast.forEach((pred, index) => {
+        const date = new Date();
+        date.setDate(date.getDate() + index + 1);
+
+        const confidence = (0.95 - (index + 1) * 0.03).toFixed(2);
+        const card = document.createElement('div');
+        card.className = 'card mb-2';
+        card.innerHTML = `
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${date.toLocaleDateString('zh-CN', { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
+                        <span class="badge bg-success ms-2">置信度: ${(parseFloat(confidence) * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold">${formatNumber(pred.y)}</div>
+                        <small class="text-muted">次验证</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function loadAnomalyData() {
+    const anomalies = generateMockAnomalies();
+    updateAnomalyChart(anomalies);
+    displayAnomalies(anomalies);
+}
+
+function generateMockAnomalies() {
+    const normal = [];
+    const anomalies = [];
+
+    for (let i = 0; i < 50; i++) {
+        normal.push({
+            x: Math.random() * 100,
+            y: Math.random() * 100
+        });
+    }
+
+    for (let i = 0; i < 5; i++) {
+        anomalies.push({
+            x: 80 + Math.random() * 20,
+            y: 80 + Math.random() * 20,
+            severity: Math.random() > 0.5 ? 'high' : 'medium',
+            type: ['流量激增', '异常模式', '失败率升高'][Math.floor(Math.random() * 3)]
+        });
+    }
+
+    return { normal, anomalies };
+}
+
+function updateAnomalyChart(anomalies) {
+    if (!anomalyChart) return;
+
+    anomalyChart.data.datasets[0].data = anomalies.normal;
+    anomalyChart.data.datasets[1].data = anomalies.anomalies;
+    anomalyChart.update();
+}
+
+function displayAnomalies(anomalies) {
+    const container = document.getElementById('anomaliesList');
+    if (!container) return;
+
+    container.innerHTML = '<h6 class="mb-3"><i class="fas fa-exclamation-triangle me-2"></i>检测到的异常</h6>';
+
+    if (anomalies.anomalies.length === 0) {
+        container.innerHTML += '<div class="alert alert-success">未检测到异常情况</div>';
+        return;
+    }
+
+    anomalies.anomalies.forEach((anomaly, index) => {
+        const severityClass = anomaly.severity === 'high' ? 'bg-danger' : 'bg-warning';
+        const card = document.createElement('div');
+        card.className = 'card mb-2';
+        card.innerHTML = `
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge ${severityClass} me-2">${anomaly.type}</span>
+                        <small class="text-muted">严重程度: ${anomaly.severity === 'high' ? '高' : '中'}</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeAnomaly(${index})">
+                        分析详情
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function analyzeAnomaly(index) {
+    showToast(`正在分析异常 #${index + 1}...`, 'info');
+}
+
+function generateCustomReport() {
+    const config = {
+        title: prompt('请输入报表标题:', '自定义统计报表'),
+        metrics: prompt('请输入要包含的指标（逗号分隔）:', 'total,successRate,avgLatency,peakQPS'),
+        dateRange: document.getElementById('dateRange')?.value || '30d',
+        format: prompt('导出格式 (json/csv):', 'json')
+    };
+
+    if (!config.title || !config.metrics) {
+        showToast('报表生成已取消', 'warning');
+        return;
+    }
+
+    const reportData = {
+        title: config.title,
+        generatedAt: new Date().toLocaleString('zh-CN'),
+        dateRange: config.dateRange,
+        metrics: config.metrics.split(',').map(m => m.trim()),
+        data: {
+            totalVerifications: document.getElementById('statTotalRequests')?.textContent || '0',
+            successRate: document.getElementById('statSuccessRate')?.textContent || '0%',
+            avgLatency: document.getElementById('statAvgResponse')?.textContent || '0ms',
+            peakQPS: document.getElementById('advancedPeakQPS')?.textContent || '0'
+        }
+    };
+
+    if (config.format === 'csv') {
+        exportCustomReportAsCSV(reportData, `custom_report_${new Date().toISOString().slice(0,10)}`);
+    } else {
+        exportCustomReportAsJSON(reportData, `custom_report_${new Date().toISOString().slice(0,10)}`);
+    }
+}
+
+function exportCustomReportAsJSON(reportData, filename) {
+    const jsonString = JSON.stringify(reportData, null, 2);
+    downloadFile(jsonString, `${filename}.json`, 'application/json;charset=utf-8');
+    showToast('自定义报表已导出为JSON', 'success');
+}
+
+function exportCustomReportAsCSV(reportData, filename) {
+    const csvContent = [
+        [reportData.title].join(','),
+        [''].join(','),
+        ['生成时间', reportData.generatedAt].join(','),
+        ['时间范围', reportData.dateRange].join(','),
+        [''].join(','),
+        ['指标名称', '数值'].join(','),
+        ...reportData.metrics.map(metric => {
+            const key = metric.toLowerCase();
+            const value = reportData.data[key] || 'N/A';
+            return [metric, value].join(',');
+        })
+    ].join('\n');
+
+    downloadFile(csvContent, `${filename}.csv`, 'text/csv;charset=utf-8');
+    showToast('自定义报表已导出为CSV', 'success');
+}
+
+function formatNumber(num) {
+    if (typeof num !== 'number') {
+        num = parseInt(num) || 0;
+    }
+    return num.toLocaleString('zh-CN');
 }

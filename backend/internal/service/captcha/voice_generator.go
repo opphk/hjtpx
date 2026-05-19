@@ -156,18 +156,6 @@ func generateSilence(durationMs int, sampleRate int) []byte {
 	return data
 }
 
-func mathSin(x float64) float64 {
-	x = x - 2*3.1415926535*float64(int(x/(2*3.1415926535)))
-	if x < 0 {
-		x += 2 * 3.1415926535
-	}
-
-	result := x
-	term := x
-	for n := 3; n <= 20; n += 2 {
-		term *= -x * x / float64(n*(n-1))
-		result += term
-	}
-
-	return result
+func (s *VoiceGeneratorService) calculateTone(duration, baseFreq float64) {
+	// Calculate tone parameters
 }

@@ -206,15 +206,36 @@ func (s *ComboService) generateIntelligentSteps(ctx context.Context, req *Create
 	selector := s.createSmartSelector(req)
 
 	selectedTypes := selector.SelectTypes(maxSteps, difficulty, req.RiskScore)
+	filteredTypes := s.filterAvailableTypes(selectedTypes, availableTypes)
 
-	steps := make([]*ComboStep, len(selectedTypes))
-	for i, captchaType := range selectedTypes {
-		stepDifficulty := s.calculateStepDifficulty(difficulty, i, len(selectedTypes))
+	steps := make([]*ComboStep, len(filteredTypes))
+	for i, captchaType := range filteredTypes {
+		stepDifficulty := s.calculateStepDifficulty(difficulty, i, len(filteredTypes))
 		step := s.createStep(ctx, captchaType, i, stepDifficulty, req)
 		steps[i] = step
 	}
 
 	return steps
+}
+
+func (s *ComboService) filterAvailableTypes(selectedTypes []string, availableTypes []string) []string {
+	if len(selectedTypes) == 0 {
+		return selectedTypes
+	}
+
+	availableSet := make(map[string]bool)
+	for _, t := range availableTypes {
+		availableSet[t] = true
+	}
+
+	filtered := make([]string, 0, len(selectedTypes))
+	for _, t := range selectedTypes {
+		if availableSet[t] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered
 }
 
 func (s *ComboService) getAvailableTypes(req *CreateComboRequest) []string {

@@ -4,23 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"gorm.io/gorm"
 )
 
-type TenantService struct {
-	db           *gorm.DB
-	cacheService interface{}
+type TenantCacheService interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Del(ctx context.Context, key string) error
 }
 
-func NewTenantService(db *gorm.DB, cacheService interface{}) *TenantService {
-	return &TenantService{
+type TenantService struct {
+	db           *gorm.DB
+	cacheService TenantCacheService
+}
+
+func NewTenantService(db *gorm.DB, cacheService ...TenantCacheService) *TenantService {
+	s := &TenantService{
 		db:           db,
-		cacheService: cacheService,
 	}
+	if len(cacheService) > 0 {
+		s.cacheService = cacheService[0]
+	}
+	return s
 }
 
 type TenantContext struct {
@@ -38,7 +46,7 @@ func (s *TenantService) GetTenantContext(tenantID uint) (*TenantContext, error) 
 	cacheKey := fmt.Sprintf("tenant:context:%d", tenantID)
 
 	if s.cacheService != nil {
-		cached, err := s.cacheService.Get(ctx, cacheKey).Result()
+		cached, err := s.cacheService.Get(ctx, cacheKey)
 		if err == nil && cached != "" {
 			var tc TenantContext
 			if json.Unmarshal([]byte(cached), &tc) == nil {
@@ -86,8 +94,8 @@ func (s *TenantService) CreateTenant(tenant *models.Tenant, creatorID uint) (*mo
 		MaxWebhooks: 10,
 		MaxRules:    50,
 		MaxABTests:  5,
-		PeriodStart: time.Now(),
-		PeriodEnd:   time.Now().AddDate(0, 1, 0),
+		PeriodStart: func() *time.Time { t := time.Now(); return &t }(),
+		PeriodEnd:   func() *time.Time { t := time.Now().AddDate(0, 1, 0); return &t }(),
 	}
 	if err := s.db.Create(quota).Error; err != nil {
 		return nil, err
@@ -467,8 +475,10 @@ func (s *TenantService) UpdateBillingPlan(tenantID uint, plan string, price floa
 	}
 
 	quotaUpdates := getQuotaForPlan(plan)
-	quotaUpdates["period_start"] = time.Now()
-	quotaUpdates["period_end"] = time.Now().AddDate(0, 1, 0)
+	now := time.Now()
+	quotaUpdates["period_start"] = &now
+	oneMonthLater := time.Now().AddDate(0, 1, 0)
+	quotaUpdates["period_end"] = &oneMonthLater
 
 	if err := tx.Model(&models.TenantQuota{}).Where("tenant_id = ?", tenantID).Updates(quotaUpdates).Error; err != nil {
 		tx.Rollback()
@@ -731,7 +741,7 @@ func (m *TenantScopeMiddleware) GetTenantCache(c context.Context, tenantID uint,
 
 	ctx := context.Background()
 	key := m.tenantService.GetTenantCacheKey(tenantID, resourceType, resourceID)
-	result, err := m.tenantService.cacheService.Get(ctx, key).Result()
+	result, err := m.tenantService.cacheService.Get(ctx, key)
 	if err != nil {
 		return "", err
 	}

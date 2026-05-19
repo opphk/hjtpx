@@ -106,13 +106,6 @@ type MouseMovement struct {
 	Acceleration float64
 }
 
-type KeyboardPattern struct {
-	Key           string
-	PressTime    time.Time
-	ReleaseTime  time.Time
-	HoldDuration time.Duration
-}
-
 type TouchEvent struct {
 	X, Y        float64
 	Timestamp   time.Time

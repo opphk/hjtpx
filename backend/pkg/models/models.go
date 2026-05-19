@@ -890,24 +890,25 @@ func (WebhookConfig) TableName() string {
 // Tenant 租户模型
 type Tenant struct {
 	gorm.Model
-	Name            string    `gorm:"size:255;not null;index:idx_tenant_name" json:"name"`
-	Code            string    `gorm:"size:100;uniqueIndex;not null" json:"code"`
-	Status          string    `gorm:"size:20;default:active;index:idx_tenant_status" json:"status"`
-	Plan            string    `gorm:"size:50;default:free" json:"plan"`
-	Logo            string    `gorm:"size:500" json:"logo"`
-	Website         string    `gorm:"size:255" json:"website"`
-	ContactEmail    string    `gorm:"size:255" json:"contact_email"`
-	ContactPhone    string    `gorm:"size:50" json:"contact_phone"`
-	Address         string    `gorm:"size:500" json:"address"`
-	Description     string    `gorm:"type:text" json:"description"`
-	Domain          string    `gorm:"size:255;index:idx_tenant_domain" json:"domain"`
-	Settings        string    `gorm:"type:text" json:"settings"`
-	IsolatedDB      bool      `gorm:"default:false" json:"isolated_db"`
-	IsolatedCache   bool      `gorm:"default:false" json:"isolated_cache"`
-	CreatedBy       uint      `json:"created_by"`
-	ActivatedAt     *time.Time `json:"activated_at,omitempty"`
-	SuspendedAt     *time.Time `json:"suspended_at,omitempty"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	Name            string       `gorm:"size:255;not null;index:idx_tenant_name" json:"name"`
+	Code            string       `gorm:"size:100;uniqueIndex;not null" json:"code"`
+	Status          string       `gorm:"size:20;default:active;index:idx_tenant_status" json:"status"`
+	Plan            string       `gorm:"size:50;default:free" json:"plan"`
+	Logo            string       `gorm:"size:500" json:"logo"`
+	Website         string       `gorm:"size:255" json:"website"`
+	ContactEmail    string       `gorm:"size:255" json:"contact_email"`
+	ContactPhone    string       `gorm:"size:50" json:"contact_phone"`
+	Address         string       `gorm:"size:500" json:"address"`
+	Description     string       `gorm:"type:text" json:"description"`
+	Domain          string       `gorm:"size:255;index:idx_tenant_domain" json:"domain"`
+	Settings        string       `gorm:"type:text" json:"settings"`
+	IsolatedDB      bool         `gorm:"default:false" json:"isolated_db"`
+	IsolatedCache   bool         `gorm:"default:false" json:"isolated_cache"`
+	Quota           *TenantQuota `gorm:"foreignKey:TenantID" json:"quota,omitempty"`
+	CreatedBy       uint         `json:"created_by"`
+	ActivatedAt     *time.Time   `json:"activated_at,omitempty"`
+	SuspendedAt     *time.Time   `json:"suspended_at,omitempty"`
+	ExpiresAt       *time.Time   `json:"expires_at,omitempty"`
 }
 
 func (Tenant) TableName() string {

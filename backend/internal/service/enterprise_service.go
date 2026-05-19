@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -16,20 +17,29 @@ import (
 type EnterpriseService struct {
 	db           *gorm.DB
 	httpClient   *http.Client
-	cacheService interface{}
+	cacheService CacheService
 }
 
-func NewEnterpriseService(db *gorm.DB) *EnterpriseService {
-	return &EnterpriseService{
+func NewEnterpriseService(db *gorm.DB, cacheService ...CacheService) *EnterpriseService {
+	s := &EnterpriseService{
 		db:         db,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
+	if len(cacheService) > 0 {
+		s.cacheService = cacheService[0]
+	}
+	return s
 }
 
 type SSOProvider interface {
 	InitiateAuth() (string, error)
 	HandleCallback(code string) (*SSOUser, error)
 	GetUserInfo(token string) (*SSOUser, error)
+}
+
+type CacheService interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 }
 
 type SSOUser struct {
@@ -49,7 +59,7 @@ func (s *EnterpriseService) GetSSOConfig(tenantID uint) (*models.SSOConfig, erro
 	cacheKey := fmt.Sprintf("sso_config:%d", tenantID)
 
 	if s.cacheService != nil {
-		if cached, err := s.cacheService.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+		if cached, err := s.cacheService.Get(ctx, cacheKey); err == nil && cached != "" {
 			var config models.SSOConfig
 			if json.Unmarshal([]byte(cached), &config) == nil {
 				return &config, nil
@@ -557,7 +567,7 @@ type SCIMSyncResult struct {
 
 type APIAuditService struct {
 	db           *gorm.DB
-	cacheService interface{}
+	cacheService CacheService
 }
 
 func NewAPIAuditService(db *gorm.DB) *APIAuditService {
@@ -717,6 +727,12 @@ func (s *ComplianceService) GenerateReport(reportID uint) error {
 		report.PeriodStart.Format("20060102"))
 
 	report.FilePath = filePath
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		report.Status = "failed"
+		s.db.Save(&report)
+		return err
+	}
+
 	report.Status = "completed"
 	now := time.Now()
 	report.GeneratedAt = &now

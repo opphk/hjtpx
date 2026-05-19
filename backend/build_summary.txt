@@ -1,0 +1,4 @@
+=== 项目编译摘要 ===
+编译时间: Tue May 19 15:49:20 UTC 2026
+Go版本: go version go1.25.1 linux/amd64
+文件大小: 49M
