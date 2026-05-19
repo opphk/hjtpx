@@ -725,3 +725,299 @@ type RiskRuleAuditLog struct {
 func (RiskRuleAuditLog) TableName() string {
 	return "risk_rule_audit_logs"
 }
+
+// Workflow 工作流模型
+type Workflow struct {
+	gorm.Model
+	ID           string    `gorm:"size:100;uniqueIndex;not null" json:"id"`
+	Name         string    `gorm:"size:255;not null" json:"name"`
+	Description  string    `gorm:"type:text" json:"description"`
+	TriggerType  string    `gorm:"size:50;not null" json:"trigger_type"`
+	Definition   string    `gorm:"type:text" json:"definition"`
+	Status      string    `gorm:"size:20;default:active" json:"status"`
+	Version      int       `gorm:"default:1" json:"version"`
+	CreatedBy   uint      `json:"created_by"`
+	UpdatedBy   uint      `json:"updated_by"`
+}
+
+func (Workflow) TableName() string {
+	return "workflows"
+}
+
+// WorkflowExecution 工作流执行记录
+type WorkflowExecution struct {
+	ID         string     `gorm:"size:100;uniqueIndex;not null" json:"id"`
+	WorkflowID string     `gorm:"size:100;index;not null" json:"workflow_id"`
+	Status     string     `gorm:"size:20;not null" json:"status"`
+	StartedAt  time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Result     string     `gorm:"type:text" json:"result"`
+	Error      string     `gorm:"type:text" json:"error,omitempty"`
+}
+
+func (WorkflowExecution) TableName() string {
+	return "workflow_executions"
+}
+
+// SSOConfig SSO配置
+type SSOConfig struct {
+	gorm.Model
+	TenantID        uint    `gorm:"not null;uniqueIndex" json:"tenant_id"`
+	Provider        string  `gorm:"size:50;not null" json:"provider"` // saml, oauth2, oidc
+	Enabled         bool    `gorm:"default:false" json:"enabled"`
+	EntityID        string  `gorm:"size:500" json:"entity_id"`
+	SSOURL          string  `gorm:"size:500" json:"sso_url"`
+	Certificate     string  `gorm:"type:text" json:"certificate"`
+	PrivateKey      string  `gorm:"type:text" json:"-"`
+	ClientID        string  `gorm:"size:255" json:"client_id"`
+	ClientSecret    string  `gorm:"size:255" json:"-"`
+	AuthorizationURL string `gorm:"size:500" json:"authorization_url"`
+	TokenURL        string  `gorm:"size:500" json:"token_url"`
+	UserinfoURL     string  `gorm:"size:500" json:"userinfo_url"`
+	Scopes          string  `gorm:"type:text" json:"scopes"`
+	Attributes      string  `gorm:"type:text" json:"attributes"`
+}
+
+func (SSOConfig) TableName() string {
+	return "sso_configs"
+}
+
+// SCIMUser SCIM用户同步
+type SCIMUser struct {
+	gorm.Model
+	TenantID      uint      `gorm:"not null;index" json:"tenant_id"`
+	ExternalID    string    `gorm:"size:255;uniqueIndex" json:"external_id"`
+	Username      string    `gorm:"size:255;index" json:"username"`
+	Email         string    `gorm:"size:255;index" json:"email"`
+	FirstName     string    `gorm:"size:100" json:"first_name"`
+	LastName      string    `gorm:"size:100" json:"last_name"`
+	DisplayName   string    `gorm:"size:255" json:"display_name"`
+	Active        bool      `gorm:"default:true" json:"active"`
+	Groups        string    `gorm:"type:text" json:"groups"`
+	Roles         string    `gorm:"type:text" json:"roles"`
+	Department    string    `gorm:"size:255" json:"department"`
+	Title         string    `gorm:"size:255" json:"title"`
+	Manager       string    `gorm:"size:255" json:"manager"`
+	Phone         string    `gorm:"size:50" json:"phone"`
+	LocalUserID   *uint     `gorm:"index" json:"local_user_id"`
+	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
+	SyncStatus    string    `gorm:"size:20;default:synced" json:"sync_status"`
+}
+
+func (SCIMUser) TableName() string {
+	return "scim_users"
+}
+
+// SCIMGroup SCIM组同步
+type SCIMGroup struct {
+	gorm.Model
+	TenantID      uint      `gorm:"not null;index" json:"tenant_id"`
+	ExternalID    string    `gorm:"size:255;uniqueIndex" json:"external_id"`
+	Name          string    `gorm:"size:255;not null" json:"name"`
+	Description   string    `gorm:"type:text" json:"description"`
+	Members       string    `gorm:"type:text" json:"members"`
+	LocalGroupID  *uint     `gorm:"index" json:"local_group_id"`
+	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
+	SyncStatus    string    `gorm:"size:20;default:synced" json:"sync_status"`
+}
+
+func (SCIMGroup) TableName() string {
+	return "scim_groups"
+}
+
+// APIAuditLog API审计日志
+type APIAuditLog struct {
+	gorm.Model
+	TenantID       uint      `gorm:"index" json:"tenant_id"`
+	ApplicationID  uint      `gorm:"index" json:"application_id"`
+	UserID         uint      `gorm:"index" json:"user_id"`
+	APIKey         string    `gorm:"size:255;index" json:"api_key"`
+	Method         string    `gorm:"size:10;not null" json:"method"`
+	Endpoint       string    `gorm:"size:500;not null" json:"endpoint"`
+	RequestBody    string    `gorm:"type:text" json:"request_body"`
+	ResponseStatus int       `gorm:"not null" json:"response_status"`
+	ResponseBody   string    `gorm:"type:text" json:"response_body"`
+	Latency        int64     `gorm:"comment:'响应延迟(毫秒)'" json:"latency"`
+	IPAddress      string    `gorm:"size:50;index" json:"ip_address"`
+	UserAgent      string    `gorm:"size:500" json:"user_agent"`
+	ErrorMessage   string    `gorm:"type:text" json:"error_message,omitempty"`
+}
+
+func (APIAuditLog) TableName() string {
+	return "api_audit_logs"
+}
+
+// ComplianceReport 合规报告
+type ComplianceReport struct {
+	gorm.Model
+	TenantID       uint      `gorm:"not null;index" json:"tenant_id"`
+	ReportType    string    `gorm:"size:50;not null" json:"report_type"` // gdpr, hipaa, sox, iso27001, custom
+	PeriodStart   time.Time `json:"period_start"`
+	PeriodEnd     time.Time `json:"period_end"`
+	Status        string    `gorm:"size:20;default:pending" json:"status"`
+	FilePath      string    `gorm:"size:500" json:"file_path"`
+	GeneratedBy   uint      `json:"generated_by"`
+	GeneratedAt   *time.Time `json:"generated_at,omitempty"`
+}
+
+func (ComplianceReport) TableName() string {
+	return "compliance_reports"
+}
+
+// WebhookConfig Webhook配置
+type WebhookConfig struct {
+	gorm.Model
+	TenantID      uint      `gorm:"index" json:"tenant_id"`
+	Name          string    `gorm:"size:255;not null" json:"name"`
+	Type          string    `gorm:"size:50;not null" json:"type"`
+	URL           string    `gorm:"size:500;not null" json:"url"`
+	Events        string    `gorm:"type:text" json:"events"`
+	Secret        string    `gorm:"size:255" json:"-"`
+	Headers       string    `gorm:"type:text" json:"headers"`
+	Active        bool      `gorm:"default:true" json:"active"`
+	RetryPolicy   string    `gorm:"size:20;default:exponential" json:"retry_policy"`
+	MaxRetries    int       `gorm:"default:3" json:"max_retries"`
+	Timeout       int       `gorm:"default:30" json:"timeout"`
+	FailureCount  int       `gorm:"default:0" json:"failure_count"`
+	LastTriggered *time.Time `json:"last_triggered_at,omitempty"`
+	LastStatus    int       `json:"last_status"`
+}
+
+func (WebhookConfig) TableName() string {
+	return "webhook_configs"
+}
+
+// Tenant 租户模型
+type Tenant struct {
+	gorm.Model
+	Name            string    `gorm:"size:255;not null;index:idx_tenant_name" json:"name"`
+	Code            string    `gorm:"size:100;uniqueIndex;not null" json:"code"`
+	Status          string    `gorm:"size:20;default:active;index:idx_tenant_status" json:"status"`
+	Plan            string    `gorm:"size:50;default:free" json:"plan"`
+	Logo            string    `gorm:"size:500" json:"logo"`
+	Website         string    `gorm:"size:255" json:"website"`
+	ContactEmail    string    `gorm:"size:255" json:"contact_email"`
+	ContactPhone    string    `gorm:"size:50" json:"contact_phone"`
+	Address         string    `gorm:"size:500" json:"address"`
+	Description     string    `gorm:"type:text" json:"description"`
+	Domain          string    `gorm:"size:255;index:idx_tenant_domain" json:"domain"`
+	Settings        string    `gorm:"type:text" json:"settings"`
+	IsolatedDB      bool      `gorm:"default:false" json:"isolated_db"`
+	IsolatedCache   bool      `gorm:"default:false" json:"isolated_cache"`
+	CreatedBy       uint      `json:"created_by"`
+	ActivatedAt     *time.Time `json:"activated_at,omitempty"`
+	SuspendedAt     *time.Time `json:"suspended_at,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+}
+
+func (Tenant) TableName() string {
+	return "tenants"
+}
+
+// TenantUser 租户用户关联
+type TenantUser struct {
+	gorm.Model
+	TenantID      uint       `gorm:"not null;index:idx_tenant_user_tenant" json:"tenant_id"`
+	UserID        uint       `gorm:"not null;index:idx_tenant_user_user" json:"user_id"`
+	Role          string     `gorm:"size:50;default:member" json:"role"`
+	Status        string     `gorm:"size:20;default:active" json:"status"`
+	InvitedBy     uint       `json:"invited_by"`
+	InvitedAt     *time.Time `json:"invited_at,omitempty"`
+	JoinedAt      *time.Time `json:"joined_at,omitempty"`
+	Permissions   string     `gorm:"type:text" json:"permissions"`
+}
+
+func (TenantUser) TableName() string {
+	return "tenant_users"
+}
+
+// TenantQuota 租户配额
+type TenantQuota struct {
+	gorm.Model
+	TenantID           uint    `gorm:"not null;uniqueIndex" json:"tenant_id"`
+	MaxUsers           int     `gorm:"default:10" json:"max_users"`
+	MaxApplications    int     `gorm:"default:5" json:"max_applications"`
+	MaxAPIRequests     int64   `gorm:"default:100000" json:"max_api_requests"`
+	MaxStorage         int64   `gorm:"default:10737418240" json:"max_storage"`
+	MaxBandwidth       int64   `gorm:"default:10737418240" json:"max_bandwidth"`
+	MaxWebhooks        int     `gorm:"default:10" json:"max_webhooks"`
+	MaxRules           int     `gorm:"default:50" json:"max_rules"`
+	MaxABTests         int     `gorm:"default:5" json:"max_ab_tests"`
+	CustomBranding     bool    `gorm:"default:false" json:"custom_branding"`
+	AdvancedAnalytics  bool    `gorm:"default:false" json:"advanced_analytics"`
+	SSOEnabled         bool    `gorm:"default:false" json:"sso_enabled"`
+	APIAccess          bool    `gorm:"default:true" json:"api_access"`
+	CurrentUsers       int     `gorm:"default:0" json:"current_users"`
+	CurrentApps        int     `gorm:"default:0" json:"current_apps"`
+	CurrentAPIRequests int64   `gorm:"default:0" json:"current_api_requests"`
+	CurrentStorage     int64   `gorm:"default:0" json:"current_storage"`
+	CurrentBandwidth   int64   `gorm:"default:0" json:"current_bandwidth"`
+	CurrentWebhooks    int     `gorm:"default:0" json:"current_webhooks"`
+	CurrentRules       int     `gorm:"default:0" json:"current_rules"`
+	CurrentABTests     int     `gorm:"default:0" json:"current_ab_tests"`
+	PeriodStart        *time.Time `json:"period_start,omitempty"`
+	PeriodEnd          *time.Time `json:"period_end,omitempty"`
+}
+
+func (TenantQuota) TableName() string {
+	return "tenant_quotas"
+}
+
+// TenantBilling 租户账单
+type TenantBilling struct {
+	gorm.Model
+	TenantID           uint       `gorm:"not null;uniqueIndex" json:"tenant_id"`
+	Plan               string     `gorm:"size:50;default:free" json:"plan"`
+	Status             string     `gorm:"size:20;default:active" json:"status"`
+	BillingCycle       string     `gorm:"size:20;default:monthly" json:"billing_cycle"`
+	Price              float64    `gorm:"default:0" json:"price"`
+	Currency           string     `gorm:"size:10;default:USD" json:"currency"`
+	PaymentMethod      string     `gorm:"size:50" json:"payment_method"`
+	PaymentStatus      string     `gorm:"size:20;default:pending" json:"payment_status"`
+	LastPaymentAt      *time.Time `json:"last_payment_at,omitempty"`
+	NextPaymentAt      *time.Time `json:"next_payment_at,omitempty"`
+	Invoices           string     `gorm:"type:text" json:"invoices"`
+	AutoRenew          bool       `gorm:"default:true" json:"auto_renew"`
+}
+
+func (TenantBilling) TableName() string {
+	return "tenant_billings"
+}
+
+// TenantInvitation 租户邀请
+type TenantInvitation struct {
+	gorm.Model
+	TenantID    uint      `gorm:"not null;index:idx_invitation_tenant" json:"tenant_id"`
+	Email       string    `gorm:"size:255;not null" json:"email"`
+	Role        string    `gorm:"size:50;default:member" json:"role"`
+	Token       string    `gorm:"size:255;uniqueIndex" json:"token"`
+	Status      string    `gorm:"size:20;default:pending;index:idx_invitation_status" json:"status"`
+	InvitedBy   uint      `json:"invited_by"`
+	InvitedAt   time.Time `json:"invited_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	AcceptedAt  *time.Time `json:"accepted_at,omitempty"`
+}
+
+func (TenantInvitation) TableName() string {
+	return "tenant_invitations"
+}
+
+// TenantAuditLog 租户审计日志
+type TenantAuditLog struct {
+	gorm.Model
+	TenantID      uint      `gorm:"not null;index:idx_tenant_audit_tenant" json:"tenant_id"`
+	UserID        uint      `gorm:"index:idx_tenant_audit_user" json:"user_id"`
+	Username      string    `gorm:"size:100" json:"username"`
+	Action        string    `gorm:"size:100;not null" json:"action"`
+	ResourceType  string    `gorm:"size:50" json:"resource_type"`
+	ResourceID    string    `gorm:"size:100" json:"resource_id"`
+	Changes       string    `gorm:"type:text" json:"changes"`
+	IPAddress     string    `gorm:"size:50" json:"ip_address"`
+	UserAgent     string    `gorm:"size:500" json:"user_agent"`
+	Status        string    `gorm:"size:20" json:"status"`
+	ErrorMessage  string    `gorm:"type:text" json:"error_message"`
+}
+
+func (TenantAuditLog) TableName() string {
+	return "tenant_audit_logs"
+}
