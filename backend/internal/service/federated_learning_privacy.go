@@ -150,12 +150,12 @@ type CrossPlatformAnalysis struct {
 type PlatformData struct {
 	PlatformID   string              `json:"platform_id"`
 	Features     map[string]float64  `json:"features"`
-	Behaviors    []BehaviorPattern   `json:"behaviors"`
+	Behaviors    []FLBehaviorPattern   `json:"behaviors"`
 	TrustScore   float64            `json:"trust_score"`
 	LastUpdate   time.Time           `json:"last_update"`
 }
 
-type BehaviorPattern struct {
+type FLBehaviorPattern struct {
 	PatternID    string                 `json:"pattern_id"`
 	Type        string                 `json:"type"`
 	Features     []float64             `json:"features"`
@@ -729,7 +729,7 @@ func (s *FederatedLearningSystem) PerformCrossPlatformAnalysis(ctx context.Conte
 		platform := &PlatformData{
 			PlatformID: id,
 			Features:   make(map[string]float64),
-			Behaviors:  make([]BehaviorPattern, 0),
+			Behaviors:  make([]FLBehaviorPattern, 0),
 			TrustScore: participant.TrustScore,
 			LastUpdate: participant.LastSync,
 		}

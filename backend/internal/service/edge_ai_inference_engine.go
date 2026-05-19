@@ -92,7 +92,7 @@ type OptimizationPass struct {
 type OfflineValidator struct {
 	mu            sync.RWMutex
 	rules        map[string]*ValidationRule
-	cachedResults map[string]*ValidationResult
+	cachedResults map[string]*EdgeValidationResult
 	mode          string
 }
 
@@ -110,7 +110,7 @@ type ValidationCondition struct {
 	Value     interface{} `json:"value"`
 }
 
-type ValidationResult struct {
+type EdgeValidationResult struct {
 	Valid        bool                  `json:"valid"`
 	Score        float64               `json:"score"`
 	MatchedRules []string              `json:"matched_rules"`
@@ -199,7 +199,7 @@ type OfflineValidationRequest struct {
 
 type OfflineValidationResponse struct {
 	Success   bool                `json:"success"`
-	Result    *ValidationResult   `json:"result"`
+	Result    *EdgeValidationResult   `json:"result"`
 	Cached    bool                `json:"cached"`
 }
 
@@ -562,7 +562,7 @@ func (e *LocalInferenceEngine) calculateConfidence(output []float64) float64 {
 func NewOfflineValidator() *OfflineValidator {
 	return &OfflineValidator{
 		rules:         make(map[string]*ValidationRule),
-		cachedResults: make(map[string]*ValidationResult),
+		cachedResults: make(map[string]*EdgeValidationResult),
 		mode:          "normal",
 	}
 }
@@ -608,7 +608,7 @@ func (v *OfflineValidator) Validate(ctx context.Context, request *OfflineValidat
 		}, nil
 	}
 
-	result := &ValidationResult{
+	result := &EdgeValidationResult{
 		Valid:        true,
 		Score:        1.0,
 		MatchedRules: make([]string, 0),

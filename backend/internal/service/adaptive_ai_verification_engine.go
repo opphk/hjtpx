@@ -15,7 +15,7 @@ type AdaptiveVerificationEngine struct {
 	mu                    sync.RWMutex
 	riskAssessor          *RealtimeRiskAssessor
 	strategyEngine        *DynamicStrategyEngine
-	personalizationEngine *PersonalizationEngine
+	personalizationEngine *AdaptivePersonalizationEngine
 	learningEngine        *SelfLearningEngine
 	initialized           bool
 }
@@ -157,7 +157,7 @@ func NewAdaptiveVerificationEngine() *AdaptiveVerificationEngine {
 	return &AdaptiveVerificationEngine{
 		riskAssessor:          NewRealtimeRiskAssessor(),
 		strategyEngine:        NewDynamicStrategyEngine(),
-		personalizationEngine: NewPersonalizationEngine(),
+		personalizationEngine: NewAdaptivePersonalizationEngine(),
 		learningEngine:        NewSelfLearningEngine(),
 	}
 }
@@ -740,7 +740,7 @@ func (e *DynamicStrategyEngine) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (e *DynamicStrategyEngine) DetermineStrategy(ctx context.Context, riskResult *AdaptiveRiskResult, userProfile *UserProfile) (*AdaptiveStrategyResult, error) {
+func (e *DynamicStrategyEngine) DetermineStrategy(ctx context.Context, riskResult *AdaptiveRiskResult, userProfile *AdaptiveUserProfile) (*AdaptiveStrategyResult, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	
@@ -795,7 +795,7 @@ func (e *DynamicStrategyEngine) adjustStrategyForContext(strategy *VerificationS
 	
 	if riskResult.RiskScore > 80 {
 		adjusted.Timeout = time.Duration(float64(adjusted.Timeout) * 0.8)
-		adjusted.MaxAttempts = math.Max(1, adjusted.MaxAttempts-1)
+		adjusted.MaxAttempts = int(math.Max(1, float64(adjusted.MaxAttempts)-1))
 	} else if riskResult.RiskScore < 30 {
 		adjusted.Timeout = time.Duration(float64(adjusted.Timeout) * 1.2)
 	}
@@ -818,7 +818,7 @@ func (e *DynamicStrategyEngine) generateSpecialInstructions(strategy *Verificati
 	return instructions
 }
 
-func (e *DynamicStrategyEngine) generateReasoning(strategy *VerificationStrategy, riskResult *AdaptiveRiskResult, userProfile *UserProfile) string {
+func (e *DynamicStrategyEngine) generateReasoning(strategy *VerificationStrategy, riskResult *AdaptiveRiskResult, userProfile *AdaptiveUserProfile) string {
 	reasoning := fmt.Sprintf("基于风险评分 %.2f (级别: %s) 和置信度 %.2f%%",
 		riskResult.RiskScore, riskResult.RiskLevel, riskResult.Confidence)
 	
@@ -832,20 +832,20 @@ func (e *DynamicStrategyEngine) generateReasoning(strategy *VerificationStrategy
 	return reasoning
 }
 
-func NewPersonalizationEngine() *PersonalizationEngine {
-	return &PersonalizationEngine{
-		userProfiles: make(map[string]*UserProfile),
-		modelCache:   make(map[string]*PersonalizationModel),
+func NewAdaptivePersonalizationEngine() *AdaptivePersonalizationEngine {
+	return &AdaptivePersonalizationEngine{
+		userProfiles: make(map[string]*AdaptiveUserProfile),
+		modelCache:   make(map[string]*AdaptivePersonalizationModel),
 	}
 }
 
-func (e *PersonalizationEngine) Initialize(ctx context.Context) error {
+func (e *AdaptivePersonalizationEngine) Initialize(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return nil
 }
 
-func (e *PersonalizationEngine) GetPersonalization(ctx context.Context, userID string, riskResult *AdaptiveRiskResult) (*PersonalizationResult, error) {
+func (e *AdaptivePersonalizationEngine) GetPersonalization(ctx context.Context, userID string, riskResult *AdaptiveRiskResult) (*PersonalizationResult, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	
@@ -871,7 +871,7 @@ func (e *PersonalizationEngine) GetPersonalization(ctx context.Context, userID s
 	return result, nil
 }
 
-func (e *PersonalizationEngine) UpdateProfile(ctx context.Context, userID string, interaction *InteractionData) error {
+func (e *AdaptivePersonalizationEngine) UpdateProfile(ctx context.Context, userID string, interaction *InteractionData) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	
@@ -919,8 +919,8 @@ type InteractionData struct {
 	CaptchaType    string
 }
 
-func (e *PersonalizationEngine) createDefaultProfile(userID string) *UserProfile {
-	return &UserProfile{
+func (e *AdaptivePersonalizationEngine) createDefaultProfile(userID string) *AdaptiveUserProfile {
+	return &AdaptiveUserProfile{
 		UserID:           userID,
 		InteractionStyle: "normal",
 		PreferredCaptcha: "slider",
@@ -934,8 +934,8 @@ func (e *PersonalizationEngine) createDefaultProfile(userID string) *UserProfile
 	}
 }
 
-func (e *PersonalizationEngine) createDefaultModel(userID string) *PersonalizationModel {
-	return &PersonalizationModel{
+func (e *AdaptivePersonalizationEngine) createDefaultModel(userID string) *AdaptivePersonalizationModel {
+	return &AdaptivePersonalizationModel{
 		UserID:         userID,
 		Features:       make([]float64, 32),
 		Preferences:    map[string]float64{"slider": 0.4, "click": 0.3, "rotate": 0.2, "puzzle": 0.1},
@@ -944,7 +944,7 @@ func (e *PersonalizationEngine) createDefaultModel(userID string) *Personalizati
 	}
 }
 
-func (e *PersonalizationEngine) calculateOptimalDifficulty(profile *UserProfile, riskResult *AdaptiveRiskResult) int {
+func (e *AdaptivePersonalizationEngine) calculateOptimalDifficulty(profile *AdaptiveUserProfile, riskResult *AdaptiveRiskResult) int {
 	baseDifficulty := 2
 	
 	avgDifficulty := 0.0
@@ -976,7 +976,7 @@ func (e *PersonalizationEngine) calculateOptimalDifficulty(profile *UserProfile,
 	return optimal
 }
 
-func (e *PersonalizationEngine) generateCustomInstructions(profile *UserProfile) []string {
+func (e *AdaptivePersonalizationEngine) generateCustomInstructions(profile *AdaptiveUserProfile) []string {
 	var instructions []string
 	
 	if profile.SuccessRate < 0.5 {
@@ -997,7 +997,7 @@ func (e *PersonalizationEngine) generateCustomInstructions(profile *UserProfile)
 	return instructions
 }
 
-func (e *PersonalizationEngine) calculateTrustAdjustment(profile *UserProfile) float64 {
+func (e *AdaptivePersonalizationEngine) calculateTrustAdjustment(profile *AdaptiveUserProfile) float64 {
 	if len(profile.DifficultyHistory) < 5 {
 		return 0
 	}
@@ -1007,8 +1007,8 @@ func (e *PersonalizationEngine) calculateTrustAdjustment(profile *UserProfile) f
 	return improvement * 0.2
 }
 
-func (e *PersonalizationEngine) updateModelCache(userID string, profile *UserProfile) {
-	model := &PersonalizationModel{
+func (e *AdaptivePersonalizationEngine) updateModelCache(userID string, profile *AdaptiveUserProfile) {
+	model := &AdaptivePersonalizationModel{
 		UserID:          userID,
 		AdaptationRate:  math.Min(0.9, profile.TrustScore),
 		LastUpdate:      time.Now(),
@@ -1091,8 +1091,7 @@ func (e *SelfLearningEngine) UpdateModel(ctx context.Context) (*LearningUpdateRe
 	previousAccuracy := e.calculateCurrentAccuracy()
 	
 	e.applyLearning()
-	
-	previousModelVersion := e.modelVersion
+
 	e.modelVersion = fmt.Sprintf("v1.%d", len(e.trainingData)/100)
 	
 	newAccuracy := e.calculateCurrentAccuracy()
@@ -1179,16 +1178,8 @@ func (e *SelfLearningEngine) detectNewPatterns() int {
 		return 0
 	}
 	
-	recentSamples := e.trainingData[len(e.trainingData)-100:]return 0.0
-}
-
-func (e *SelfLearningEngine) detectNewPatterns() int {
-	if len(e.trainingData) < 100 {
-		return 0
-	}
-	
 	recentSamples := e.trainingData[len(e.trainingData)-100:]
-	
+
 	var humanCount, botCount int
 	for _, s := range recentSamples {
 		if s.Label {
@@ -1197,21 +1188,22 @@ func (e *SelfLearningEngine) detectNewPatterns() int {
 			botCount++
 		}
 	}
-	
+
 	patterns := 0
-	
+
 	if humanCount > 80 {
 		patterns++
 	}
-	
+
 	if botCount > 20 {
 		patterns++
 	}
-	
+
 	return patterns
 }
 
-func (e *AdaptiveVerificationEngine) PerformAdaptiveAssessment(ctx context.Context, riskCtx *model.RiskContext, traceData *model.TraceData, userID string) (map[string]interface{}, error) {	if !e.initialized {
+func (e *AdaptiveVerificationEngine) PerformAdaptiveAssessment(ctx context.Context, riskCtx *model.RiskContext, traceData *model.TraceData, userID string) (map[string]interface{}, error) {
+	if !e.initialized {
 		return nil, fmt.Errorf("engine not initialized")
 	}
 	
@@ -1220,7 +1212,7 @@ func (e *AdaptiveVerificationEngine) PerformAdaptiveAssessment(ctx context.Conte
 		return nil, err
 	}
 	
-	var userProfile *UserProfile
+	var userProfile *AdaptiveUserProfile
 	if userID != "" {
 		e.personalizationEngine.mu.RLock()
 		userProfile = e.personalizationEngine.userProfiles[userID]
