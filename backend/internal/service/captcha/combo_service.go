@@ -202,7 +202,6 @@ func (s *ComboService) Create(ctx context.Context, req *CreateComboRequest) (*Cr
 }
 
 func (s *ComboService) generateIntelligentSteps(ctx context.Context, req *CreateComboRequest, difficulty, maxSteps int) []*ComboStep {
-	availableTypes := s.getAvailableTypes(req)
 	selector := s.createSmartSelector(req)
 
 	selectedTypes := selector.SelectTypes(maxSteps, difficulty, req.RiskScore)

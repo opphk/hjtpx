@@ -28,7 +28,7 @@ func (h *EnterpriseHandler) GetSSOConfig(c *gin.Context) {
 
 	config, err := h.enterpriseService.GetSSOConfig(tenantID.(uint))
 	if err != nil {
-		response.Fail(c, http.StatusNotFound, "SSO config not found", err.Error())
+		response.Fail(c, http.StatusNotFound, "SSO config not found")
 		return
 	}
 
@@ -51,7 +51,7 @@ func (h *EnterpriseHandler) CreateOrUpdateSSOConfig(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid request", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *EnterpriseHandler) CreateOrUpdateSSOConfig(c *gin.Context) {
 	}
 
 	if err := h.enterpriseService.CreateOrUpdateSSOConfig(tenantID.(uint), config); err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to save SSO config", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to save SSO config")
 		return
 	}
 
@@ -85,14 +85,14 @@ func (h *EnterpriseHandler) EnableSSO(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid request", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	tenantID, _ := c.Get("tenant_id")
 
 	if err := h.enterpriseService.EnableSSO(tenantID.(uint), req.Provider); err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to enable SSO", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to enable SSO")
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *EnterpriseHandler) DisableSSO(c *gin.Context) {
 	tenantID, _ := c.Get("tenant_id")
 
 	if err := h.enterpriseService.DisableSSO(tenantID.(uint)); err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to disable SSO", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to disable SSO")
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *EnterpriseHandler) InitiateSSO(c *gin.Context) {
 
 	config, err := h.enterpriseService.GetSSOConfig(tenantID.(uint))
 	if err != nil {
-		response.Fail(c, http.StatusNotFound, "SSO config not found", err.Error())
+		response.Fail(c, http.StatusNotFound, "SSO config not found")
 		return
 	}
 
@@ -128,13 +128,13 @@ func (h *EnterpriseHandler) InitiateSSO(c *gin.Context) {
 	case "oidc":
 		provider = h.enterpriseService.OIDCProvider(config)
 	default:
-		response.Fail(c, http.StatusBadRequest, "unsupported SSO provider", nil)
+		response.Fail(c, http.StatusBadRequest, "unsupported SSO provider")
 		return
 	}
 
 	authURL, err := provider.InitiateAuth()
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to initiate SSO", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to initiate SSO")
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *EnterpriseHandler) InitiateSSO(c *gin.Context) {
 func (h *EnterpriseHandler) HandleSSOCallback(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
-		response.Fail(c, http.StatusBadRequest, "authorization code required", nil)
+		response.Fail(c, http.StatusBadRequest, "authorization code required")
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *EnterpriseHandler) HandleSSOCallback(c *gin.Context) {
 
 	config, err := h.enterpriseService.GetSSOConfig(tenantID.(uint))
 	if err != nil {
-		response.Fail(c, http.StatusNotFound, "SSO config not found", err.Error())
+		response.Fail(c, http.StatusNotFound, "SSO config not found")
 		return
 	}
 
@@ -163,20 +163,20 @@ func (h *EnterpriseHandler) HandleSSOCallback(c *gin.Context) {
 	case "oidc":
 		provider = h.enterpriseService.OIDCProvider(config)
 	default:
-		response.Fail(c, http.StatusBadRequest, "unsupported SSO provider", nil)
+		response.Fail(c, http.StatusBadRequest, "unsupported SSO provider")
 		return
 	}
 
 	user, err := provider.HandleCallback(code)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to handle callback", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to handle callback")
 		return
 	}
 
 	scimService := service.NewSCIMService(nil)
 	scimUser, err := scimService.CreateSCIMUser(tenantID.(uint), user)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to create user", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to create user")
 		return
 	}
 
@@ -194,7 +194,7 @@ func (h *EnterpriseHandler) SyncSCIMUsers(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid request", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -203,7 +203,7 @@ func (h *EnterpriseHandler) SyncSCIMUsers(c *gin.Context) {
 	scimService := service.NewSCIMService(nil)
 	result, err := scimService.SyncUsers(tenantID.(uint), req.Provider, req.BaseURL, req.BearerToken)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to sync users", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to sync users")
 		return
 	}
 
@@ -218,7 +218,7 @@ func (h *EnterpriseHandler) SyncSCIMGroups(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid request", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -227,7 +227,7 @@ func (h *EnterpriseHandler) SyncSCIMGroups(c *gin.Context) {
 	scimService := service.NewSCIMService(nil)
 	result, err := scimService.SyncGroups(tenantID.(uint), req.BaseURL, req.BearerToken)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to sync groups", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to sync groups")
 		return
 	}
 
@@ -263,7 +263,7 @@ func (h *EnterpriseHandler) GetAuditLogs(c *gin.Context) {
 	auditService := service.NewAPIAuditService(nil)
 	logs, total, err := auditService.GetAuditLogs(tenantID.(uint), page, pageSize, filters)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to get audit logs", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to get audit logs")
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *EnterpriseHandler) GetAuditStats(c *gin.Context) {
 	auditService := service.NewAPIAuditService(nil)
 	stats, err := auditService.GetAuditStats(tenantID.(uint), startDate, endDate)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to get audit stats", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to get audit stats")
 		return
 	}
 
@@ -300,19 +300,19 @@ func (h *EnterpriseHandler) CreateComplianceReport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid request", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	startDate, err := time.Parse("2006-01-02", req.PeriodStart)
 	if err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid start date format", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid start date format")
 		return
 	}
 
 	endDate, err := time.Parse("2006-01-02", req.PeriodEnd)
 	if err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid end date format", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid end date format")
 		return
 	}
 
@@ -321,7 +321,7 @@ func (h *EnterpriseHandler) CreateComplianceReport(c *gin.Context) {
 	complianceService := service.NewComplianceService(nil)
 	report, err := complianceService.CreateReport(tenantID.(uint), req.ReportType, startDate, endDate)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to create report", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to create report")
 		return
 	}
 
@@ -342,7 +342,7 @@ func (h *EnterpriseHandler) GetComplianceReports(c *gin.Context) {
 	complianceService := service.NewComplianceService(nil)
 	reports, total, err := complianceService.GetReports(tenantID.(uint), page, pageSize)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "failed to get reports", err.Error())
+		response.Fail(c, http.StatusInternalServerError, "failed to get reports")
 		return
 	}
 
@@ -358,14 +358,14 @@ func (h *EnterpriseHandler) GetComplianceReports(c *gin.Context) {
 func (h *EnterpriseHandler) DownloadComplianceReport(c *gin.Context) {
 	reportID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.Fail(c, http.StatusBadRequest, "invalid report ID", err.Error())
+		response.Fail(c, http.StatusBadRequest, "invalid report ID")
 		return
 	}
 
 	complianceService := service.NewComplianceService(nil)
 	filePath, err := complianceService.DownloadReport(uint(reportID))
 	if err != nil {
-		response.Fail(c, http.StatusNotFound, "report not found or not ready", err.Error())
+		response.Fail(c, http.StatusNotFound, "report not found or not ready")
 		return
 	}
 

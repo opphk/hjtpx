@@ -454,7 +454,7 @@ func TestReverseSequence(t *testing.T) {
 	}
 }
 
-func TestMathSin(t *testing.T) {
+func TestVideoMathSin(t *testing.T) {
 	testCases := []struct {
 		input    float64
 		expected float64
@@ -468,13 +468,13 @@ func TestMathSin(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		result := mathSin(tc.input)
+		result := videoMathSin(tc.input)
 		diff := result - tc.expected
 		if diff < 0 {
 			diff = -diff
 		}
 		if diff > tc.delta {
-			t.Errorf("mathSin(%f): expected %f (±%f), got %f", tc.input, tc.expected, tc.delta, result)
+			t.Errorf("videoMathSin(%f): expected %f (±%f), got %f", tc.input, tc.expected, tc.delta, result)
 		}
 	}
 }

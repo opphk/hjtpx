@@ -8,9 +8,9 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/internal/repository/cache"
 	"github.com/hjtpx/hjtpx/internal/repository/db"
-	"github.com/hjtpx/hjtpx/pkg/models"
 )
 
 type VideoGeneratorService struct {
@@ -534,7 +534,7 @@ func reverseSequence(sequence []string) []string {
 	return reversed
 }
 
-func mathSin(x float64) float64 {
+func videoMathSin(x float64) float64 {
 	x = x - 2*math.Pi*float64(int(x/(2*math.Pi)))
 	if x < 0 {
 		x += 2 * math.Pi

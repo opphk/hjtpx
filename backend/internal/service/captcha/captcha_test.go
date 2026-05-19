@@ -540,7 +540,7 @@ func TestGenerateSilence(t *testing.T) {
 	assert.Greater(t, len(silence), 0)
 }
 
-func TestMathSin(t *testing.T) {
+func TestVoiceMathSin(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  float64
@@ -557,7 +557,7 @@ func TestMathSin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mathSin(tt.input)
+			result := voiceMathSin(tt.input)
 			assert.GreaterOrEqual(t, result, tt.minVal)
 			assert.LessOrEqual(t, result, tt.maxVal)
 		})

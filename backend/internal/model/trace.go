@@ -26,6 +26,16 @@ type TraceData struct {
 	DeviceInfo string       `json:"device_info"`
 	ClickData  []ClickInfo  `json:"click_data,omitempty"`
 	ScrollData []ScrollInfo `json:"scroll_data,omitempty"`
+	PointCount         int     `json:"point_count"`
+	TotalDistance     float64 `json:"total_distance"`
+	AvgDistance       float64 `json:"avg_distance"`
+	AvgSpeed          float64 `json:"avg_speed"`
+	SpeedVariance     float64 `json:"speed_variance"`
+	MinSpeed          float64 `json:"min_speed"`
+	MaxSpeed          float64 `json:"max_speed"`
+	DirectionChanges  int     `json:"direction_changes"`
+	AvgCurvature      float64 `json:"avg_curvature"`
+	CurvatureVariance float64 `json:"curvature_variance"`
 }
 
 type ClickInfo struct {

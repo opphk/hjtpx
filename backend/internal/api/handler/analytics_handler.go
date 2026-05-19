@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"sort"
 	"strconv"
 	"time"
 
@@ -15,10 +14,7 @@ import (
 
 type AnalyticsHandler struct {
 	db           *gorm.DB
-	cacheService interface {
-		Get(key string) interface{}
-		Set(key string, value interface{}, ttl time.Duration) error
-	}
+	cacheService interface{}
 }
 
 func NewAnalyticsHandler(db *gorm.DB, cacheService interface{}) *AnalyticsHandler {
@@ -180,7 +176,7 @@ func (h *AnalyticsHandler) CreateCustomReport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, 400, "invalid request", err.Error())
+		response.Fail(c, 400, "invalid request")
 		return
 	}
 

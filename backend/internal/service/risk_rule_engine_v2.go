@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/model"
-	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"gorm.io/gorm"
 )
@@ -19,10 +18,26 @@ import (
 type RiskRuleEngineV2 struct {
 	db              *gorm.DB
 	workflowEngine  *WorkflowEngine
-	cacheService    interface{}
+	cacheService    RiskCacheService
 	ruleMutex       sync.RWMutex
 	compiledRules   map[uint]*CompiledRule
 	ruleConditions  map[string]ConditionEvaluator
+}
+
+type RiskCacheService interface {
+	Get(ctx context.Context, key string) RiskCacheResult
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Incr(ctx context.Context, key string) RiskIntResult
+	Expire(ctx context.Context, key string, expiration time.Duration) bool
+}
+
+type RiskCacheResult interface {
+	Int() (int, error)
+	String() (string, error)
+}
+
+type RiskIntResult interface {
+	Result() (int64, error)
 }
 
 type CompiledRule struct {
@@ -749,10 +764,10 @@ func (e *RiskRuleEngineV2) evalExpression(ctx *model.RiskContext, params map[str
 	if len(ops) < 3 {
 		return false
 	}
-	
-	left := parseFloat(ops[0])
+
+	left, _ := parseFloat(ops[0])
 	op := ops[1]
-	right := parseFloat(ops[2])
+	right, _ := parseFloat(ops[2])
 	
 	switch op {
 	case ">":
@@ -777,7 +792,8 @@ func (e *RiskRuleEngineV2) getIPRequestCount(ip string, windowSeconds int) (int,
 	cacheKey := fmt.Sprintf("ip_count:%s:%d", ip, windowSeconds/60)
 	
 	if e.cacheService != nil {
-		if cached, err := e.cacheService.Get(ctx, cacheKey).Int(); err == nil {
+		cacheResult := e.cacheService.Get(ctx, cacheKey)
+		if cached, err := cacheResult.Int(); err == nil {
 			return cached, nil
 		}
 	}
@@ -941,7 +957,8 @@ func (e *RiskRuleEngineV2) applyRateLimit(ctx *model.RiskContext, params map[str
 	
 	if e.cacheService != nil {
 		ctx := context.Background()
-		count, _ := e.cacheService.Incr(ctx, ctxKey).Result()
+		incrResult := e.cacheService.Incr(ctx, ctxKey)
+		count, _ := incrResult.Result()
 		if count == 1 {
 			e.cacheService.Expire(ctx, ctxKey, time.Duration(window)*time.Second)
 		}
@@ -992,6 +1009,8 @@ func (e *RiskRuleEngineV2) triggerWebhook(ctx *model.RiskContext, params map[str
 		"timestamp":  time.Now(),
 		"context":     ctx,
 	}
+	
+	_ = payload
 	
 	e.db.Create(&models.WebhookConfig{
 		Name:   "automated_webhook",
