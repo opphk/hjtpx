@@ -18,21 +18,45 @@ type EnhancedBiometricProfile struct {
 	FaceProfile       *FaceBiometrics       `json:"face_profile,omitempty"`
 	VoiceProfile      *VoiceBiometrics      `json:"voice_profile,omitempty"`
 	GestureProfile    *GestureBiometrics    `json:"gesture_profile,omitempty"`
+	TypingPattern     *TypingPatternProfile `json:"typing_pattern,omitempty"`
 	MultimodalWeights MultimodalWeights     `json:"multimodal_weights"`
 	VerificationCount int                   `json:"verification_count"`
 	ConfidenceScore   float64               `json:"confidence_score"`
 }
 
+// MicroExpressionScores 微表情分析分数
+type MicroExpressionScores struct {
+	Happy      float64 `json:"happy"`
+	Sad        float64 `json:"sad"`
+	Surprised  float64 `json:"surprised"`
+	Scared     float64 `json:"scared"`
+	Angry      float64 `json:"angry"`
+	Disgusted  float64 `json:"disgusted"`
+	Neutral    float64 `json:"neutral"`
+	Focused    float64 `json:"focused"`
+	Tense      float64 `json:"tense"`
+}
+
 // FaceBiometrics 面部生物特征
 type FaceBiometrics struct {
-	LandmarkDistances  map[string]float64   `json:"landmark_distances"`
-	FeatureVector      []float64            `json:"feature_vector"`
-	FaceEmbedding      []float64            `json:"face_embedding"`
-	EyeAspectRatio     float64              `json:"eye_aspect_ratio"`
-	MouthAspectRatio   float64              `json:"mouth_aspect_ratio"`
-	BlinkFrequency     float64              `json:"blink_frequency"`
-	MicroExpressionScores map[string]float64 `json:"micro_expression_scores"`
-	QualityScore       float64              `json:"quality_score"`
+	LandmarkDistances      map[string]float64   `json:"landmark_distances"`
+	FeatureVector          []float64            `json:"feature_vector"`
+	FaceEmbedding          []float64            `json:"face_embedding"`
+	EyeAspectRatio         float64              `json:"eye_aspect_ratio"`
+	MouthAspectRatio       float64              `json:"mouth_aspect_ratio"`
+	BlinkFrequency         float64              `json:"blink_frequency"`
+	MicroExpressionScores  MicroExpressionScores `json:"micro_expression_scores"`
+	QualityScore           float64              `json:"quality_score"`
+	LivenessConfidence     float64              `json:"liveness_confidence"`
+}
+
+// LivenessFeatures 声纹活体检测特征
+type LivenessFeatures struct {
+	BreathPatternConfidence float64 `json:"breath_pattern_confidence"`
+	FormantVariability      float64 `json:"formant_variability"`
+	TemporalConsistency     float64 `json:"temporal_consistency"`
+	SpectralAuthenticity    float64 `json:"spectral_authenticity"`
+	OverallLivenessScore    float64 `json:"overall_liveness_score"`
 }
 
 // VoiceBiometrics 语音生物特征
@@ -46,6 +70,7 @@ type VoiceBiometrics struct {
 	TempoFeatures      TempoFeatures        `json:"tempo_features"`
 	VoiceEmbedding     []float64            `json:"voice_embedding"`
 	VoiceQualityScore  float64              `json:"voice_quality_score"`
+	LivenessFeatures   LivenessFeatures     `json:"liveness_features"`
 }
 
 // PitchFeatures 音调特征
@@ -87,6 +112,7 @@ type MultimodalWeights struct {
 	FaceWeight      float64 `json:"face_weight"`
 	VoiceWeight     float64 `json:"voice_weight"`
 	GestureWeight   float64 `json:"gesture_weight"`
+	TypingWeight    float64 `json:"typing_weight"`
 }
 
 // FaceSample 面部样本
@@ -108,6 +134,28 @@ type VoiceSample struct {
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// TypingPatternProfile 打字模式分析特征
+type TypingPatternProfile struct {
+	AverageHoldTime      float64            `json:"average_hold_time"`
+	HoldTimeStdDev       float64            `json:"hold_time_std_dev"`
+	AverageFlightTime    float64            `json:"average_flight_time"`
+	FlightTimeStdDev     float64            `json:"flight_time_std_dev"`
+	TypingSpeedWPM       float64            `json:"typing_speed_wpm"`
+	ErrorRate            float64            `json:"error_rate"`
+	KeyPairPatterns      map[string]float64 `json:"key_pair_patterns"`
+	DwellTimeDistribution map[string]float64 `json:"dwell_time_distribution"`
+	RhythmScore          float64            `json:"rhythm_score"`
+	ConsistencyScore     float64            `json:"consistency_score"`
+}
+
+// TypingPatternSample 打字模式样本
+type TypingPatternSample struct {
+	KeyEvents      []KeyEvent             `json:"key_events"`
+	TextContent    string                 `json:"text_content,omitempty"`
+	Timestamp      int64                  `json:"timestamp"`
+	SessionID      string                 `json:"session_id,omitempty"`
+}
+
 // GestureSample 手势样本
 type GestureSample struct {
 	HandLandmarks  [][]float64            `json:"hand_landmarks,omitempty"`
@@ -118,23 +166,25 @@ type GestureSample struct {
 
 // EnhancedVerificationRequest 增强版验证请求
 type EnhancedVerificationRequest struct {
-	UserID         string                  `json:"user_id" binding:"required"`
-	KeyboardSample *KeyboardSample         `json:"keyboard_sample,omitempty"`
-	MouseSample    *MouseSample            `json:"mouse_sample,omitempty"`
-	FaceSample     *FaceSample             `json:"face_sample,omitempty"`
-	VoiceSample    *VoiceSample            `json:"voice_sample,omitempty"`
-	GestureSample  *GestureSample          `json:"gesture_sample,omitempty"`
-	SessionContext map[string]interface{}  `json:"session_context,omitempty"`
+	UserID              string                  `json:"user_id" binding:"required"`
+	KeyboardSample      *KeyboardSample         `json:"keyboard_sample,omitempty"`
+	MouseSample         *MouseSample            `json:"mouse_sample,omitempty"`
+	FaceSample          *FaceSample             `json:"face_sample,omitempty"`
+	VoiceSample         *VoiceSample            `json:"voice_sample,omitempty"`
+	GestureSample       *GestureSample          `json:"gesture_sample,omitempty"`
+	TypingPatternSample *TypingPatternSample    `json:"typing_pattern_sample,omitempty"`
+	SessionContext      map[string]interface{}  `json:"session_context,omitempty"`
 }
 
 // EnhancedVerificationResult 增强版验证结果
 type EnhancedVerificationResult struct {
-	IsVerified     bool                   `json:"is_verified"`
-	OverallConfidence float64             `json:"overall_confidence"`
-	ModalScores    map[string]float64     `json:"modal_scores"`
-	Details        string                 `json:"details"`
-	RiskAssessment *BiometricsRiskAssessment `json:"risk_assessment,omitempty"`
-	Timestamp      time.Time              `json:"timestamp"`
+	IsVerified         bool                   `json:"is_verified"`
+	OverallConfidence  float64                `json:"overall_confidence"`
+	ModalScores        map[string]float64     `json:"modal_scores"`
+	LivenessChecks     map[string]bool        `json:"liveness_checks"`
+	Details            string                 `json:"details"`
+	RiskAssessment     *BiometricsRiskAssessment `json:"risk_assessment,omitempty"`
+	Timestamp          time.Time              `json:"timestamp"`
 }
 
 // BiometricsRiskAssessment 生物识别风险评估
@@ -164,6 +214,7 @@ func (s *EnhancedBiometricsService) RegisterEnhancedProfile(
 	faceSample *FaceSample,
 	voiceSample *VoiceSample,
 	gestureSample *GestureSample,
+	typingSample *TypingPatternSample,
 ) (*EnhancedBiometricProfile, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
@@ -179,11 +230,12 @@ func (s *EnhancedBiometricsService) RegisterEnhancedProfile(
 				CommonKeys:     make(map[string]float64),
 			},
 			MultimodalWeights: MultimodalWeights{
-				KeyboardWeight: 0.3,
-				MouseWeight:    0.25,
+				KeyboardWeight: 0.25,
+				MouseWeight:    0.2,
 				FaceWeight:     0.2,
-				VoiceWeight:    0.15,
-				GestureWeight:  0.1,
+				VoiceWeight:    0.2,
+				GestureWeight:  0.05,
+				TypingWeight:   0.1,
 			},
 		}
 	}
@@ -215,6 +267,11 @@ func (s *EnhancedBiometricsService) RegisterEnhancedProfile(
 		profile.GestureProfile = &gestureProfile
 	}
 
+	if typingSample != nil {
+		typingProfile := s.extractTypingPatternFeatures(typingSample)
+		profile.TypingPattern = &typingProfile
+	}
+
 	profile.VerificationCount++
 	profile.ConfidenceScore = math.Min(1.0, float64(profile.VerificationCount)/10.0)
 
@@ -230,12 +287,14 @@ func (s *EnhancedBiometricsService) VerifyEnhanced(req *EnhancedVerificationRequ
 			IsVerified:        false,
 			OverallConfidence: 0,
 			ModalScores:       make(map[string]float64),
+			LivenessChecks:    make(map[string]bool),
 			Details:           "No profile found for user",
 			Timestamp:         time.Now(),
 		}, nil
 	}
 
 	modalScores := make(map[string]float64)
+	livenessChecks := make(map[string]bool)
 	totalWeight := 0.0
 
 	// 键盘验证
@@ -259,23 +318,31 @@ func (s *EnhancedBiometricsService) VerifyEnhanced(req *EnhancedVerificationRequ
 	}
 
 	// 面部验证
+	var faceLivenessConfidence float64
 	if req.FaceSample != nil && profile.FaceProfile != nil {
 		sampleFeatures := s.extractFaceFeatures(req.FaceSample)
 		faceScore := s.compareFaceBiometrics(*profile.FaceProfile, sampleFeatures)
 		modalScores["face"] = faceScore
+		faceLivenessConfidence = sampleFeatures.LivenessConfidence
+		livenessChecks["face_liveness"] = faceLivenessConfidence > 0.7
 		totalWeight += profile.MultimodalWeights.FaceWeight
 	} else {
 		modalScores["face"] = 0.5
+		livenessChecks["face_liveness"] = true
 	}
 
 	// 语音验证
+	var voiceLivenessConfidence float64
 	if req.VoiceSample != nil && profile.VoiceProfile != nil {
 		sampleFeatures := s.extractVoiceFeatures(req.VoiceSample)
 		voiceScore := s.compareVoiceBiometrics(*profile.VoiceProfile, sampleFeatures)
 		modalScores["voice"] = voiceScore
+		voiceLivenessConfidence = sampleFeatures.LivenessFeatures.OverallLivenessScore
+		livenessChecks["voice_liveness"] = voiceLivenessConfidence > 0.7
 		totalWeight += profile.MultimodalWeights.VoiceWeight
 	} else {
 		modalScores["voice"] = 0.5
+		livenessChecks["voice_liveness"] = true
 	}
 
 	// 手势验证
@@ -288,28 +355,39 @@ func (s *EnhancedBiometricsService) VerifyEnhanced(req *EnhancedVerificationRequ
 		modalScores["gesture"] = 0.5
 	}
 
-	// 计算多模态融合分数
-	overallConfidence := 0.0
-	if totalWeight > 0 {
-		overallConfidence = (modalScores["keyboard"]*profile.MultimodalWeights.KeyboardWeight +
-			modalScores["mouse"]*profile.MultimodalWeights.MouseWeight +
-			modalScores["face"]*profile.MultimodalWeights.FaceWeight +
-			modalScores["voice"]*profile.MultimodalWeights.VoiceWeight +
-			modalScores["gesture"]*profile.MultimodalWeights.GestureWeight) / totalWeight
+	// 打字模式验证
+	if req.TypingPatternSample != nil && profile.TypingPattern != nil {
+		sampleFeatures := s.extractTypingPatternFeatures(req.TypingPatternSample)
+		typingScore := s.compareTypingPatternBiometrics(*profile.TypingPattern, sampleFeatures)
+		modalScores["typing_pattern"] = typingScore
+		totalWeight += profile.MultimodalWeights.TypingWeight
 	} else {
-		// 如果没有提供任何模态，使用默认分数
-		overallConfidence = 0.5
+		modalScores["typing_pattern"] = 0.5
+	}
+
+	// 多模态融合分数
+	overallConfidence := s.fuseMultimodalScores(modalScores, profile.MultimodalWeights, totalWeight)
+
+	// 检查所有活体检测
+	allLivenessPassed := true
+	for _, passed := range livenessChecks {
+		if !passed {
+			allLivenessPassed = false
+			break
+		}
 	}
 
 	// 风险评估
-	riskAssessment := s.assessRisk(modalScores, req.SessionContext)
+	riskAssessment := s.assessRisk(modalScores, livenessChecks, req.SessionContext)
 
-	isVerified := overallConfidence >= 0.95
+	// 最终验证结果
+	isVerified := overallConfidence >= 0.90 && allLivenessPassed
 
 	result := &EnhancedVerificationResult{
 		IsVerified:        isVerified,
 		OverallConfidence: overallConfidence,
 		ModalScores:       modalScores,
+		LivenessChecks:    livenessChecks,
 		Details:           fmt.Sprintf("Enhanced verification with %.2f%% confidence", overallConfidence*100),
 		RiskAssessment:    riskAssessment,
 		Timestamp:         time.Now(),
@@ -321,18 +399,28 @@ func (s *EnhancedBiometricsService) VerifyEnhanced(req *EnhancedVerificationRequ
 // extractFaceFeatures 提取面部特征（模拟）
 func (s *EnhancedBiometricsService) extractFaceFeatures(sample *FaceSample) FaceBiometrics {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	features := FaceBiometrics{
 		LandmarkDistances: make(map[string]float64),
 		FeatureVector:     make([]float64, 128),
 		FaceEmbedding:     make([]float64, 512),
-		MicroExpressionScores: make(map[string]float64),
+		MicroExpressionScores: MicroExpressionScores{
+			Happy:     rand.Float64() * 0.3,
+			Sad:       rand.Float64() * 0.2,
+			Surprised: rand.Float64() * 0.15,
+			Scared:    rand.Float64() * 0.1,
+			Angry:     rand.Float64() * 0.1,
+			Disgusted: rand.Float64() * 0.05,
+			Neutral:   0.3 + rand.Float64()*0.5,
+			Focused:   0.4 + rand.Float64()*0.4,
+			Tense:     0.1 + rand.Float64()*0.3,
+		},
 	}
 
 	// 模拟生成面部特征
-	landmarkPairs := []string{"eye_distance", "nose_width", "mouth_width", "jaw_length"}
+	landmarkPairs := []string{"eye_distance", "nose_width", "mouth_width", "jaw_length", "forehead_height", "cheek_width"}
 	for _, pair := range landmarkPairs {
-		features.LandmarkDistances[pair] = 30 + rand.Float64()*50
+		features.LandmarkDistances[pair] = 25 + rand.Float64()*60
 	}
 
 	for i := range features.FeatureVector {
@@ -347,11 +435,7 @@ func (s *EnhancedBiometricsService) extractFaceFeatures(sample *FaceSample) Face
 	features.MouthAspectRatio = 0.3 + rand.Float64()*0.4
 	features.BlinkFrequency = 5 + rand.Float64()*15
 	features.QualityScore = 0.6 + rand.Float64()*0.4
-
-	expressions := []string{"happy", "surprised", "neutral", "focused"}
-	for _, expr := range expressions {
-		features.MicroExpressionScores[expr] = rand.Float64()
-	}
+	features.LivenessConfidence = 0.7 + rand.Float64()*0.3
 
 	return features
 }
@@ -359,7 +443,7 @@ func (s *EnhancedBiometricsService) extractFaceFeatures(sample *FaceSample) Face
 // extractVoiceFeatures 提取语音特征（模拟）
 func (s *EnhancedBiometricsService) extractVoiceFeatures(sample *VoiceSample) VoiceBiometrics {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	features := VoiceBiometrics{
 		PitchFeatures: PitchFeatures{
 			MeanPitch:     100 + rand.Float64()*150,
@@ -375,7 +459,21 @@ func (s *EnhancedBiometricsService) extractVoiceFeatures(sample *VoiceSample) Vo
 			ArticulationRate: 5 + rand.Float64()*10,
 		},
 		VoiceEmbedding:    make([]float64, 256),
+		LivenessFeatures: LivenessFeatures{
+			BreathPatternConfidence: 0.6 + rand.Float64()*0.4,
+			FormantVariability:      0.5 + rand.Float64()*0.4,
+			TemporalConsistency:     0.7 + rand.Float64()*0.3,
+			SpectralAuthenticity:    0.65 + rand.Float64()*0.35,
+			OverallLivenessScore:    0.0,
+		},
 	}
+
+	// 计算综合活体检测分数
+	features.LivenessFeatures.OverallLivenessScore = (
+		features.LivenessFeatures.BreathPatternConfidence*0.25 +
+		features.LivenessFeatures.FormantVariability*0.2 +
+		features.LivenessFeatures.TemporalConsistency*0.3 +
+		features.LivenessFeatures.SpectralAuthenticity*0.25)
 
 	features.SpectralCentroid = 1000 + rand.Float64()*3000
 	features.SpectralBandwidth = 500 + rand.Float64()*1500
@@ -400,7 +498,7 @@ func (s *EnhancedBiometricsService) extractVoiceFeatures(sample *VoiceSample) Vo
 // extractGestureFeatures 提取手势特征（模拟）
 func (s *EnhancedBiometricsService) extractGestureFeatures(sample *GestureSample) GestureBiometrics {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	features := GestureBiometrics{
 		HandLandmarks:   make([][]float64, 21),
 		GestureSequences: make([]GestureSequence, 0),
@@ -429,6 +527,146 @@ func (s *EnhancedBiometricsService) extractGestureFeatures(sample *GestureSample
 	return features
 }
 
+// extractTypingPatternFeatures 提取打字模式特征
+func (s *EnhancedBiometricsService) extractTypingPatternFeatures(sample *TypingPatternSample) TypingPatternProfile {
+	features := TypingPatternProfile{
+		KeyPairPatterns:      make(map[string]float64),
+		DwellTimeDistribution: make(map[string]float64),
+	}
+
+	if sample == nil || len(sample.KeyEvents) < 5 {
+		return features
+	}
+
+	holdTimes := []float64{}
+	flightTimes := []float64{}
+	keyDownMap := make(map[string]int64)
+	keyCount := make(map[string]int)
+
+	for i := 0; i < len(sample.KeyEvents); i++ {
+		event := sample.KeyEvents[i]
+		key := fmt.Sprintf("%s:%d", event.Key, event.KeyCode)
+
+		if event.Type == "keydown" {
+			keyDownMap[key] = event.Timestamp
+			keyCount[key]++
+		} else if event.Type == "keyup" {
+			if downTime, exists := keyDownMap[key]; exists {
+				holdTime := float64(event.Timestamp - downTime)
+				if holdTime > 0 && holdTime < 2000 {
+					holdTimes = append(holdTimes, holdTime)
+				}
+				delete(keyDownMap, key)
+			}
+		}
+
+		if i > 0 && event.Type == "keydown" && sample.KeyEvents[i-1].Type == "keydown" {
+			flightTime := float64(event.Timestamp - sample.KeyEvents[i-1].Timestamp)
+			if flightTime > 0 && flightTime < 2000 {
+				flightTimes = append(flightTimes, flightTime)
+				prevKey := fmt.Sprintf("%s:%d", sample.KeyEvents[i-1].Key, sample.KeyEvents[i-1].KeyCode)
+				pairKey := fmt.Sprintf("%s->%s", prevKey, key)
+				features.KeyPairPatterns[pairKey] = flightTime
+			}
+		}
+	}
+
+	if len(holdTimes) > 0 {
+		features.AverageHoldTime = meanEnhanced(holdTimes)
+		features.HoldTimeStdDev = stdDevEnhanced(holdTimes)
+	}
+
+	if len(flightTimes) > 0 {
+		features.AverageFlightTime = meanEnhanced(flightTimes)
+		features.FlightTimeStdDev = stdDevEnhanced(flightTimes)
+		features.TypingSpeedWPM = calculateWPM(flightTimes, len(flightTimes)+1)
+	}
+
+	features.ConsistencyScore = calculateConsistency(holdTimes, flightTimes)
+	features.RhythmScore = calculateRhythm(flightTimes)
+
+	return features
+}
+
+// calculateSimilarityScore 计算相似度分数
+func (s *EnhancedBiometricsService) calculateSimilarityScore(val1, val2, tolerance float64) float64 {
+	if val1 <= 0 || val2 <= 0 {
+		return 0.5
+	}
+	
+	diff := math.Abs(val1 - val2)
+	maxVal := math.Max(val1, val2)
+	if maxVal == 0 {
+		return 0.5
+	}
+	
+	normalizedDiff := diff / maxVal
+	if normalizedDiff <= tolerance {
+		return 1.0 - (normalizedDiff / tolerance) * 0.5
+	}
+	
+	return math.Max(0, 0.5 - (normalizedDiff - tolerance) * 0.5)
+}
+
+// compareTypingPatternBiometrics 比较打字模式特征相似度
+func (s *EnhancedBiometricsService) compareTypingPatternBiometrics(profile, sample TypingPatternProfile) float64 {
+	score := 0.0
+	weights := 0.0
+
+	if profile.AverageHoldTime > 0 && sample.AverageHoldTime > 0 {
+		holdTimeScore := s.calculateSimilarityScore(profile.AverageHoldTime, sample.AverageHoldTime, 0.4)
+		score += holdTimeScore * 0.25
+		weights += 0.25
+	}
+
+	if profile.AverageFlightTime > 0 && sample.AverageFlightTime > 0 {
+		flightTimeScore := s.calculateSimilarityScore(profile.AverageFlightTime, sample.AverageFlightTime, 0.4)
+		score += flightTimeScore * 0.25
+		weights += 0.25
+	}
+
+	if profile.TypingSpeedWPM > 0 && sample.TypingSpeedWPM > 0 {
+		speedScore := s.calculateSimilarityScore(profile.TypingSpeedWPM, sample.TypingSpeedWPM, 0.3)
+		score += speedScore * 0.2
+		weights += 0.2
+	}
+
+	if profile.ConsistencyScore > 0 && sample.ConsistencyScore > 0 {
+		consistencyScore := 1.0 - math.Abs(profile.ConsistencyScore-sample.ConsistencyScore)
+		score += consistencyScore * 0.15
+		weights += 0.15
+	}
+
+	if profile.RhythmScore > 0 && sample.RhythmScore > 0 {
+		rhythmScore := 1.0 - math.Abs(profile.RhythmScore-sample.RhythmScore)
+		score += rhythmScore * 0.15
+		weights += 0.15
+	}
+
+	if weights > 0 {
+		return score / weights
+	}
+
+	return 0.5
+}
+
+// fuseMultimodalScores 多模态融合
+func (s *EnhancedBiometricsService) fuseMultimodalScores(scores map[string]float64, weights MultimodalWeights, totalWeight float64) float64 {
+	if totalWeight <= 0 {
+		return 0.5
+	}
+
+	weightedSum := 0.0
+	weightedSum += scores["keyboard"] * weights.KeyboardWeight
+	weightedSum += scores["mouse"] * weights.MouseWeight
+	weightedSum += scores["face"] * weights.FaceWeight
+	weightedSum += scores["voice"] * weights.VoiceWeight
+	weightedSum += scores["gesture"] * weights.GestureWeight
+	weightedSum += scores["typing_pattern"] * weights.TypingWeight
+
+	return weightedSum / totalWeight
+}
+
 // compareFaceBiometrics 比较面部生物特征相似度
 func (s *EnhancedBiometricsService) compareFaceBiometrics(profile, sample FaceBiometrics) float64 {
 	score := 0.7 + rand.Float64()*0.3
@@ -448,9 +686,9 @@ func (s *EnhancedBiometricsService) compareGestureBiometrics(profile, sample Ges
 }
 
 // assessRisk 评估风险
-func (s *EnhancedBiometricsService) assessRisk(modalScores map[string]float64, context map[string]interface{}) *BiometricsRiskAssessment {
+func (s *EnhancedBiometricsService) assessRisk(modalScores map[string]float64, livenessChecks map[string]bool, context map[string]interface{}) *BiometricsRiskAssessment {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	averageScore := 0.0
 	count := 0
 	for _, score := range modalScores {
@@ -467,16 +705,23 @@ func (s *EnhancedBiometricsService) assessRisk(modalScores map[string]float64, c
 	riskLevel := "low"
 	factors := []string{}
 
+	// 检查活体检测结果
+	for check, passed := range livenessChecks {
+		if !passed {
+			factors = append(factors, fmt.Sprintf("Liveness check failed: %s", check))
+			riskScore += 0.15
+		}
+	}
+
 	if riskScore > 0.7 {
 		riskLevel = "high"
-		factors = append(factors, "Multiple modal scores below threshold")
 	} else if riskScore > 0.4 {
 		riskLevel = "medium"
 	}
 
 	return &BiometricsRiskAssessment{
 		RiskLevel: riskLevel,
-		RiskScore: riskScore,
+		RiskScore: math.Min(1.0, riskScore),
 		Factors:   factors,
 	}
 }
@@ -593,6 +838,58 @@ func stdDevEnhanced(values []float64) float64 {
 		variance += math.Pow(v-avg, 2)
 	}
 	return math.Sqrt(variance / float64(len(values)))
+}
+
+// calculateWPM 计算打字速度（每分钟词数）
+func calculateWPM(flightTimes []float64, keyCount int) float64 {
+	if len(flightTimes) < 2 || keyCount < 2 {
+		return 0
+	}
+
+	totalTime := flightTimes[len(flightTimes)-1] - flightTimes[0]
+	if totalTime <= 0 {
+		return 0
+	}
+
+	minutes := totalTime / 60000.0
+	words := float64(keyCount) / 5.0 // 平均5个字符一个词
+
+	return words / minutes
+}
+
+// calculateConsistency 计算一致性分数
+func calculateConsistency(holdTimes, flightTimes []float64) float64 {
+	if len(holdTimes) < 3 || len(flightTimes) < 3 {
+		return 0.5
+	}
+
+	holdCV := stdDevEnhanced(holdTimes) / meanEnhanced(holdTimes)
+	flightCV := stdDevEnhanced(flightTimes) / meanEnhanced(flightTimes)
+
+	// 变异系数越小越一致
+	consistency := 1.0 - (holdCV*0.5+flightCV*0.5)/2.0
+	return math.Max(0.0, math.Min(1.0, consistency))
+}
+
+// calculateRhythm 计算节奏分数
+func calculateRhythm(flightTimes []float64) float64 {
+	if len(flightTimes) < 4 {
+		return 0.5
+	}
+
+	// 检查间隔的规律性
+	irregularity := 0.0
+	for i := 2; i < len(flightTimes); i++ {
+		diff1 := math.Abs(flightTimes[i] - flightTimes[i-1])
+		diff2 := math.Abs(flightTimes[i-1] - flightTimes[i-2])
+		irregularity += math.Abs(diff1 - diff2)
+	}
+
+	avgIrregularity := irregularity / float64(len(flightTimes)-2)
+	normalizedIrregularity := avgIrregularity / meanEnhanced(flightTimes)
+
+	rhythmScore := 1.0 - math.Min(1.0, normalizedIrregularity)
+	return math.Max(0.0, rhythmScore)
 }
 
 // SerializeEnhancedProfile 序列化增强版档案

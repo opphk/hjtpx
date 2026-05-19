@@ -21,7 +21,11 @@ func SetupRoutes(r *gin.Engine) {
 	vrGen := captcha.NewVRGeneratorServiceSimple()
 	vrVer := captcha.NewVRVerifierServiceSimple()
 	handler.InitVRCaptchaHandler(vrGen, vrVer)
-	handler.InitVrArCaptchaHandler(vrGen, vrVer)
+	
+	// 初始化VR/AR验证码handler
+	vrArGen := captcha.NewVRARGeneratorServiceSimple()
+	vrArVer := captcha.NewVRARVerifierServiceSimple()
+	handler.InitVrArCaptchaHandler(vrArGen, vrArVer)
 
 	// 初始化神经验证码handler
 	neuralSvc := service.NewNeuralCaptchaService()
