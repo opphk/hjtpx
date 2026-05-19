@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/config"
+	"gorm.io/gorm"
 )
 
 type AdvancedConnectionPoolManager struct {
@@ -714,4 +715,29 @@ func init() {
 
 func GetConnectionPoolExporter() *ConnectionPoolExporter {
 	return globalPoolExporter
+}
+
+type EnhancedPoolOptimizer struct {
+	db     *gorm.DB
+	mu     sync.RWMutex
+	active bool
+}
+
+func NewEnhancedConnectionPoolOptimizer(db *gorm.DB, config interface{}) *EnhancedPoolOptimizer {
+	return &EnhancedPoolOptimizer{
+		db:     db,
+		mu:     sync.RWMutex{},
+		active: true,
+	}
+}
+
+func (e *EnhancedPoolOptimizer) Start() error {
+	return nil
+}
+
+func (e *EnhancedPoolOptimizer) WarmUpConnections(numConnections int) error {
+	return nil
+}
+
+func (e *EnhancedPoolOptimizer) Stop() {
 }

@@ -1,0 +1,242 @@
+groups:
+  - name: hjtpx-backend-alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) /
+          rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "服务器错误率过高"
+          description: "服务器5xx错误率超过5%，当前值: {{ $value | printf \"%.2f\" }}"
+          runbook_url: "https://docs.hjtpx.com/runbooks/high-error-rate"
+      
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "API响应延迟过高"
+          description: "P95响应时间超过2秒，当前值: {{ $value | printf \"%.2f\" }}秒"
+      
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "内存使用率过高"
+          description: "内存使用率超过85%，当前值: {{ $value | printf \"%.2f\" }}"
+      
+      - alert: HighCPUUsage
+        expr: |
+          (rate(container_cpu_usage_seconds_total[5m])) > 1.8
+        for: 10m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "CPU使用率过高"
+          description: "CPU使用率超过90%，当前值: {{ $value | printf \"%.2f\" }}"
+      
+      - alert: PodRestartingFrequently
+        expr: |
+          increase(kube_pod_container_status_restarts_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "Pod频繁重启"
+          description: "Pod在过去1小时内重启超过3次"
+      
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_ready{condition="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Pod未就绪"
+          description: "Pod {{ $labels.pod }} 未就绪超过5分钟"
+
+  - name: hjtpx-captcha-alerts
+    interval: 30s
+    rules:
+      - alert: HighCaptchaFailureRate
+        expr: |
+          rate(captcha_verifications_total{status="failed"}[5m]) /
+          rate(captcha_verifications_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          component: captcha
+        annotations:
+          summary: "验证码失败率过高"
+          description: "验证码失败率超过30%，当前值: {{ $value | printf \"%.2f\" }}"
+      
+      - alert: LowCaptchaSuccessRate
+        expr: |
+          rate(captcha_verifications_total{status="success"}[5m]) /
+          rate(captcha_verifications_total[5m]) < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          component: captcha
+        annotations:
+          summary: "验证码成功率过低"
+          description: "验证码成功率低于70%，当前值: {{ $value | printf \"%.2f\" }}"
+      
+      - alert: CaptchaGenerationSlow
+        expr: |
+          histogram_quantile(0.95, rate(captcha_generation_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: captcha
+        annotations:
+          summary: "验证码生成速度慢"
+          description: "验证码生成P95时间超过1秒，当前值: {{ $value | printf \"%.2f\" }}秒"
+
+  - name: hjtpx-database-alerts
+    interval: 30s
+    rules:
+      - alert: DatabaseConnectionErrors
+        expr: |
+          rate(database_connections_failed_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "数据库连接失败"
+          description: "数据库连接失败率超过1/秒"
+      
+      - alert: DatabaseHighConnections
+        expr: |
+          database_connections_active / database_connections_max > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "数据库连接数过高"
+          description: "活跃连接数超过最大连接的80%"
+      
+      - alert: DatabaseSlowQueries
+        expr: |
+          histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "数据库慢查询"
+          description: "数据库查询P95时间超过5秒"
+
+  - name: hjtpx-redis-alerts
+    interval: 30s
+    rules:
+      - alert: RedisConnectionErrors
+        expr: |
+          rate(redis_connections_failed_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis连接失败"
+          description: "Redis连接失败率超过1/秒"
+      
+      - alert: RedisHighMemory
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis内存使用过高"
+          description: "Redis内存使用超过85%"
+      
+      - alert: RedisKeyEvictions
+        expr: |
+          rate(redis_evicted_keys_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis key驱逐率过高"
+          description: "Redis每秒驱逐超过100个key"
+
+  - name: hjtpx-rate-limit-alerts
+    interval: 30s
+    rules:
+      - alert: RateLimitTriggered
+        expr: |
+          rate(rate_limit_hits_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "限流被触发"
+          description: "限流触发率超过10/秒"
+      
+      - alert: PossibleDDoS
+        expr: |
+          rate(http_requests_total[1m]) > 1000
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "可能的DDoS攻击"
+          description: "请求率超过1000/秒，可能是DDoS攻击"
+
+  - name: hjtpx-security-alerts
+    interval: 60s
+    rules:
+      - alert: HighRiskScoreAttempts
+        expr: |
+          rate(verification_attempts_total{risk_score="high"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "高风险验证尝试"
+          description: "高风险验证尝试超过10/秒"
+      
+      - alert: BlacklistedIPAccess
+        expr: |
+          rate(blacklist_hits_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "黑名单IP访问"
+          description: "检测到黑名单IP访问超过5/秒"
+      
+      - alert: BotDetected
+        expr: |
+          rate(bot_detections_total[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "检测到Bot"
+          description: "Bot检测超过20/秒"

@@ -1,0 +1,441 @@
+/* HJTPX Loading Animations & Skeleton Screens v15.0 */
+
+/* 加载动画基础样式 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  backdrop-filter: blur(5px);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.loading-overlay.fade-out {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.loading-overlay.dark-mode {
+  background: rgba(33, 37, 41, 0.95);
+}
+
+/* 主加载动画 */
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 多层加载动画 */
+.loading-spinner-multi {
+  width: 50px;
+  height: 50px;
+  position: relative;
+}
+
+.loading-spinner-multi .spinner {
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  animation: spin-multi 1.2s linear infinite;
+}
+
+.loading-spinner-multi .spinner:nth-child(2) {
+  width: 80%;
+  height: 80%;
+  top: 10%;
+  left: 10%;
+  animation-delay: -0.4s;
+  border-top-color: #e74c3c;
+}
+
+.loading-spinner-multi .spinner:nth-child(3) {
+  width: 60%;
+  height: 60%;
+  top: 20%;
+  left: 20%;
+  animation-delay: -0.8s;
+  border-top-color: #2ecc71;
+}
+
+@keyframes spin-multi {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 脉冲动画 */
+.loading-pulse {
+  width: 60px;
+  height: 60px;
+  background: #3498db;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+}
+
+/* 进度条动画 */
+.loading-progress {
+  width: 200px;
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.loading-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #3498db, transparent);
+  animation: progress-shine 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-shine {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* 验证码加载动画 */
+.captcha-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+}
+
+.captcha-loading-icon {
+  width: 80px;
+  height: 80px;
+  position: relative;
+}
+
+.captcha-loading-icon::before,
+.captcha-loading-icon::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  animation: captcha-spin 2s linear infinite;
+}
+
+.captcha-loading-icon::before {
+  border-top-color: #3498db;
+  animation-duration: 1.5s;
+}
+
+.captcha-loading-icon::after {
+  border-bottom-color: #e74c3c;
+  animation-duration: 2s;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+}
+
+@keyframes captcha-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 骨架屏基础样式 */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 骨架屏元素 */
+.skeleton-text {
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text-sm {
+  height: 12px;
+  width: 60%;
+}
+
+.skeleton-text-lg {
+  height: 24px;
+}
+
+.skeleton-title {
+  height: 32px;
+  width: 70%;
+  margin-bottom: 16px;
+}
+
+.skeleton-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+.skeleton-image {
+  width: 100%;
+  height: 200px;
+}
+
+.skeleton-button {
+  height: 40px;
+  width: 120px;
+}
+
+.skeleton-paragraph {
+  margin-bottom: 12px;
+}
+
+/* 卡片骨架屏 */
+.skeleton-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.skeleton-card .skeleton-image {
+  height: 180px;
+  margin-bottom: 16px;
+}
+
+.skeleton-card .skeleton-title {
+  margin-bottom: 12px;
+}
+
+.skeleton-card .skeleton-text {
+  margin-bottom: 8px;
+}
+
+/* 验证码骨架屏 */
+.skeleton-captcha {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 350px;
+}
+
+.skeleton-captcha-image {
+  height: 160px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.skeleton-captcha-slider {
+  height: 50px;
+  background: #f0f0f0;
+  border-radius: 25px;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.skeleton-captcha-slider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  background: #e0e0e0;
+  border-radius: 50%;
+  animation: slider-move 1.5s ease-in-out infinite;
+}
+
+@keyframes slider-move {
+  0%, 100% { left: 20px; }
+  50% { left: calc(100% - 66px); }
+}
+
+.skeleton-captcha-text {
+  display: flex;
+  justify-content: space-between;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 列表骨架屏 */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skeleton-list-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+}
+
+.skeleton-list-item .skeleton-avatar {
+  flex-shrink: 0;
+}
+
+.skeleton-list-item-content {
+  flex: 1;
+}
+
+.skeleton-list-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 表格骨架屏 */
+.skeleton-table {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.skeleton-table-header {
+  display: flex;
+  padding: 16px;
+  background: #f5f5f5;
+  gap: 16px;
+}
+
+.skeleton-table-header .skeleton-text {
+  flex: 1;
+  margin: 0;
+}
+
+.skeleton-table-row {
+  display: flex;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 16px;
+}
+
+.skeleton-table-row:last-child {
+  border-bottom: none;
+}
+
+/* 加载状态文字 */
+.loading-text {
+  margin-top: 16px;
+  color: #666;
+  font-size: 14px;
+  animation: text-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes text-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 速度指示器 */
+.loading-speed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-speed-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #3498db;
+}
+
+.loading-speed-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .loading-overlay {
+    background: rgba(33, 37, 41, 0.95);
+  }
+  
+  .skeleton {
+    background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+    background-size: 200% 100%;
+  }
+  
+  .skeleton-card,
+  .skeleton-list-item,
+  .skeleton-table {
+    background: #1e1e1e;
+  }
+  
+  .skeleton-captcha {
+    background: #1e1e1e;
+  }
+  
+  .skeleton-captcha-image {
+    background: #2d2d2d;
+  }
+  
+  .skeleton-captcha-slider {
+    background: #2d2d2d;
+  }
+  
+  .loading-text {
+    color: #999;
+  }
+}
+
+/* 性能优化：减少动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .loading-overlay {
+    display: none;
+  }
+}

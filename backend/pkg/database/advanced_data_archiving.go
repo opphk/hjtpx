@@ -615,6 +615,10 @@ func (a *AdvancedDataArchiver) GenerateArchiveReport() map[string]interface{} {
 	return report
 }
 
+func InitDataArchiving(cfg *config.Config) error {
+	return nil
+}
+
 type DataRetentionManager struct {
 	mu       sync.RWMutex
 	policies []DataRetentionPolicy

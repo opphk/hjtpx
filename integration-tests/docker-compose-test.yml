@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        - BUILD_VERSION=test
+        - BUILD_TIME=${BUILD_TIME:-}
+        - BUILD_FLAGS=-s -w
+    container_name: hjtpx_test_app
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - GIN_MODE=debug
+      - SERVER_PORT=8080
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=hjtpx_test
+      - DATABASE_PASSWORD=hjtpx_test_password
+      - DATABASE_NAME=hjtpx_test
+      - DATABASE_SSLMODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hjtpx_test_password
+      - REDIS_DB=1
+      - JWT_SECRET=test-jwt-secret-key-for-integration-testing
+      - JWT_EXPIRE_HOURS=24
+      - GOMAXPROCS=2
+      - GOGC=100
+      - LOG_LEVEL=debug
+      - TEST_MODE=true
+    volumes:
+      - ./reports:/var/log/hjtpx
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - hjtpx_test_network
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: hjtpx_test_postgres
+    environment:
+      - POSTGRES_USER=hjtpx_test
+      - POSTGRES_PASSWORD=hjtpx_test_password
+      - POSTGRES_DB=hjtpx_test
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./scripts/migrate:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hjtpx_test -d hjtpx_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - hjtpx_test_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: hjtpx_test_redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "hjtpx_test_password", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - hjtpx_test_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  hjtpx_test_network:
+    driver: bridge
+
+volumes:
+  postgres_test_data:
+    driver: local
+  redis_test_data:
+    driver: local
