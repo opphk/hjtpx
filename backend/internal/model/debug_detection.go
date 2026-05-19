@@ -98,7 +98,7 @@ type DebugStats struct {
 	MaxResponseTimeMs   int64                          `json:"max_response_time_ms"`
 	LastDetectionAt     *time.Time                    `json:"last_detection_at,omitempty"`
 	LastBlockedAt       *time.Time                    `json:"last_blocked_at,omitempty"`
-	TopOffenders        []DebugIPStat                  `json:"top_offenders"`
+	TopOffenders        []DebugIPStat                 `json:"top_offenders"`
 }
 
 type DebugIPStat struct {
