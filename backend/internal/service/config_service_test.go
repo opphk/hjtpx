@@ -5,14 +5,14 @@ import (
 )
 
 func TestNewConfigService(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	if configService == nil {
 		t.Error("NewConfigService 返回了 nil")
 	}
 }
 
 func TestGetConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	config, err := configService.GetConfig()
 	if err != nil {
@@ -24,7 +24,7 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestUpdateConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	currentConfig, err := configService.GetConfig()
 	if err != nil {
@@ -38,7 +38,7 @@ func TestUpdateConfig(t *testing.T) {
 }
 
 func TestGetConfigValue(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	value := configService.GetConfigValue("app.name")
 	if value == nil {
@@ -47,7 +47,7 @@ func TestGetConfigValue(t *testing.T) {
 }
 
 func TestGetConfigValue_NotFound(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	value := configService.GetConfigValue("nonexistent.key")
 	if value != nil {
@@ -56,7 +56,7 @@ func TestGetConfigValue_NotFound(t *testing.T) {
 }
 
 func TestSetConfigValue(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	err := configService.SetConfigValue("test.key", "test-value")
 	if err != nil {
@@ -70,7 +70,7 @@ func TestSetConfigValue(t *testing.T) {
 }
 
 func TestReloadConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	err := configService.ReloadConfig()
 	if err != nil {
@@ -79,7 +79,7 @@ func TestReloadConfig(t *testing.T) {
 }
 
 func TestValidateConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	validConfig := map[string]interface{}{
 		"app.name": "hjtpx",
@@ -102,7 +102,7 @@ func TestValidateConfig(t *testing.T) {
 }
 
 func TestExportConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	export, err := configService.ExportConfig()
 	if err != nil {
@@ -114,7 +114,7 @@ func TestExportConfig(t *testing.T) {
 }
 
 func TestImportConfig(t *testing.T) {
-	configService := NewConfigService()
+	configService := NewConfigServiceForTest()
 	
 	configJSON := `{"app.name":"hjtpx","app.port":8080}`
 	

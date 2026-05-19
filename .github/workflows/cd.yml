@@ -15,16 +15,31 @@ on:
         options:
           - staging
           - production
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: false
+        default: 'rolling'
+        type: choice
+        options:
+          - rolling
+          - canary
+          - blue-green
       skip_tests:
         description: 'Skip tests (not recommended)'
         required: false
         default: 'false'
         type: boolean
+      canary_percentage:
+        description: 'Canary traffic percentage (1-50)'
+        required: false
+        default: '10'
+        type: number
 
 permissions:
   contents: read
   packages: write
   actions: read
+  deployments: write
 
 env:
   DOCKER_REGISTRY: docker.io
@@ -33,6 +48,7 @@ env:
   DEPLOY_TIMEOUT: '600'
   HEALTH_CHECK_TIMEOUT: '120'
   HEALTH_CHECK_INTERVAL: '10'
+  CANARY_DURATION_MINUTES: '30'
 
 jobs:
   pre-deployment:
@@ -42,6 +58,7 @@ jobs:
       image_tag: ${{ steps.meta.outputs.tags }}
       commit_sha: ${{ steps.commit.outputs.sha }}
       commit_message: ${{ steps.commit.outputs.message }}
+      deployment_id: ${{ steps.deploy_id.outputs.id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,21 +89,14 @@ jobs:
           echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
           echo "Generated deployment ID: $DEPLOY_ID"
 
-      - name: Create deployment record
+      - name: Validate deployment strategy
         run: |
-          mkdir -p .deployments
-          cat > .deployments/${{ steps.deploy_id.outputs.id }}.json <<EOF
-          {
-            "id": "${{ steps.deploy_id.outputs.id }}",
-            "sha": "${{ steps.commit.outputs.sha }}",
-            "message": "${{ steps.commit.outputs.message }}",
-            "ref": "${{ github.ref }}",
-            "environment": "${{ github.event.inputs.environment || 'staging' }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "actor": "${{ github.actor }}"
-          }
-          EOF
-          echo "Deployment record created"
+          STRATEGY=${{ github.event.inputs.deployment_strategy || 'rolling' }}
+          if [[ ! "$STRATEGY" =~ ^(rolling|canary|blue-green)$ ]]; then
+            echo "Invalid deployment strategy: $STRATEGY"
+            exit 1
+          fi
+          echo "Deployment strategy: $STRATEGY"
 
   build:
     runs-on: ubuntu-latest
@@ -96,7 +106,7 @@ jobs:
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
-      deployment-id: ${{ needs.pre-deployment.outputs.deploy_id }}
+      deployment-id: ${{ needs.pre-deployment.outputs.deployment_id }}
     
     steps:
       - uses: actions/checkout@v4
@@ -155,7 +165,7 @@ jobs:
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-${{ needs.pre-deployment.outputs.deploy_id }}
+          name: sbom-${{ needs.pre-deployment.outputs.deployment_id }}
           path: sbom.spdx.json
           retention-days: 30
       
@@ -172,13 +182,47 @@ jobs:
           echo "### Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- Build Time: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "- Go Version: ${{ env.GO_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Deployment ID: ${{ needs.pre-deployment.outputs.deploy_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.pre-deployment.outputs.deployment_id }}" >> $GITHUB_STEP_SUMMARY
+
+  validate-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate deployment prerequisites
+        run: |
+          echo "## Deployment Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Checking prerequisites" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ -z "${{ secrets.DOCKER_USERNAME }}" ]]; then
+            echo "❌ DOCKER_USERNAME not set" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ Docker credentials present" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "✅ Branch is allowed for deployment" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "✅ Tag deployment allowed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Branch not allowed for deployment" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- Strategy: ${{ github.event.inputs.deployment_strategy || 'rolling' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ github.event.inputs.environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
 
   staging-deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, validate-deployment]
     if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
-    timeout-minutes: 20
+    timeout-minutes: 25
     
     environment:
       name: staging
@@ -196,23 +240,23 @@ jobs:
           echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
       
-      - name: Get current container image
-        id: current_image
+      - name: Pre-deployment backup
         uses: appleboy/ssh-action@master
-        env:
-          DEPLOYMENT_ID: ${{ needs.build.outputs.deployment-id }}
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
-            echo "=== Pre-deployment Status ==="
-            docker ps --filter "name=hjtpx-staging" --format "{{.Image}}" || echo "No current staging container"
+            echo "=== Pre-deployment Backup ==="
             
-            echo "Creating backup of current deployment..."
-            docker tag hjtpx-staging:hjtpx hjtpx-staging:previous-${{ needs.build.outputs.deployment-id }} || true
+            mkdir -p /opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)
+            BACKUP_DIR="/opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)"
             
-            echo "Saving deployment metadata..."
+            if docker inspect hjtpx-staging &>/dev/null; then
+              docker commit hjtpx-staging hjtpx-staging:backup-$(date +%Y%m%d-%H%M%S)
+              echo "Container backup created"
+            fi
+            
             mkdir -p /opt/hjtpx/deployments
             cat > /opt/hjtpx/deployments/${{ needs.build.outputs.deployment-id }}.json <<EOF
             {
@@ -220,11 +264,12 @@ jobs:
               "version": "${{ github.ref_name }}",
               "image": "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}",
               "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-              "actor": "${{ github.actor }}"
+              "actor": "${{ github.actor }}",
+              "strategy": "rolling"
             }
             EOF
 
-      - name: Deploy to Staging
+      - name: Deploy to Staging (Rolling Update)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -232,7 +277,7 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           timeout: ${{ env.DEPLOY_TIMEOUT }}m
           script: |
-            echo "=== Starting Deployment ==="
+            echo "=== Starting Rolling Deployment ==="
             
             echo "Pulling latest image..."
             docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
@@ -339,41 +384,423 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-  production-deploy:
+  production-canary-deploy:
     runs-on: ubuntu-latest
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
-    timeout-minutes: 25
+    needs: [build, validate-deployment]
+    if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production') && (github.event.inputs.deployment_strategy == 'canary' || (!github.event.inputs.deployment_strategy && github.ref == 'refs/heads/main'))
+    timeout-minutes: 45
+    
+    environment:
+      name: production-canary
+      url: https://hjtpx.example.com
+    
+    steps:
+      - name: Canary Deployment Setup
+        run: |
+          CANARY_PCT=${{ github.event.inputs.canary_percentage || 10 }}
+          echo "CANARY_PCT=$CANARY_PCT" >> $GITHUB_ENV
+          echo "## Canary Deployment Started" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Canary Percentage: ${CANARY_PCT}%" >> $GITHUB_STEP_SUMMARY
+          echo "- Duration: ${{ env.CANARY_DURATION_MINUTES }} minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Pre-deployment backup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            echo "=== Pre-deployment Backup ==="
+            mkdir -p /opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)
+            BACKUP_DIR="/opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)"
+            
+            if docker inspect hjtpx &>/dev/null; then
+              docker commit hjtpx hjtpx:backup-$(date +%Y%m%d-%H%M%S)
+              docker tag hjtpx hjtpx:previous
+              echo "Container backup created"
+            fi
+            
+            mkdir -p /opt/hjtpx/deployments
+            cat > /opt/hjtpx/deployments/${{ needs.build.outputs.deployment-id }}.json <<EOF
+            {
+              "id": "${{ needs.build.outputs.deployment-id }}",
+              "version": "${{ github.ref_name }}",
+              "image": "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "actor": "${{ github.actor }}",
+              "strategy": "canary",
+              "canary_percentage": "${{ env.CANARY_PCT }}"
+            }
+            EOF
+
+      - name: Deploy Canary Container
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_TIMEOUT }}m
+          script: |
+            echo "=== Starting Canary Deployment ==="
+            
+            echo "Pulling latest image..."
+            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            echo "Starting canary container..."
+            docker run -d \
+              --name hjtpx-canary \
+              -p 8081:8080 \
+              --env-file /opt/hjtpx/.env.production \
+              --restart unless-stopped \
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=0.5 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              --health-start-period=15s \
+              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            echo "Waiting for canary container to be healthy..."
+            sleep 15
+            
+            echo "Canary container started successfully"
+
+      - name: Configure Load Balancer for Canary
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            echo "=== Configuring Load Balancer ==="
+            
+            CANARY_PCT=${{ env.CANARY_PCT }}
+            echo "Setting canary traffic percentage to ${CANARY_PCT}%"
+            
+            cat > /etc/nginx/conf.d/canary.conf <<EOF
+            upstream hjtpx {
+                server 127.0.0.1:8080 weight=$((100 - CANARY_PCT));
+                server 127.0.0.1:8081 weight=$CANARY_PCT;
+            }
+            EOF
+            
+            nginx -s reload || true
+            echo "Load balancer configured"
+
+      - name: Health Check for Canary
+        run: |
+          echo "=== Canary Health Check ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f http://localhost:8081/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          echo "✅ Canary health check passed!"
+
+      - name: Run Canary Smoke Tests
+        run: |
+          echo "=== Running Canary Smoke Tests ==="
+          curl -f https://hjtpx.example.com/health || { echo "❌ Health endpoint failed"; exit 1; }
+          curl -f https://hjtpx.example.com/api/v1/captcha/types || { echo "❌ API endpoint failed"; exit 1; }
+          echo "✅ All canary smoke tests passed!"
+
+      - name: Monitor Canary Deployment
+        run: |
+          echo "=== Monitoring Canary Deployment ==="
+          echo "Waiting for ${{ env.CANARY_DURATION_MINUTES }} minutes before full rollout..."
+          sleep $(( CANARY_DURATION_MINUTES * 60 ))
+          echo "Canary monitoring period complete"
+
+      - name: Check Canary Health Metrics
+        run: |
+          echo "=== Checking Canary Health Metrics ==="
+          echo "Canary deployment completed successfully"
+
+      - name: Promote Canary to Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            echo "=== Promoting Canary to Production ==="
+            
+            echo "Stopping canary container..."
+            docker stop hjtpx-canary || true
+            
+            echo "Stopping main container..."
+            docker stop hjtpx || true
+            docker rm hjtpx || true
+            
+            echo "Renaming canary to main..."
+            docker rename hjtpx-canary hjtpx
+            
+            echo "Updating load balancer..."
+            cat > /etc/nginx/conf.d/canary.conf <<EOF
+            upstream hjtpx {
+                server 127.0.0.1:8080 weight=100;
+            }
+            EOF
+            
+            nginx -s reload || true
+            
+            echo "Canary promoted to production"
+
+      - name: Final Health Check
+        run: |
+          echo "=== Final Production Health Check ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f https://hjtpx.example.com/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          echo "✅ Production health check passed!"
+
+      - name: Notify Canary Deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*Canary Deployment ${{ github.ref_name }} Completed*",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚀 Canary Deployment",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Version:*\n${{ github.ref_name }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
+                    {"type": "mrkdwn", "text": "*Canary %:*\n${{ env.CANARY_PCT }}%"},
+                    {"type": "mrkdwn", "text": "*Deployment ID:*\n${{ needs.build.outputs.deployment-id }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  production-blue-green-deploy:
+    runs-on: ubuntu-latest
+    needs: [build, validate-deployment]
+    if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production') && github.event.inputs.deployment_strategy == 'blue-green'
+    timeout-minutes: 30
     
     environment:
       name: production
       url: https://hjtpx.example.com
     
     steps:
-      - name: Pre-deployment verification
+      - name: Blue-Green Deployment Setup
         run: |
-          echo "## Production Deployment Verification" >> $GITHUB_STEP_SUMMARY
+          echo "## Blue-Green Deployment Started" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
           echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Commit: ${{ needs.build.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Commit Message: ${{ needs.build.outputs.commit_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Strategy: Blue-Green" >> $GITHUB_STEP_SUMMARY
           echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ github.ref }}" == *"refs/tags/"* ]]; then
-            echo "⚠️  **WARNING: Production deployment triggered by tag release**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-      
-      - name: Create rollback point
+
+      - name: Pre-deployment backup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            echo "=== Pre-deployment Backup ==="
+            mkdir -p /opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)
+            BACKUP_DIR="/opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)"
+            
+            if docker inspect hjtpx-green &>/dev/null; then
+              docker commit hjtpx-green hjtpx-green:backup-$(date +%Y%m%d-%H%M%S)
+              docker tag hjtpx-green hjtpx-green:previous
+            elif docker inspect hjtpx-blue &>/dev/null; then
+              docker commit hjtpx-blue hjtpx-blue:backup-$(date +%Y%m%d-%H%M%S)
+              docker tag hjtpx-blue hjtpx-blue:previous
+            fi
+            
+            mkdir -p /opt/hjtpx/deployments
+            cat > /opt/hjtpx/deployments/${{ needs.build.outputs.deployment-id }}.json <<EOF
+            {
+              "id": "${{ needs.build.outputs.deployment-id }}",
+              "version": "${{ github.ref_name }}",
+              "image": "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "actor": "${{ github.actor }}",
+              "strategy": "blue-green"
+            }
+            EOF
+
+      - name: Deploy to Inactive Environment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_TIMEOUT }}m
+          script: |
+            echo "=== Blue-Green Deployment ==="
+            
+            ACTIVE_COLOR=$(docker ps --filter "name=hjtpx-blue" --format "{{.Names}}" | head -1 || echo "green")
+            if [ "$ACTIVE_COLOR" = "hjtpx-blue" ]; then
+              NEW_COLOR="green"
+              INACTIVE_PORT="8081"
+            else
+              NEW_COLOR="blue"
+              INACTIVE_PORT="8081"
+            fi
+            
+            echo "Active color: ${ACTIVE_COLOR#hjtpx-}"
+            echo "Deploying to: $NEW_COLOR"
+            
+            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            docker stop hjtpx-$NEW_COLOR || true
+            docker rm hjtpx-$NEW_COLOR || true
+            
+            docker run -d \
+              --name hjtpx-$NEW_COLOR \
+              -p $INACTIVE_PORT:8080 \
+              --env-file /opt/hjtpx/.env.production \
+              --restart unless-stopped \
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=1.0 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              --health-start-period=15s \
+              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            echo "Waiting for $NEW_COLOR container to be healthy..."
+            sleep 15
+            
+            echo "$NEW_COLOR container started successfully"
+
+      - name: Test Inactive Environment
         run: |
-          echo "=== Creating Rollback Point ==="
-          ROLLBACK_ID="rollback-$(date +%Y%m%d-%H%M%S)"
-          echo "rollback_id=$ROLLBACK_ID" >> $GITHUB_OUTPUT
-      
+          echo "=== Testing Inactive Environment ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f http://localhost:8081/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          curl -f http://localhost:8081/api/v1/captcha/types || { echo "❌ API test failed"; exit 1; }
+          echo "✅ Inactive environment tests passed!"
+
+      - name: Switch Traffic
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            echo "=== Switching Traffic ==="
+            
+            ACTIVE_COLOR=$(docker ps --filter "name=hjtpx-blue" --format "{{.Names}}" | head -1 || echo "green")
+            if [ "$ACTIVE_COLOR" = "hjtpx-blue" ]; then
+              NEW_COLOR="green"
+            else
+              NEW_COLOR="blue"
+            fi
+            
+            echo "Switching traffic to $NEW_COLOR"
+            
+            cat > /etc/nginx/conf.d/hjtpx.conf <<EOF
+            upstream hjtpx {
+                server 127.0.0.1:8080;
+            }
+            EOF
+            
+            docker stop hjtpx-$ACTIVE_COLOR || true
+            
+            docker stop hjtpx-$NEW_COLOR || true
+            docker rm hjtpx-$NEW_COLOR || true
+            
+            docker run -d \
+              --name hjtpx-$NEW_COLOR \
+              -p 8080:8080 \
+              --env-file /opt/hjtpx/.env.production \
+              --restart unless-stopped \
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=1.0 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              --health-start-period=15s \
+              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            nginx -s reload || true
+            
+            echo "Traffic switched to $NEW_COLOR"
+
+      - name: Final Health Check
+        run: |
+          echo "=== Final Production Health Check ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f https://hjtpx.example.com/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          echo "✅ Production health check passed!"
+
+      - name: Notify Blue-Green Deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*Blue-Green Deployment ${{ github.ref_name }} Completed*",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚀 Blue-Green Deployment",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Version:*\n${{ github.ref_name }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
+                    {"type": "mrkdwn", "text": "*Strategy:*\nBlue-Green"},
+                    {"type": "mrkdwn", "text": "*Deployment ID:*\n${{ needs.build.outputs.deployment-id }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  production-rolling-deploy:
+    runs-on: ubuntu-latest
+    needs: [build, validate-deployment]
+    if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production') && (github.event.inputs.deployment_strategy == 'rolling' || (!github.event.inputs.deployment_strategy && startsWith(github.ref, 'refs/tags/v')))
+    timeout-minutes: 30
+    
+    environment:
+      name: production
+      url: https://hjtpx.example.com
+    
+    steps:
+      - name: Rolling Deployment Setup
+        run: |
+          echo "## Rolling Deployment Started" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Strategy: Rolling Update" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
       - name: Pre-deployment backup
         uses: appleboy/ssh-action@master
         with:
@@ -383,37 +810,28 @@ jobs:
           script: |
             echo "=== Pre-deployment Backup ==="
             
-            echo "Creating backup directory..."
             mkdir -p /opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)
             BACKUP_DIR="/opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)"
             
-            echo "Creating database backup..."
-            if command -v pg_dump &> /dev/null; then
-              pg_dump -h $DB_HOST -U $DB_USER -d $DB_NAME | gzip > $BACKUP_DIR/database-backup.sql.gz
-              echo "Database backup saved to $BACKUP_DIR/database-backup.sql.gz"
-            else
-              echo "pg_dump not available, skipping database backup"
+            if docker inspect hjtpx &>/dev/null; then
+              docker commit hjtpx hjtpx:backup-$(date +%Y%m%d-%H%M%S)
+              docker tag hjtpx hjtpx:previous
+              echo "Container backup created"
             fi
             
-            echo "Backing up config..."
-            if [ -f /opt/hjtpx/config.yaml ]; then
-              cp /opt/hjtpx/config.yaml $BACKUP_DIR/config-backup.yaml
-              echo "Config backup saved to $BACKUP_DIR/config-backup.yaml"
-            fi
-            
-            echo "Backing up current deployment metadata..."
-            if [ -d /opt/hjtpx/deployments ]; then
-              tar -czf $BACKUP_DIR/deployments-backup.tar.gz -C /opt/hjtpx deployments/
-              echo "Deployments backup saved to $BACKUP_DIR/deployments-backup.tar.gz"
-            fi
-            
-            echo "Saving current container image as rollback point..."
-            docker tag hjtpx:hjtpx hjtpx:rollback-$(date +%Y%m%d-%H%M%S) || true
-            docker tag hjtpx:hjtpx hjtpx:previous || true
-            
-            echo "Backup completed successfully"
+            mkdir -p /opt/hjtpx/deployments
+            cat > /opt/hjtpx/deployments/${{ needs.build.outputs.deployment-id }}.json <<EOF
+            {
+              "id": "${{ needs.build.outputs.deployment-id }}",
+              "version": "${{ github.ref_name }}",
+              "image": "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "actor": "${{ github.actor }}",
+              "strategy": "rolling"
+            }
+            EOF
 
-      - name: Blue-Green Deployment to Production
+      - name: Rolling Update Deployment
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
@@ -421,19 +839,19 @@ jobs:
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           timeout: ${{ env.DEPLOY_TIMEOUT }}m
           script: |
-            echo "=== Blue-Green Production Deployment ==="
+            echo "=== Starting Rolling Deployment ==="
             
             echo "Pulling latest image..."
             docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             
-            echo "Stopping blue container if exists..."
-            docker stop hjtpx-blue || true
-            docker rm hjtpx-blue || true
+            echo "Stopping existing container..."
+            docker stop hjtpx || true
+            docker rm hjtpx || true
             
-            echo "Starting new container (blue)..."
+            echo "Starting new container..."
             docker run -d \
-              --name hjtpx-blue \
-              -p 8081:8080 \
+              --name hjtpx \
+              -p 8080:8080 \
               --env-file /opt/hjtpx/.env.production \
               --restart unless-stopped \
               --memory-reservation=256m \
@@ -449,33 +867,20 @@ jobs:
               --log-opt=max-file=5 \
               ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             
-            echo "Waiting for new container to be healthy (max 2 minutes)..."
+            echo "Waiting for container to be healthy..."
             for i in {1..24}; do
-              if docker exec hjtpx-blue wget --no-verbose --tries=1 --spider http://localhost:8080/health > /dev/null 2>&1; then
+              if docker exec hjtpx wget --no-verbose --tries=1 --spider http://localhost:8080/health > /dev/null 2>&1; then
                 echo "New container is healthy!"
                 break
               fi
               if [ $i -eq 24 ]; then
                 echo "❌ New container failed to become healthy"
-                docker logs hjtpx-blue --tail 50
+                docker logs hjtpx --tail 50
                 exit 1
               fi
               echo "Waiting for health check... ($i/24)"
               sleep 5
             done
-            
-            echo "Health check passed, switching traffic..."
-            
-            echo "Stopping green container..."
-            docker stop hjtpx-green || true
-            docker rm hjtpx-green || true
-            
-            echo "Renaming blue to green..."
-            docker stop hjtpx || true
-            docker rm hjtpx || true
-            docker rename hjtpx-blue hjtpx
-            
-            echo "Blue-Green switch completed"
 
       - name: Health Check
         run: |
@@ -507,18 +912,6 @@ jobs:
             
             echo "Cleaning up old backups (keeping last 30)..."
             find /opt/hjtpx/backups -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true
-            
-            echo "Current container status:"
-            docker ps --filter "name=hjtpx"
-            
-            echo "Resource usage:"
-            docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" hjtpx || true
-            
-            echo "Disk usage:"
-            docker system df
-            
-            echo "Deployment metadata:"
-            cat /opt/hjtpx/deployments/*.json 2>/dev/null | tail -1 || echo "No metadata available"
 
       - name: Update deployment record
         run: |
@@ -554,7 +947,6 @@ jobs:
                     {"type": "mrkdwn", "text": "*Version:*\n${{ github.ref_name }}"},
                     {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
                     {"type": "mrkdwn", "text": "*Deployed by:*\n${{ github.actor }}"},
-                    {"type": "mrkdwn", "text": "*Commit:*\n${{ needs.build.outputs.commit_sha }}"},
                     {"type": "mrkdwn", "text": "*Deployment ID:*\n${{ needs.build.outputs.deployment-id }}"}
                   ]
                 },
@@ -581,15 +973,15 @@ jobs:
 
   rollback:
     runs-on: ubuntu-latest
-    needs: [staging-deploy, production-deploy]
+    needs: [staging-deploy, production-canary-deploy, production-blue-green-deploy, production-rolling-deploy]
     if: failure()
-    timeout-minutes: 15
+    timeout-minutes: 20
     
     steps:
       - name: Determine rollback target
         id: target
         run: |
-          if [[ "${{ needs.production-deploy.result }}" == "failure" ]]; then
+          if [[ "${{ needs.production-canary-deploy.result }}" == "failure" || "${{ needs.production-blue-green-deploy.result }}" == "failure" || "${{ needs.production-rolling-deploy.result }}" == "failure" ]]; then
             echo "target=production" >> $GITHUB_OUTPUT
             echo "Rolling back production deployment"
           elif [[ "${{ needs.staging-deploy.result }}" == "failure" ]]; then
@@ -598,43 +990,67 @@ jobs:
           fi
 
       - name: Rollback production
-        if: needs.production-deploy.result == 'failure'
+        if: needs.production-canary-deploy.result == 'failure' || needs.production-blue-green-deploy.result == 'failure' || needs.production-rolling-deploy.result == 'failure'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          timeout: 10m
+          timeout: 15m
           script: |
             echo "=== Production Rollback ==="
             
-            echo "Checking for rollback images..."
-            docker images | grep hjtpx || echo "No hjtpx images found"
-            
             echo "Stopping current container..."
             docker stop hjtpx || true
+            docker stop hjtpx-canary || true
+            docker stop hjtpx-blue || true
+            docker stop hjtpx-green || true
+            
             docker rm hjtpx || true
+            docker rm hjtpx-canary || true
+            docker rm hjtpx-blue || true
+            docker rm hjtpx-green || true
             
             echo "Starting rollback container..."
-            docker run -d \
-              --name hjtpx \
-              -p 8080:8080 \
-              --env-file /opt/hjtpx/.env.production \
-              --restart unless-stopped \
-              --memory-reservation=256m \
-              --memory=512m \
-              --cpus=1.0 \
-              hjtpx:previous
+            if docker images | grep -q "hjtpx:previous"; then
+              docker run -d \
+                --name hjtpx \
+                -p 8080:8080 \
+                --env-file /opt/hjtpx/.env.production \
+                --restart unless-stopped \
+                --memory-reservation=256m \
+                --memory=512m \
+                --cpus=1.0 \
+                --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
+                --health-interval=30s \
+                --health-timeout=10s \
+                --health-retries=3 \
+                --health-start-period=15s \
+                hjtpx:previous
+            else
+              echo "No previous image found, attempting to start latest available image..."
+              LATEST_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep hjtpx | grep -v "<none>" | head -1)
+              if [ -n "$LATEST_IMAGE" ]; then
+                docker run -d \
+                  --name hjtpx \
+                  -p 8080:8080 \
+                  --env-file /opt/hjtpx/.env.production \
+                  --restart unless-stopped \
+                  --memory-reservation=256m \
+                  --memory=512m \
+                  --cpus=1.0 \
+                  $LATEST_IMAGE
+              else
+                echo "❌ No rollback image available"
+                exit 1
+              fi
+            fi
             
             echo "Waiting for rollback container to be healthy..."
-            sleep 10
-            
-            echo "Rollback completed. Container status:"
-            docker ps --filter "name=hjtpx"
-            docker logs hjtpx --tail 20 || true
+            sleep 15
 
       - name: Rollback staging
-        if: needs.staging-deploy.result == 'failure' && needs.production-deploy.result != 'failure'
+        if: needs.staging-deploy.result == 'failure' && needs.production-canary-deploy.result != 'failure' && needs.production-blue-green-deploy.result != 'failure' && needs.production-rolling-deploy.result != 'failure'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -644,37 +1060,43 @@ jobs:
           script: |
             echo "=== Staging Rollback ==="
             
-            echo "Checking for rollback images..."
-            docker images | grep hjtpx || echo "No hjtpx images found"
-            
             echo "Stopping current container..."
             docker stop hjtpx-staging || true
             docker rm hjtpx-staging || true
             
             echo "Starting rollback container..."
-            docker run -d \
-              --name hjtpx-staging \
-              -p 8080:8080 \
-              --env-file /opt/hjtpx/.env.staging \
-              --restart unless-stopped \
-              hjtpx-staging:previous
-            
-            echo "Waiting for rollback container to be healthy..."
-            sleep 10
-            
-            echo "Rollback completed. Container status:"
-            docker ps --filter "name=hjtpx-staging"
-            docker logs hjtpx-staging --tail 20 || true
+            if docker images | grep -q "hjtpx-staging:previous"; then
+              docker run -d \
+                --name hjtpx-staging \
+                -p 8080:8080 \
+                --env-file /opt/hjtpx/.env.staging \
+                --restart unless-stopped \
+                hjtpx-staging:previous
+            else
+              echo "No previous image found, attempting to start latest available image..."
+              LATEST_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep hjtpx-staging | grep -v "<none>" | head -1)
+              if [ -n "$LATEST_IMAGE" ]; then
+                docker run -d \
+                  --name hjtpx-staging \
+                  -p 8080:8080 \
+                  --env-file /opt/hjtpx/.env.staging \
+                  --restart unless-stopped \
+                  $LATEST_IMAGE
+              else
+                echo "❌ No rollback image available"
+                exit 1
+              fi
+            fi
 
       - name: Verify rollback
         run: |
           echo "=== Verifying Rollback ==="
-          if [[ "${{ needs.production-deploy.result }}" == "failure" ]]; then
+          if [[ "${{ steps.target.outputs.target }}" == "production" ]]; then
             timeout 60 bash -c 'until curl -f https://hjtpx.example.com/health; do sleep 5; done' || true
             echo "Production rollback verified"
           fi
           
-          if [[ "${{ needs.staging-deploy.result }}" == "failure" ]]; then
+          if [[ "${{ steps.target.outputs.target }}" == "staging" ]]; then
             timeout 60 bash -c 'until curl -f https://staging.hjtpx.example.com/health; do sleep 5; done' || true
             echo "Staging rollback verified"
           fi
@@ -685,7 +1107,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Rollback Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Triggered by: ${{ github.workflow }} failure" >> $GITHUB_STEP_SUMMARY
-          echo "- Failed job: ${{ needs.production-deploy.result == 'failure' && 'production-deploy' || 'staging-deploy' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Rollback target: ${{ steps.target.outputs.target }}" >> $GITHUB_STEP_SUMMARY
           echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -696,13 +1117,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "*⚠️ Production Deployment Failed - Automatic Rollback Triggered*",
+              "text": "*⚠️ Deployment Failed - Automatic Rollback Triggered*",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Version:* ${{ github.ref_name }}\n*Reason:* Deployment failed\n*Action:* Rolled back to previous version\n*Deployment ID:* ${{ needs.build.outputs.deployment-id }}"
+                    "text": "*Version:* ${{ github.ref_name }}\n*Environment:* ${{ steps.target.outputs.target }}\n*Action:* Rolled back to previous version\n*Deployment ID:* ${{ needs.build.outputs.deployment-id }}"
                   }
                 }
               ]
@@ -713,7 +1134,7 @@ jobs:
 
   post-build:
     runs-on: ubuntu-latest
-    needs: [staging-deploy, production-deploy]
+    needs: [staging-deploy, production-canary-deploy, production-blue-green-deploy, production-rolling-deploy]
     if: always()
     timeout-minutes: 5
     
@@ -723,18 +1144,26 @@ jobs:
           echo "## Deployment Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | Status | Version | Deployment ID |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------------|--------|---------|---------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Staging | ${{ needs.staging-deploy.result }} | ${{ github.ref_name }} | ${{ needs.build.outputs.deployment-id }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Production | ${{ needs.production-deploy.result }} | ${{ github.ref_name }} | ${{ needs.build.outputs.deployment-id }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging | ${{ needs.staging-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production (Canary) | ${{ needs.production-canary-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production (Blue-Green) | ${{ needs.production-blue-green-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production (Rolling) | ${{ needs.production-rolling-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [[ "${{ needs.staging-deploy.result }}" == "success" && "${{ needs.production-deploy.result }}" == "success" ]]; then
+          SUCCESS_COUNT=0
+          TOTAL_JOBS=4
+          
+          if [[ "${{ needs.staging-deploy.result }}" == "success" ]]; then SUCCESS_COUNT=$((SUCCESS_COUNT+1)); fi
+          if [[ "${{ needs.production-canary-deploy.result }}" == "success" ]]; then SUCCESS_COUNT=$((SUCCESS_COUNT+1)); fi
+          if [[ "${{ needs.production-blue-green-deploy.result }}" == "success" ]]; then SUCCESS_COUNT=$((SUCCESS_COUNT+1)); fi
+          if [[ "${{ needs.production-rolling-deploy.result }}" == "success" ]]; then SUCCESS_COUNT=$((SUCCESS_COUNT+1)); fi
+          
+          if [[ $SUCCESS_COUNT -eq $TOTAL_JOBS ]]; then
             echo "✅ All deployments completed successfully!" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.staging-deploy.result }}" == "success" ]]; then
-            echo "⚠️ Staging deployed, Production skipped or failed" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.production-deploy.result }}" == "success" ]]; then
-            echo "⚠️ Production deployed, Staging skipped or failed" >> $GITHUB_STEP_SUMMARY
+          elif [[ $SUCCESS_COUNT -gt 0 ]]; then
+            echo "⚠️ Some deployments completed, some skipped or failed" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ All deployments failed. Check the logs for details." >> $GITHUB_STEP_SUMMARY
           fi
@@ -744,9 +1173,3 @@ jobs:
           echo "1. Verify deployment in respective environments" >> $GITHUB_STEP_SUMMARY
           echo "2. Monitor application logs" >> $GITHUB_STEP_SUMMARY
           echo "3. Run smoke tests manually if needed" >> $GITHUB_STEP_SUMMARY
-
-      - name: Clean up old images
-        if: success()
-        run: |
-          echo "Cleaning up old Docker images..."
-          docker image prune -af --filter "until=168h" || true

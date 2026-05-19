@@ -1,19 +1,36 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
-  title: Behavior Verification System API
+  title: HJTPX Behavior Verification System API
   description: |
-    行为验证系统API文档
-    
-    提供多种验证码类型、用户认证、环境检测、风险分析等功能。
-  version: 2.0.0
+    # HJTPX 行为验证系统 API 文档 v3
+
+    提供多种验证码类型、用户认证、环境检测、风险分析等功能的完整RESTful API。
+
+    ## 功能特性
+
+    - **多类型验证码**: 滑块、点击、手势、3D、语音、连连看等
+    - **行为分析**: 高级人机识别能力
+    - **环境检测**: Canvas、WebGL、音频指纹等设备识别
+    - **风险评估**: 实时风险评分和威胁检测
+    - **管理后台**: 完整的管理功能和统计分析
+
+  version: 3.0.0
   contact:
     name: API Support
-    email: support@example.com
+    email: support@hjtpx.com
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+
 servers:
-  - url: https://api.example.com/api/v1
+  - url: https://api.hjtpx.com/v3
     description: 生产环境
-  - url: http://localhost:8080/api/v1
+    variables:
+      basePath:
+        default: /v3
+  - url: http://localhost:8080/v3
     description: 开发环境
+
 tags:
   - name: captcha
     description: 验证码相关接口
@@ -37,6 +54,11 @@ tags:
     description: 管理端风控规则接口
   - name: admin-analytics
     description: 高级分析接口
+  - name: seamless
+    description: 无感验证接口
+  - name: biometrics
+    description: 生物特征验证接口
+
 paths:
   /captcha/slider:
     get:
@@ -44,6 +66,7 @@ paths:
         - captcha
       summary: 获取滑块验证码
       description: 生成滑块验证码，返回会话ID和图片数据
+      operationId: getSliderCaptcha
       parameters:
         - name: width
           in: query
@@ -52,6 +75,8 @@ paths:
           schema:
             type: integer
             default: 320
+            minimum: 200
+            maximum: 500
         - name: height
           in: query
           description: 验证码图片高度
@@ -59,191 +84,246 @@ paths:
           schema:
             type: integer
             default: 160
+            minimum: 100
+            maximum: 300
         - name: tolerance
           in: query
-          description: 容差值
+          description: 容差值（像素）
           required: false
           schema:
             type: integer
             default: 8
+            minimum: 1
+            maximum: 20
+        - name: theme
+          in: query
+          description: 主题样式
+          required: false
+          schema:
+            type: string
+            enum: [default, modern, minimal]
+            default: default
       responses:
         '200':
-          description: 成功
+          description: 成功生成滑块验证码
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      session_id:
-                        type: string
-                        example: slider_abc123def456
-                      image_url:
-                        type: string
-                        format: byte
-                      puzzle_url:
-                        type: string
-                        format: byte
-                      hint_url:
-                        type: string
-                        format: byte
-                      shape:
-                        type: integer
-                        example: 1
-                      secret_y:
-                        type: integer
-                        example: 100
-                      image_width:
-                        type: integer
-                        example: 320
-                      image_height:
-                        type: integer
-                        example: 160
+                $ref: '#/components/schemas/SliderCaptchaResponse'
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    code: 0
+                    message: success
+                    data:
+                      session_id: slider_abc123def456
+                      image_url: data:image/png;base64,iVBORw0KGgo...
+                      puzzle_url: data:image/png;base64,iVBORw0KGgo...
+                      hint_url: data:image/png;base64,iVBORw0KGgo...
+                      shape: 1
+                      secret_y: 100
+                      image_width: 320
+                      image_height: 160
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /captcha/click:
     get:
       tags:
         - captcha
       summary: 获取点击验证码
-      description: 生成点击验证码
+      description: 生成点击验证码，要求用户点击特定位置
+      operationId: getClickCaptcha
+      parameters:
+        - name: mode
+          in: query
+          description: 验证码模式
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, chinese, emoji]
+            default: number
+        - name: points
+          in: query
+          description: 需要点击的点数
+          required: false
+          schema:
+            type: integer
+            default: 3
+            minimum: 2
+            maximum: 6
+        - name: width
+          in: query
+          description: 图片宽度
+          required: false
+          schema:
+            type: integer
+            default: 320
+        - name: height
+          in: query
+          description: 图片高度
+          required: false
+          schema:
+            type: integer
+            default: 200
       responses:
         '200':
-          description: 成功
+          description: 成功生成点击验证码
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      session_id:
-                        type: string
-                      image_url:
-                        type: string
-                        format: byte
-                      hint:
-                        type: string
-                      max_points:
-                        type: integer
+                $ref: '#/components/schemas/ClickCaptchaResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /captcha/verify:
     post:
       tags:
         - captcha
       summary: 验证验证码
-      description: 提交验证码答案进行验证
+      description: 提交验证码答案进行验证，支持多种验证码类型
+      operationId: verifyCaptcha
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - session_id
-                - x
-              properties:
-                session_id:
-                  type: string
-                  description: 验证码会话ID
-                x:
-                  type: integer
-                  description: X坐标
-                y:
-                  type: integer
-                  description: Y坐标
-                trajectory:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      x:
-                        type: integer
-                      y:
-                        type: integer
-                      t:
-                        type: integer
-                        format: int64
+              $ref: '#/components/schemas/VerifyRequest'
+            examples:
+              slider:
+                summary: 滑块验证码验证
+                value:
+                  session_id: slider_abc123def456
+                  type: slider
+                  x: 180
+                  y: 100
+                  trajectory:
+                    - x: 0
+                      y: 100
+                      t: 0
+                    - x: 90
+                      y: 98
+                      t: 150
+                    - x: 180
+                      y: 101
+                      t: 300
+              click:
+                summary: 点击验证码验证
+                value:
+                  session_id: click_abc123def456
+                  type: click
+                  points:
+                    - x: 50
+                      y: 80
+                    - x: 150
+                      y: 120
+                    - x: 250
+                      y: 60
       responses:
         '200':
-          description: 成功
+          description: 验证完成
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      success:
-                        type: boolean
-                      message:
-                        type: string
-                      remaining_attempts:
-                        type: integer
+                $ref: '#/components/schemas/VerifyResponse'
+              examples:
+                success:
+                  summary: 验证成功
+                  value:
+                    code: 0
+                    message: success
+                    data:
+                      success: true
+                      message: 验证通过
+                      remaining_attempts: 4
+                      token: captcha_token_abc123
                       trajectory_result:
-                        type: object
-                        properties:
-                          score:
-                            type: number
-                            format: float
-                          passed:
-                            type: boolean
-                          reasons:
-                            type: array
-                            items:
-                              type: string
+                        score: 95.5
+                        passed: true
+                        reasons:
+                          - 轨迹速度正常
+                          - 轨迹曲线自然
+                failure:
+                  summary: 验证失败
+                  value:
+                    code: 0
+                    message: success
+                    data:
+                      success: false
+                      message: 验证失败，请重试
+                      remaining_attempts: 3
+                      trajectory_result:
+                        score: 25.3
+                        passed: false
+                        reasons:
+                          - 轨迹过于直线
+                          - 速度异常
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 验证失败次数过多，暂时锁定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /captcha/gesture:
     get:
       tags:
         - captcha
       summary: 获取手势验证码
+      description: 生成手势验证码，要求用户绘制特定图案
+      operationId: getGestureCaptcha
+      parameters:
+        - name: pattern_type
+          in: query
+          description: 手势图案类型
+          required: false
+          schema:
+            type: string
+            enum: [L, Z, N, M, V, W, custom]
+            default: L
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+            default: medium
       responses:
         '200':
-          description: 成功
+          description: 成功生成手势验证码
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      session_id:
-                        type: string
-                      pattern:
-                        type: string
-                      grid_size:
-                        type: integer
+                $ref: '#/components/schemas/GestureCaptchaResponse'
+
   /captcha/gesture/verify:
     post:
       tags:
         - captcha
       summary: 验证手势验证码
+      operationId: verifyGestureCaptcha
       requestBody:
         required: true
         content:
@@ -256,149 +336,257 @@ paths:
               properties:
                 session_id:
                   type: string
+                  description: 验证码会话ID
                 pattern:
                   type: array
+                  description: 用户绘制的手势路径点
                   items:
-                    type: integer
+                    type: object
+                    properties:
+                      x:
+                        type: integer
+                      y:
+                        type: integer
+                      t:
+                        type: integer
+                        format: int64
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 验证完成
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      success:
-                        type: boolean
-                      message:
-                        type: string
+                $ref: '#/components/schemas/VerifyResponse'
+
+  /captcha/3d:
+    get:
+      tags:
+        - captcha
+      summary: 获取3D验证码
+      description: 生成3D验证码，要求用户旋转到正确角度
+      operationId: get3DCaptcha
+      parameters:
+        - name: model_type
+          in: query
+          description: 3D模型类型
+          required: false
+          schema:
+            type: string
+            enum: [cube, sphere, cylinder, cone]
+            default: cube
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+            default: medium
+      responses:
+        '200':
+          description: 成功生成3D验证码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreeDCaptchaResponse'
+
+  /captcha/emoji:
+    get:
+      tags:
+        - captcha
+      summary: 获取Emoji验证码
+      description: 生成Emoji验证码，要求用户选择指定的表情
+      operationId: getEmojiCaptcha
+      parameters:
+        - name: count
+          in: query
+          description: 需要选择的Emoji数量
+          required: false
+          schema:
+            type: integer
+            default: 4
+            minimum: 2
+            maximum: 8
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+            default: medium
+      responses:
+        '200':
+          description: 成功生成Emoji验证码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmojiCaptchaResponse'
+
+  /captcha/voice:
+    get:
+      tags:
+        - captcha
+      summary: 获取语音验证码
+      description: 生成语音验证码，适合视障用户
+      operationId: getVoiceCaptcha
+      parameters:
+        - name: mode
+          in: query
+          description: 验证码内容模式
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, mixed]
+            default: number
+        - name: count
+          in: query
+          description: 验证码位数
+          required: false
+          schema:
+            type: integer
+            default: 4
+            minimum: 4
+            maximum: 8
+        - name: language
+          in: query
+          description: 语音语言
+          required: false
+          schema:
+            type: string
+            enum: [zh-CN, en-US, ja-JP, ko-KR]
+            default: zh-CN
+      responses:
+        '200':
+          description: 成功生成语音验证码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoiceCaptchaResponse'
+
+  /captcha/lianliankan:
+    get:
+      tags:
+        - captcha
+      summary: 获取连连看验证码
+      description: 生成连连看验证码，要求用户配对相同图标
+      operationId: getLianliankanCaptcha
+      parameters:
+        - name: pairs
+          in: query
+          description: 配对数量
+          required: false
+          schema:
+            type: integer
+            default: 6
+            minimum: 4
+            maximum: 12
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+            default: medium
+      responses:
+        '200':
+          description: 成功生成连连看验证码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LianliankanCaptchaResponse'
+
   /auth/register:
     post:
       tags:
         - auth
       summary: 用户注册
+      description: 创建新用户账户
+      operationId: registerUser
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-                - email
-                - password
-              properties:
-                username:
-                  type: string
-                  minLength: 3
-                  maxLength: 50
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  minLength: 6
-                behavior_data:
-                  type: string
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              default:
+                summary: 注册请求示例
+                value:
+                  username: testuser
+                  email: test@example.com
+                  password: SecurePass123!
+                  behavior_data: eyJ0cmFja2V0IjpbXX0=
       responses:
         '200':
-          description: 成功
+          description: 注册成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      user_id:
-                        type: integer
-                      username:
-                        type: string
-                      email:
-                        type: string
-                      verification_link:
-                        type: string
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: 用户已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/login:
     post:
       tags:
         - auth
       summary: 用户登录
+      description: 用户登录获取访问令牌
+      operationId: loginUser
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-                - password
-              properties:
-                username:
-                  type: string
-                password:
-                  type: string
-                captcha_token:
-                  type: string
-                behavior_data:
-                  type: string
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                summary: 登录请求示例
+                value:
+                  username: testuser
+                  password: SecurePass123!
+                  captcha_token: captcha_abc123
+                  behavior_data: eyJ0cmFja2V0IjpbXX0=
       responses:
         '200':
-          description: 成功
+          description: 登录成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      access_token:
-                        type: string
-                      refresh_token:
-                        type: string
-                      expires_in:
-                        type: integer
-                        example: 900
-                      user:
-                        type: object
-                        properties:
-                          id:
-                            type: integer
-                          username:
-                            type: string
-                          email:
-                            type: string
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/refresh:
     post:
       tags:
         - auth
       summary: 刷新Token
+      description: 使用刷新令牌获取新的访问令牌
+      operationId: refreshToken
       requestBody:
         required: true
         content:
@@ -410,108 +598,80 @@ paths:
               properties:
                 refresh_token:
                   type: string
+                  description: 刷新令牌
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 刷新成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      access_token:
-                        type: string
-                      refresh_token:
-                        type: string
-                      expires_in:
-                        type: integer
-                        example: 900
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 刷新令牌无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/logout:
     post:
       tags:
         - auth
       summary: 用户登出
+      description: 使当前令牌失效
+      operationId: logoutUser
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: 成功
+          description: 登出成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    nullable: true
+                $ref: '#/components/schemas/SuccessResponse'
+
   /auth/verify-email:
     get:
       tags:
         - auth
       summary: 验证邮箱
+      description: 使用邮箱验证链接验证用户邮箱
+      operationId: verifyEmail
       parameters:
         - name: token
           in: query
           required: true
           schema:
             type: string
+            description: 邮箱验证令牌
       responses:
         '200':
-          description: 成功
+          description: 验证成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-  /auth/resend-verification:
-    post:
-      tags:
-        - auth
-      summary: 重新发送验证邮件
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
-      responses:
-        '200':
-          description: 成功
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 令牌无效或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth/request-password-reset:
     post:
       tags:
         - auth
       summary: 请求重置密码
+      description: 发送密码重置链接到用户邮箱
+      operationId: requestPasswordReset
       requestBody:
         required: true
         content:
@@ -524,14 +684,22 @@ paths:
                 email:
                   type: string
                   format: email
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 请求已处理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /auth/reset-password:
     post:
       tags:
         - auth
       summary: 重置密码
+      description: 使用重置令牌设置新密码
+      operationId: resetPassword
       requestBody:
         required: true
         content:
@@ -544,59 +712,54 @@ paths:
               properties:
                 token:
                   type: string
+                  description: 密码重置令牌
                 new_password:
                   type: string
                   minLength: 6
+                  description: 新密码
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 密码重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 令牌无效或密码不符合要求
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /user/profile:
     get:
       tags:
         - user
       summary: 获取用户资料
+      description: 获取当前登录用户的详细资料
+      operationId: getUserProfile
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: 成功
+          description: 获取成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                      username:
-                        type: string
-                      email:
-                        type: string
-                      nickname:
-                        type: string
-                      avatar:
-                        type: string
-                      phone:
-                        type: string
-                      bio:
-                        type: string
-                      is_verified:
-                        type: boolean
-                      created_at:
-                        type: string
-                        format: date-time
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
         - user
       summary: 更新用户资料
+      description: 更新当前登录用户的资料
+      operationId: updateUserProfile
       security:
         - bearerAuth: []
       requestBody:
@@ -604,24 +767,28 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                nickname:
-                  type: string
-                avatar:
-                  type: string
-                phone:
-                  type: string
-                bio:
-                  type: string
+              $ref: '#/components/schemas/UpdateProfileRequest'
       responses:
         '200':
-          description: 成功
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /user/change-password:
     post:
       tags:
         - user
       summary: 修改密码
+      description: 修改当前登录用户的密码
+      operationId: changePassword
       security:
         - bearerAuth: []
       requestBody:
@@ -636,169 +803,264 @@ paths:
               properties:
                 old_password:
                   type: string
+                  description: 当前密码
                 new_password:
                   type: string
                   minLength: 6
+                  description: 新密码
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 密码错误或新密码不符合要求
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /detect/script:
     get:
       tags:
         - detect
       summary: 获取检测脚本
+      description: 获取客户端环境检测脚本
+      operationId: getDetectionScript
       parameters:
         - name: callback
           in: query
+          description: 回调函数名
+          required: false
           schema:
             type: string
+            default: onDetectionComplete
       responses:
         '200':
-          description: 成功
+          description: 获取成功
           content:
             application/javascript:
               schema:
                 type: string
+
   /detect/submit:
     post:
       tags:
         - detect
       summary: 提交检测数据
+      description: 提交客户端环境检测数据进行分析
+      operationId: submitDetection
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - detection_id
-                - risk_score
-              properties:
-                detection_id:
-                  type: string
-                risk_score:
-                  type: number
-                  format: float
-                  minimum: 0
-                  maximum: 100
-                chain:
-                  type: array
-                  items:
-                    type: string
-                fingerprint:
-                  type: string
-                session_id:
-                  type: string
-                timestamp:
-                  type: integer
-                  format: int64
-                details:
-                  type: object
+              $ref: '#/components/schemas/DetectionRequest'
       responses:
         '200':
-          description: 成功
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionResponse'
+
   /detect/check:
     post:
       tags:
         - detect
       summary: 环境检测
+      description: 检测客户端环境是否存在异常
+      operationId: checkEnvironment
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - fingerprint
-              properties:
-                fingerprint:
-                  type: string
-                canvas_hash:
-                  type: string
-                webgl_vendor:
-                  type: string
-                webgl_renderer:
-                  type: string
-                fonts:
-                  type: array
-                  items:
-                    type: string
-                plugins:
-                  type: array
-                  items:
-                    type: string
-                proxy_detected:
-                  type: boolean
-                screen_info:
-                  type: object
-                timezone:
-                  type: string
-                language:
-                  type: string
-                user_agent:
-                  type: string
-                ip_address:
-                  type: string
+              $ref: '#/components/schemas/EnvironmentCheckRequest'
       responses:
         '200':
-          description: 成功
+          description: 检测完成
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      is_bot:
-                        type: boolean
-                      risk_level:
-                        type: string
-                        enum: [low, medium, high]
-                      risk_score:
-                        type: number
-                        format: float
-                      detected_flags:
-                        type: array
-                        items:
-                          type: string
-                      fingerprint:
-                        type: string
-                      is_unique:
-                        type: boolean
+                $ref: '#/components/schemas/EnvironmentCheckResponse'
+
   /detect/fingerprint:
     get:
       tags:
         - detect
       summary: 获取指纹信息
+      description: 根据指纹获取设备信息
+      operationId: getFingerprintInfo
       parameters:
         - name: fingerprint
           in: query
           required: true
           schema:
             type: string
+            description: 设备指纹
       responses:
         '200':
-          description: 成功
-  /detect/stats:
-    get:
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FingerprintResponse'
+
+  /seamless/check:
+    post:
       tags:
-        - detect
-      summary: 获取指纹统计
+        - seamless
+      summary: 无感验证检查
+      description: 检查设备是否可信任，无需显示验证码
+      operationId: checkSeamless
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_fingerprint
+              properties:
+                device_fingerprint:
+                  type: string
+                  description: 设备指纹
+                behavior_sequence:
+                  type: array
+                  items:
+                    type: object
+                  description: 行为序列数据
+                trusted_tokens:
+                  type: array
+                  items:
+                    type: string
+                  description: 信任令牌列表
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 检查完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeamlessResponse'
+
+  /seamless/trust:
+    post:
+      tags:
+        - seamless
+      summary: 信任设备
+      description: 将设备标记为信任设备
+      operationId: trustDevice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_fingerprint
+              properties:
+                device_fingerprint:
+                  type: string
+                  description: 设备指纹
+                duration_days:
+                  type: integer
+                  description: 信任有效期（天）
+                  default: 30
+              additionalProperties: false
+      responses:
+        '200':
+          description: 信任成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /biometrics/register:
+    post:
+      tags:
+        - biometrics
+      summary: 注册生物特征
+      description: 注册用户的生物特征信息（键盘、鼠标行为等）
+      operationId: registerBiometrics
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - keyboard_sample
+              properties:
+                keyboard_sample:
+                  type: object
+                  description: 键盘行为样本
+                mouse_sample:
+                  type: object
+                  description: 鼠标行为样本
+                touch_sample:
+                  type: object
+                  description: 触摸行为样本
+              additionalProperties: false
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiometricsResponse'
+
+  /biometrics/verify:
+    post:
+      tags:
+        - biometrics
+      summary: 验证生物特征
+      description: 验证用户的生物特征是否匹配
+      operationId: verifyBiometrics
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  description: 用户ID
+                keyboard_sample:
+                  type: object
+                  description: 当前键盘行为样本
+                mouse_sample:
+                  type: object
+                  description: 当前鼠标行为样本
+              additionalProperties: false
+      responses:
+        '200':
+          description: 验证完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiometricsVerifyResponse'
+
   /admin/login:
     post:
       tags:
         - admin-auth
       summary: 管理员登录
+      description: 管理员登录管理后台
+      operationId: adminLogin
       requestBody:
         required: true
         content:
@@ -813,274 +1075,62 @@ paths:
                   type: string
                 password:
                   type: string
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 登录成功
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                  message:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      token:
-                        type: string
-                      user:
-                        type: object
-                        properties:
-                          id:
-                            type: integer
-                          username:
-                            type: string
-                          is_super_admin:
-                            type: boolean
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /admin/logout:
     post:
       tags:
         - admin-auth
       summary: 管理员登出
+      description: 管理员登出管理后台
+      operationId: adminLogout
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: 成功
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /admin/dashboard/stats:
     get:
       tags:
         - admin-stats
       summary: 获取仪表盘统计
+      description: 获取管理后台仪表盘的统计数据
+      operationId: getDashboardStats
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: 成功
-  /admin/dashboard/activity:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取最近活动
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/dashboard/system-status:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取系统状态
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/dashboard/request-trend:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取请求趋势
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: start_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: interval
-          in: query
-          schema:
-            type: string
-            enum: [hour, day, week]
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/verification:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取验证统计
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: start_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: app_id
-          in: query
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/chart:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取图表数据
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [verification, risk, performance]
-        - name: period
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [today, week, month]
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/trend:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取趋势数据
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: days
-          in: query
-          schema:
-            type: integer
-            default: 7
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/hourly:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取小时统计
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: date
-          in: query
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/realtime:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取实时统计
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/risk-distribution:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取风险分布
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/top-ips:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取TOP IP
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [all, blocked, high_risk]
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/application:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取应用统计
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/captcha-type:
-    get:
-      tags:
-        - admin-stats
-      summary: 获取验证码类型统计
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/stats/report:
-    get:
-      tags:
-        - admin-stats
-      summary: 生成报告
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: start_date
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-        - name: format
-          in: query
-          schema:
-            type: string
-            enum: [json, csv, pdf]
-      responses:
-        '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStatsResponse'
+
   /admin/applications:
     get:
       tags:
         - admin-applications
       summary: 获取应用列表
+      description: 获取所有应用列表
+      operationId: getApplications
       security:
         - bearerAuth: []
       parameters:
@@ -1101,11 +1151,17 @@ paths:
             enum: [active, inactive]
       responses:
         '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListResponse'
     post:
       tags:
         - admin-applications
       summary: 创建应用
+      description: 创建新的应用
+      operationId: createApplication
       security:
         - bearerAuth: []
       requestBody:
@@ -1121,24 +1177,32 @@ paths:
                   type: string
                 description:
                   type: string
+                captcha_types:
+                  type: array
+                  items:
+                    type: string
+                risk_threshold:
+                  type: integer
+                  default: 50
+                max_attempts:
+                  type: integer
+                  default: 5
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
-  /admin/applications/summary:
-    get:
-      tags:
-        - admin-applications
-      summary: 获取应用摘要
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+
   /admin/applications/{id}:
     get:
       tags:
         - admin-applications
       summary: 获取应用详情
+      description: 获取指定应用的详细信息
+      operationId: getApplication
       security:
         - bearerAuth: []
       parameters:
@@ -1149,11 +1213,23 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '404':
+          description: 应用不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
         - admin-applications
       summary: 更新应用
+      description: 更新指定应用的信息
+      operationId: updateApplication
       security:
         - bearerAuth: []
       parameters:
@@ -1176,13 +1252,20 @@ paths:
                 status:
                   type: string
                   enum: [active, inactive]
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
     delete:
       tags:
         - admin-applications
       summary: 删除应用
+      description: 删除指定应用
+      operationId: deleteApplication
       security:
         - bearerAuth: []
       parameters:
@@ -1193,106 +1276,19 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
-  /admin/applications/{id}/regenerate-key:
-    post:
-      tags:
-        - admin-applications
-      summary: 重新生成应用密钥
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
-  /admin/applications/{id}/config:
-    get:
-      tags:
-        - admin-applications
-      summary: 获取应用配置
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
-    put:
-      tags:
-        - admin-applications
-      summary: 更新应用配置
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                captcha_types:
-                  type: array
-                  items:
-                    type: string
-                risk_threshold:
-                  type: integer
-                max_attempts:
-                  type: integer
-                session_timeout:
-                  type: integer
-                enable_behavior_analysis:
-                  type: boolean
-                enable_ip_blacklist:
-                  type: boolean
-      responses:
-        '200':
-          description: 成功
-  /admin/applications/{id}/statistics:
-    get:
-      tags:
-        - admin-applications
-      summary: 获取应用统计
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: start_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: 成功
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /admin/logs:
     get:
       tags:
         - admin-logs
       summary: 获取验证日志
+      description: 获取验证日志列表
+      operationId: getLogs
       security:
         - bearerAuth: []
       parameters:
@@ -1314,7 +1310,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [slider, click, image]
+            enum: [slider, click, gesture, image, voice, 3d, emoji, lianliankan]
         - name: status
           in: query
           schema:
@@ -1341,111 +1337,19 @@ paths:
             enum: [low, medium, high, critical]
       responses:
         '200':
-          description: 成功
-  /admin/logs/summary:
-    get:
-      tags:
-        - admin-logs
-      summary: 获取日志摘要
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/logs/statistics:
-    get:
-      tags:
-        - admin-logs
-      summary: 获取日志统计
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: start_date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: 成功
-  /admin/logs/export:
-    get:
-      tags:
-        - admin-logs
-      summary: 导出日志
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: start_date
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-        - name: format
-          in: query
-          schema:
-            type: string
-            enum: [csv, json]
-      responses:
-        '200':
-          description: 成功
+          description: 获取成功
           content:
-            text/csv: {}
-            application/json: {}
-  /admin/logs/cleanup:
-    delete:
-      tags:
-        - admin-logs
-      summary: 清理旧日志
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: days
-          in: query
-          schema:
-            type: integer
-            default: 30
-      responses:
-        '200':
-          description: 成功
-  /admin/logs/clear:
-    post:
-      tags:
-        - admin-logs
-      summary: 清空日志
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - confirm
-              properties:
-                confirm:
-                  type: boolean
-      responses:
-        '200':
-          description: 成功
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogListResponse'
+
   /admin/logs/{id}:
     get:
       tags:
         - admin-logs
       summary: 获取日志详情
+      description: 获取指定日志的详细信息
+      operationId: getLog
       security:
         - bearerAuth: []
       parameters:
@@ -1456,28 +1360,19 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
-  /admin/logs/session/{session_id}:
-    get:
-      tags:
-        - admin-logs
-      summary: 根据会话ID获取日志
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: session_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogResponse'
+
   /admin/blacklist:
     get:
       tags:
         - admin-blacklist
       summary: 获取黑名单列表
+      description: 获取黑名单列表
+      operationId: getBlacklist
       security:
         - bearerAuth: []
       parameters:
@@ -1503,11 +1398,17 @@ paths:
             enum: [active, expired]
       responses:
         '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlacklistResponse'
     post:
       tags:
         - admin-blacklist
       summary: 添加黑名单
+      description: 添加新的黑名单条目
+      operationId: addBlacklist
       security:
         - bearerAuth: []
       requestBody:
@@ -1530,98 +1431,23 @@ paths:
                 duration:
                   type: integer
                   description: 持续时间（秒），0表示永久
+                  default: 0
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
-  /admin/blacklist/summary:
-    get:
-      tags:
-        - admin-blacklist
-      summary: 获取黑名单摘要
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
-  /admin/blacklist/import:
-    post:
-      tags:
-        - admin-blacklist
-      summary: 导入黑名单
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - items
-              properties:
-                items:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      type:
-                        type: string
-                      value:
-                        type: string
-                      reason:
-                        type: string
-                      duration:
-                        type: integer
-      responses:
-        '200':
-          description: 成功
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlacklistItemResponse'
+
   /admin/blacklist/{id}:
-    get:
-      tags:
-        - admin-blacklist
-      summary: 获取黑名单详情
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
-    put:
-      tags:
-        - admin-blacklist
-      summary: 更新黑名单
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                expires_at:
-                  type: string
-                  format: date-time
-      responses:
-        '200':
-          description: 成功
     delete:
       tags:
         - admin-blacklist
       summary: 删除黑名单
+      description: 删除指定的黑名单条目
+      operationId: deleteBlacklist
       security:
         - bearerAuth: []
       parameters:
@@ -1632,28 +1458,19 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
-  /admin/blacklist/{id}/unblock:
-    post:
-      tags:
-        - admin-blacklist
-      summary: 解除黑名单
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /admin/risk-rules:
     get:
       tags:
         - admin-risk-rules
       summary: 获取风控规则列表
+      description: 获取所有风控规则列表
+      operationId: getRiskRules
       security:
         - bearerAuth: []
       parameters:
@@ -1678,11 +1495,17 @@ paths:
             enum: [behavior, device, network]
       responses:
         '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskRuleListResponse'
     post:
       tags:
         - admin-risk-rules
       summary: 创建风控规则
+      description: 创建新的风控规则
+      operationId: createRiskRule
       security:
         - bearerAuth: []
       requestBody:
@@ -1706,44 +1529,29 @@ paths:
                   enum: [behavior, device, network]
                 risk_score:
                   type: integer
+                  minimum: 1
+                  maximum: 100
                 conditions:
                   type: object
                 enabled:
                   type: boolean
                   default: true
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
-  /admin/risk-rules/summary:
-    get:
-      tags:
-        - admin-risk-rules
-      summary: 获取风控规则摘要
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskRuleResponse'
+
   /admin/risk-rules/{id}:
-    get:
-      tags:
-        - admin-risk-rules
-      summary: 获取风控规则详情
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
     put:
       tags:
         - admin-risk-rules
       summary: 更新风控规则
+      description: 更新指定的风控规则
+      operationId: updateRiskRule
       security:
         - bearerAuth: []
       parameters:
@@ -1769,13 +1577,20 @@ paths:
                   type: object
                 enabled:
                   type: boolean
+              additionalProperties: false
       responses:
         '200':
-          description: 成功
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskRuleResponse'
     delete:
       tags:
         - admin-risk-rules
       summary: 删除风控规则
+      description: 删除指定的风控规则
+      operationId: deleteRiskRule
       security:
         - bearerAuth: []
       parameters:
@@ -1786,28 +1601,19 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
-  /admin/risk-rules/{id}/toggle:
-    post:
-      tags:
-        - admin-risk-rules
-      summary: 切换风控规则状态
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: 成功
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /admin/analytics/user-behavior:
     get:
       tags:
         - admin-analytics
       summary: 获取用户行为分析
+      description: 获取用户行为分析数据
+      operationId: getUserBehaviorAnalysis
       security:
         - bearerAuth: []
       parameters:
@@ -1827,12 +1633,19 @@ paths:
             type: integer
       responses:
         '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBehaviorResponse'
+
   /admin/analytics/attack-trend:
     get:
       tags:
         - admin-analytics
       summary: 获取攻击趋势分析
+      description: 获取攻击趋势分析数据
+      operationId: getAttackTrend
       security:
         - bearerAuth: []
       parameters:
@@ -1848,62 +1661,1036 @@ paths:
             format: date
       responses:
         '200':
-          description: 成功
-  /admin/analytics/generate-report:
-    post:
-      tags:
-        - admin-analytics
-      summary: 生成风险报告
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - start_date
-                - end_date
-                - report_type
-              properties:
-                start_date:
-                  type: string
-                  format: date
-                end_date:
-                  type: string
-                  format: date
-                report_type:
-                  type: string
-                format:
-                  type: string
-                  enum: [pdf]
-      responses:
-        '200':
-          description: 成功
-  /admin/analytics/visualization:
-    get:
-      tags:
-        - admin-analytics
-      summary: 获取可视化数据
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: 成功
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackTrendResponse'
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: 使用JWT令牌进行认证，格式为 Bearer <token>
+
   schemas:
-    Error:
+    ErrorResponse:
       type: object
       properties:
         code:
           type: integer
+          description: 错误码
+          example: 400
         message:
           type: string
+          description: 错误信息
+          example: 请求参数错误
         data:
           nullable: true
+          description: 附加数据
+      required:
+        - code
+        - message
+
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          nullable: true
+
+    SliderCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+              description: 会话ID
+            image_url:
+              type: string
+              description: 背景图片URL（base64编码）
+            puzzle_url:
+              type: string
+              description: 滑块图片URL（base64编码）
+            hint_url:
+              type: string
+              description: 提示图片URL（base64编码）
+            shape:
+              type: integer
+              description: 滑块形状类型
+            secret_y:
+              type: integer
+              description: 目标Y坐标
+            image_width:
+              type: integer
+              description: 图片宽度
+            image_height:
+              type: integer
+              description: 图片高度
+
+    ClickCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            image_url:
+              type: string
+            hint:
+              type: string
+              description: 点击提示
+            max_points:
+              type: integer
+              description: 需要点击的最大点数
+
+    GestureCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            pattern:
+              type: string
+              description: 目标手势图案
+            grid_size:
+              type: integer
+              description: 网格大小
+
+    ThreeDCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            model_type:
+              type: string
+              description: 3D模型类型
+            target_rotation:
+              type: object
+              description: 目标旋转角度
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
+
+    EmojiCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            target_emojis:
+              type: array
+              items:
+                type: string
+              description: 需要选择的目标Emoji列表
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  emoji:
+                    type: string
+              description: 所有可选的Emoji选项
+
+    VoiceCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            audio_url:
+              type: string
+              description: 语音文件URL
+            text:
+              type: string
+              description: 验证码文本（用于测试）
+
+    LianliankanCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+            grid:
+              type: array
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    icon:
+                      type: string
+                    pair_id:
+                      type: integer
+              description: 连连看网格数据
+
+    VerifyRequest:
+      type: object
+      required:
+        - session_id
+        - type
+      properties:
+        session_id:
+          type: string
+          description: 验证码会话ID
+        type:
+          type: string
+          enum: [slider, click, gesture, 3d, emoji, voice, lianliankan]
+          description: 验证码类型
+        x:
+          type: integer
+          description: X坐标（滑块/点击）
+        y:
+          type: integer
+          description: Y坐标（滑块/点击）
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: integer
+              y:
+                type: integer
+          description: 点击点列表（点击验证码）
+        trajectory:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: integer
+              y:
+                type: integer
+              t:
+                type: integer
+                format: int64
+          description: 轨迹数据
+        pattern:
+          type: array
+          items:
+            type: object
+          description: 手势图案
+        rotation:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            z:
+              type: number
+          description: 3D旋转角度
+        selected_ids:
+          type: array
+          items:
+            type: integer
+          description: 选中的Emoji ID列表
+        answer:
+          type: string
+          description: 语音验证码答案
+        matching_pairs:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+          description: 连连看配对结果
+
+    VerifyResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+              description: 验证是否成功
+            message:
+              type: string
+              description: 验证结果消息
+            remaining_attempts:
+              type: integer
+              description: 剩余尝试次数
+            token:
+              type: string
+              description: 验证成功后的令牌
+            trajectory_result:
+              type: object
+              properties:
+                score:
+                  type: number
+                  format: float
+                  description: 轨迹分数
+                passed:
+                  type: boolean
+                  description: 轨迹验证是否通过
+                reasons:
+                  type: array
+                  items:
+                    type: string
+                  description: 轨迹验证原因
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: 用户名
+        email:
+          type: string
+          format: email
+          description: 邮箱地址
+        password:
+          type: string
+          minLength: 6
+          description: 密码
+        behavior_data:
+          type: string
+          description: 行为数据（Base64编码）
+
+    RegisterResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            user_id:
+              type: integer
+              description: 用户ID
+            username:
+              type: string
+              description: 用户名
+            email:
+              type: string
+              description: 邮箱地址
+            verification_link:
+              type: string
+              description: 邮箱验证链接
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 用户名或邮箱
+        password:
+          type: string
+          description: 密码
+        captcha_token:
+          type: string
+          description: 验证码令牌
+        behavior_data:
+          type: string
+          description: 行为数据
+
+    LoginResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+              description: 访问令牌
+            refresh_token:
+              type: string
+              description: 刷新令牌
+            expires_in:
+              type: integer
+              description: 令牌过期时间（秒）
+              example: 900
+            user:
+              type: object
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+                email:
+                  type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_in:
+              type: integer
+              example: 900
+
+    UserProfileResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            email:
+              type: string
+            nickname:
+              type: string
+            avatar:
+              type: string
+            phone:
+              type: string
+            bio:
+              type: string
+            is_verified:
+              type: boolean
+            created_at:
+              type: string
+              format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+        avatar:
+          type: string
+        phone:
+          type: string
+        bio:
+          type: string
+
+    DetectionRequest:
+      type: object
+      required:
+        - detection_id
+        - risk_score
+      properties:
+        detection_id:
+          type: string
+        risk_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        chain:
+          type: array
+          items:
+            type: string
+        fingerprint:
+          type: string
+        session_id:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+        details:
+          type: object
+
+    DetectionResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            risk_level:
+              type: string
+              enum: [low, medium, high, critical]
+            detected_flags:
+              type: array
+              items:
+                type: string
+
+    EnvironmentCheckRequest:
+      type: object
+      required:
+        - fingerprint
+      properties:
+        fingerprint:
+          type: string
+        canvas_hash:
+          type: string
+        webgl_vendor:
+          type: string
+        webgl_renderer:
+          type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        plugins:
+          type: array
+          items:
+            type: string
+        proxy_detected:
+          type: boolean
+        screen_info:
+          type: object
+        timezone:
+          type: string
+        language:
+          type: string
+        user_agent:
+          type: string
+        ip_address:
+          type: string
+
+    EnvironmentCheckResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            is_bot:
+              type: boolean
+            risk_level:
+              type: string
+              enum: [low, medium, high]
+            risk_score:
+              type: number
+              format: float
+            detected_flags:
+              type: array
+              items:
+                type: string
+            fingerprint:
+              type: string
+            is_unique:
+              type: boolean
+
+    FingerprintResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            fingerprint:
+              type: string
+            first_seen:
+              type: string
+              format: date-time
+            last_seen:
+              type: string
+              format: date-time
+            usage_count:
+              type: integer
+            risk_score:
+              type: number
+              format: float
+
+    SeamlessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            requires_captcha:
+              type: boolean
+              description: 是否需要显示验证码
+            trust_level:
+              type: string
+              enum: [trusted, semi-trusted, untrusted]
+              description: 信任级别
+            risk_score:
+              type: number
+              format: float
+              description: 风险分数
+            token:
+              type: string
+              description: 信任令牌（如果通过）
+
+    BiometricsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            profile_id:
+              type: string
+            registered_at:
+              type: string
+              format: date-time
+            confidence:
+              type: number
+              format: float
+
+    BiometricsVerifyResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            match:
+              type: boolean
+            confidence:
+              type: number
+              format: float
+              description: 匹配置信度
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            user:
+              type: object
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+                is_super_admin:
+                  type: boolean
+
+    DashboardStatsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            total_requests:
+              type: integer
+            success_rate:
+              type: number
+              format: float
+            risk_rate:
+              type: number
+              format: float
+            active_applications:
+              type: integer
+            today_requests:
+              type: integer
+            hourly_trend:
+              type: array
+              items:
+                type: object
+                properties:
+                  hour:
+                    type: string
+                  count:
+                    type: integer
+
+    ApplicationListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApplicationResponse'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+
+    ApplicationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        app_key:
+          type: string
+        app_secret:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        captcha_types:
+          type: array
+          items:
+            type: string
+        risk_threshold:
+          type: integer
+        max_attempts:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    LogListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/LogResponse'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+
+    LogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: string
+        app_id:
+          type: integer
+        captcha_type:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        risk_score:
+          type: number
+          format: float
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        details:
+          type: object
+
+    BlacklistResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/BlacklistItemResponse'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+
+    BlacklistItemResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [ip, fingerprint, user_id]
+        value:
+          type: string
+        reason:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    RiskRuleListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/RiskRuleResponse'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+
+    RiskRuleResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [behavior, device, network]
+        risk_score:
+          type: integer
+        conditions:
+          type: object
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserBehaviorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            user_id:
+              type: integer
+            login_count:
+              type: integer
+            verification_count:
+              type: integer
+            success_rate:
+              type: number
+              format: float
+            avg_risk_score:
+              type: number
+              format: float
+            behavior_pattern:
+              type: string
+              enum: [normal, suspicious, malicious]
+
+    AttackTrendResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            trend:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  attacks:
+                    type: integer
+                  blocked:
+                    type: integer
+            total_attacks:
+              type: integer
+            blocked_rate:
+              type: number
+              format: float
+            top_attack_types:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  count:
+                    type: integer

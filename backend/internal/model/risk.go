@@ -368,3 +368,14 @@ func NewRiskContext() *RiskContext {
 		DeviceInfo:     make(map[string]string),
 	}
 }
+
+type EdgeExecutionResult struct {
+	NodeID       string                 `json:"node_id"`
+	FunctionName string                 `json:"function_name"`
+	StartTime    time.Time              `json:"start_time"`
+	EndTime      time.Time              `json:"end_time"`
+	DurationMs   float64                `json:"duration_ms"`
+	Success      bool                   `json:"success"`
+	Error        string                 `json:"error,omitempty"`
+	Output       map[string]interface{} `json:"output,omitempty"`
+}

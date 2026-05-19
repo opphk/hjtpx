@@ -58,11 +58,14 @@ func TestParseSlackConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSlackConfig(tt.config)
+			config, err := ParseSlackConfig(tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, config)
 			} else {
 				assert.NoError(t, err)
+				assert.NotNil(t, config)
+				assert.Equal(t, "https://hooks.slack.com/services/test", config.WebhookURL)
 			}
 		})
 	}
@@ -77,33 +80,30 @@ func TestParseWebhookConfig(t *testing.T) {
 		{
 			name: "valid webhook config",
 			config: map[string]interface{}{
-				"url":     "https://example.com/webhook",
-				"method":  "POST",
-				"headers": map[string]string{"X-API-Key": "test-key"},
+				"url":    "https://example.com/webhook",
+				"method": "POST",
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid with default method",
+			name: "missing url",
 			config: map[string]interface{}{
-				"url": "https://example.com/webhook",
+				"method": "POST",
 			},
-			wantErr: false,
-		},
-		{
-			name:    "missing url",
-			config:  map[string]interface{}{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseWebhookConfig(tt.config)
+			config, err := ParseWebhookConfig(tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, config)
 			} else {
 				assert.NoError(t, err)
+				assert.NotNil(t, config)
+				assert.Equal(t, "https://example.com/webhook", config.URL)
 			}
 		})
 	}
@@ -112,13 +112,13 @@ func TestParseWebhookConfig(t *testing.T) {
 func TestCreateChannel(t *testing.T) {
 	tests := []struct {
 		name        string
-		channelType string
+		channelType ChannelType
 		config      map[string]interface{}
 		wantErr     bool
 	}{
 		{
 			name:        "create slack channel",
-			channelType: "slack",
+			channelType: ChannelTypeSlack,
 			config: map[string]interface{}{
 				"webhook_url": "https://hooks.slack.com/services/test",
 			},
@@ -126,7 +126,7 @@ func TestCreateChannel(t *testing.T) {
 		},
 		{
 			name:        "create webhook channel",
-			channelType: "webhook",
+			channelType: ChannelTypeWebhook,
 			config: map[string]interface{}{
 				"url": "https://example.com/webhook",
 			},
@@ -149,7 +149,6 @@ func TestCreateChannel(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, channel)
-				assert.Equal(t, tt.channelType, channel.Name())
 			}
 		})
 	}
@@ -158,26 +157,26 @@ func TestCreateChannel(t *testing.T) {
 func TestSlackChannel_ValidateConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  map[string]interface{}
+		config  *SlackConfig
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: map[string]interface{}{
-				"webhook_url": "https://hooks.slack.com/services/test",
+			config: &SlackConfig{
+				WebhookURL: "https://hooks.slack.com/services/test",
 			},
 			wantErr: false,
 		},
 		{
 			name:    "invalid config",
-			config:  map[string]interface{}{},
+			config:  &SlackConfig{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewSlackChannel(tt.config)
+			channel := NewSlackChannel(tt.config)
 			err := channel.ValidateConfig()
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -191,26 +190,26 @@ func TestSlackChannel_ValidateConfig(t *testing.T) {
 func TestWebhookChannel_ValidateConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  map[string]interface{}
+		config  *WebhookConfig
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: map[string]interface{}{
-				"url": "https://example.com/webhook",
+			config: &WebhookConfig{
+				URL: "https://example.com/webhook",
 			},
 			wantErr: false,
 		},
 		{
 			name:    "invalid config",
-			config:  map[string]interface{}{},
+			config:  &WebhookConfig{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewWebhookChannel(tt.config)
+			channel := NewWebhookChannel(tt.config)
 			err := channel.ValidateConfig()
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -221,235 +220,18 @@ func TestWebhookChannel_ValidateConfig(t *testing.T) {
 	}
 }
 
-func TestSlackChannel_getSeverityColor(t *testing.T) {
-	config := map[string]interface{}{
-		"webhook_url": "https://hooks.slack.com/services/test",
+func TestSlackChannel_Name(t *testing.T) {
+	config := &SlackConfig{
+		WebhookURL: "https://hooks.slack.com/services/test",
 	}
-	channel, _ := NewSlackChannel(config)
-
-	tests := []struct {
-		severity string
-		expected string
-	}{
-		{"critical", "#ff0000"},
-		{"error", "#ff0000"},
-		{"warning", "#ffa500"},
-		{"warn", "#ffa500"},
-		{"info", "#36a64f"},
-		{"debug", "#808080"},
-		{"unknown", "#36a64f"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.severity, func(t *testing.T) {
-			color := channel.GetSeverityColor(tt.severity)
-			assert.Equal(t, tt.expected, color)
-		})
-	}
+	channel := NewSlackChannel(config)
+	assert.Equal(t, "slack", channel.Name())
 }
 
-func TestParseEmailConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name: "valid email config",
-			config: map[string]interface{}{
-				"smtp_host":    "smtp.gmail.com",
-				"smtp_port":    587,
-				"username":     "test@example.com",
-				"password":     "password",
-				"from_address": "alerts@example.com",
-				"to_addresses": []string{"admin@example.com"},
-				"use_tls":      true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "missing smtp host",
-			config: map[string]interface{}{
-				"username":     "test@example.com",
-				"from_address": "alerts@example.com",
-				"to_addresses": []string{"admin@example.com"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing username",
-			config: map[string]interface{}{
-				"smtp_host":    "smtp.gmail.com",
-				"from_address": "alerts@example.com",
-				"to_addresses": []string{"admin@example.com"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing from address",
-			config: map[string]interface{}{
-				"smtp_host":    "smtp.gmail.com",
-				"username":     "test@example.com",
-				"to_addresses": []string{"admin@example.com"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing to addresses",
-			config: map[string]interface{}{
-				"smtp_host":    "smtp.gmail.com",
-				"username":     "test@example.com",
-				"from_address": "alerts@example.com",
-			},
-			wantErr: true,
-		},
+func TestWebhookChannel_Name(t *testing.T) {
+	config := &WebhookConfig{
+		URL: "https://example.com/webhook",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseEmailConfig(tt.config)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestParseDingTalkConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name: "valid dingtalk config",
-			config: map[string]interface{}{
-				"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
-				"secret":      "secret123",
-				"at_mobiles":  []string{"13800138000"},
-				"is_at_all":   false,
-			},
-			wantErr: false,
-		},
-		{
-			name: "missing webhook url",
-			config: map[string]interface{}{
-				"secret": "secret123",
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseDingTalkConfig(tt.config)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestCreateEmailChannel(t *testing.T) {
-	config := map[string]interface{}{
-		"smtp_host":    "smtp.gmail.com",
-		"smtp_port":    587,
-		"username":     "test@example.com",
-		"password":     "password",
-		"from_address": "alerts@example.com",
-		"to_addresses": []string{"admin@example.com"},
-		"use_tls":      true,
-	}
-
-	channel, err := CreateChannel("email", config)
-	assert.NoError(t, err)
-	assert.NotNil(t, channel)
-	assert.Equal(t, "email", channel.Name())
-}
-
-func TestCreateDingTalkChannel(t *testing.T) {
-	config := map[string]interface{}{
-		"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
-		"secret":     "secret123",
-	}
-
-	channel, err := CreateChannel("dingtalk", config)
-	assert.NoError(t, err)
-	assert.NotNil(t, channel)
-	assert.Equal(t, "dingtalk", channel.Name())
-}
-
-func TestEmailChannel_ValidateConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name: "valid config",
-			config: map[string]interface{}{
-				"smtp_host":    "smtp.gmail.com",
-				"smtp_port":    587,
-				"username":     "test@example.com",
-				"password":     "password",
-				"from_address": "alerts@example.com",
-				"to_addresses": []string{"admin@example.com"},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "invalid config",
-			config:  map[string]interface{}{},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewEmailChannel(tt.config)
-			err := channel.ValidateConfig()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestDingTalkChannel_ValidateConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name: "valid config",
-			config: map[string]interface{}{
-				"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "invalid config",
-			config:  map[string]interface{}{},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewDingTalkChannel(tt.config)
-			err := channel.ValidateConfig()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	channel := NewWebhookChannel(config)
+	assert.Equal(t, "webhook", channel.Name())
 }

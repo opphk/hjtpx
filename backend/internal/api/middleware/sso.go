@@ -78,6 +78,18 @@ type SAMLService struct {
 	logger      *logger.Logger
 }
 
+func (s *SAMLService) GetSSOURL() string {
+	return s.config.SSOURL
+}
+
+func (s *SAMLService) GetEntityID() string {
+	return s.config.EntityID
+}
+
+func (s *SAMLService) GetAssertionConsumerServiceURL() string {
+	return s.config.AssertionConsumerServiceURL
+}
+
 type CASConfig struct {
 	ServerURL     string   `json:"server_url"`
 	ServiceURL    string   `json:"service_url"`

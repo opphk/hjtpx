@@ -6,7 +6,7 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: postgres123
+  password: 
   db_name: hjtpx_db
   sslmode: disable
   max_open_conns: 100
@@ -31,6 +31,14 @@ security:
   signature_expire_secs: 300
   signature_key: ""
   whitelist_ips: []
+
+consul:
+  address: localhost:8500
+  scheme: http
+  timeout: 5s
+  health_check_interval: 10s
+  health_check_timeout: 5s
+  deregister_after: 30s
 
 logging:
   level: info

@@ -23,9 +23,6 @@ metadata:
     nginx.ingress.kubernetes.io/keep-alive-requests: "1000"
     nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
     nginx.ingress.kubernetes.io/server-alias: "hjtpx.example.com"
-    nginx.ingress.kubernetes.io/auth-type: "basic"
-    nginx.ingress.kubernetes.io/auth-secret: "hjtpx-auth"
-    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
     kubernetes.io/ingress.class: "nginx"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
@@ -45,6 +42,47 @@ spec:
                 name: hjtpx-app
                 port:
                   number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hjtpx-ingress-canary
+  namespace: hjtpx
+  labels:
+    app: hjtpx-app
+    component: frontend
+    track: canary
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "always"
+    nginx.ingress.kubernetes.io/canary-by-header-pattern: "^((?i)true|always|canary)$"
+    nginx.ingress.kubernetes.io/canary-by-cookie: "canary"
+    nginx.ingress.kubernetes.io/canary-by-cookie-value: "always"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - hjtpx.example.com
+      secretName: hjtpx-tls
+  rules:
+    - host: hjtpx.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hjtpx-app-canary
+                port:
+                  number: 8081
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -68,6 +106,8 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+        - protocol: TCP
+          port: 8081
   egress:
     - to:
         - podSelector:

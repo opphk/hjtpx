@@ -166,6 +166,15 @@ class AsyncVerifyResult:
     fail_reason: Optional[str] = None
 
 
+@dataclass
+class AsyncLoginResponse:
+    """异步登录响应"""
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    user: Dict
+
+
 class AsyncCaptchaClient:
     """异步验证码客户端
 
@@ -624,6 +633,16 @@ class AsyncCaptchaClient:
             fail_reason=data.get('fail_reason'),
         )
 
+    # ==================== 用户认证 ====================
+    def auth(self) -> 'AsyncUserAuth':
+        """获取用户认证 API"""
+        return AsyncUserAuth(self)
+
+    # ==================== 环境检测 ====================
+    def env(self) -> 'AsyncEnvironment':
+        """获取环境检测 API"""
+        return AsyncEnvironment(self)
+
     async def close(self):
         """关闭异步客户端，释放资源"""
         if self._session and not self._session.closed:
@@ -750,6 +769,227 @@ async def async_batch_verification_example():
             if not isinstance(r, Exception) and r.success
         )
         print(f"批量验证成功率: {success_count}/{len(verify_results)}")
+
+
+class AsyncUserAuth:
+    """异步用户认证 API"""
+    
+    def __init__(self, client: 'AsyncCaptchaClient'):
+        self.client = client
+    
+    async def register(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        behavior_data: Optional[str] = None,
+    ) -> Dict:
+        """
+        用户注册
+        
+        Args:
+            username: 用户名
+            email: 邮箱
+            password: 密码
+            behavior_data: 行为数据
+            
+        Returns:
+            注册结果
+        """
+        data = {
+            'username': username,
+            'email': email,
+            'password': password,
+        }
+        if behavior_data:
+            data['behavior_data'] = behavior_data
+        
+        return await self.client._request('POST', '/api/v1/auth/register', data=data)
+    
+    async def login(
+        self,
+        username: str,
+        password: str,
+        captcha_token: Optional[str] = None,
+    ) -> AsyncLoginResponse:
+        """
+        用户登录
+        
+        Args:
+            username: 用户名
+            password: 密码
+            captcha_token: 验证码令牌
+            
+        Returns:
+            登录响应
+        """
+        data = {'username': username, 'password': password}
+        if captcha_token:
+            data['captcha_token'] = captcha_token
+        
+        result = await self.client._request('POST', '/api/v1/auth/login', data=data)
+        self.client._token = result.get('access_token')
+        self.client._refresh_token = result.get('refresh_token')
+        return AsyncLoginResponse(
+            access_token=result.get('access_token', ''),
+            refresh_token=result.get('refresh_token', ''),
+            expires_in=result.get('expires_in', 0),
+            user=result.get('user', {}),
+        )
+    
+    async def refresh_token(self, refresh_token: Optional[str] = None) -> Dict:
+        """
+        刷新访问令牌
+        
+        Args:
+            refresh_token: 刷新令牌
+            
+        Returns:
+            刷新结果
+        """
+        token = refresh_token or self.client._refresh_token
+        if not token:
+            raise AsyncCaptchaError("No refresh token available")
+        
+        result = await self.client._request(
+            'POST',
+            '/api/v1/auth/refresh',
+            data={'refresh_token': token},
+        )
+        
+        self.client._token = result.get('access_token')
+        if result.get('refresh_token'):
+            self.client._refresh_token = result.get('refresh_token')
+        
+        return result
+    
+    async def logout(self) -> None:
+        """用户登出"""
+        try:
+            await self.client._request('POST', '/api/v1/auth/logout')
+        finally:
+            self.client._token = None
+            self.client._refresh_token = None
+    
+    async def verify_email(self, token: str) -> Dict:
+        """
+        验证邮箱
+        
+        Args:
+            token: 验证令牌
+            
+        Returns:
+            验证结果
+        """
+        return await self.client._request(
+            'GET',
+            '/api/v1/auth/verify-email',
+            params={'token': token},
+        )
+    
+    async def resend_verification(self, email: str) -> Dict:
+        """
+        重新发送验证邮件
+        
+        Args:
+            email: 邮箱
+            
+        Returns:
+            发送结果
+        """
+        return await self.client._request(
+            'POST',
+            '/api/v1/auth/resend-verification',
+            data={'email': email},
+        )
+    
+    async def request_password_reset(self, email: str) -> Dict:
+        """
+        请求重置密码
+        
+        Args:
+            email: 邮箱
+            
+        Returns:
+            请求结果
+        """
+        return await self.client._request(
+            'POST',
+            '/api/v1/auth/request-password-reset',
+            data={'email': email},
+        )
+    
+    async def reset_password(self, token: str, new_password: str) -> Dict:
+        """
+        重置密码
+        
+        Args:
+            token: 重置令牌
+            new_password: 新密码
+            
+        Returns:
+            重置结果
+        """
+        return await self.client._request(
+            'POST',
+            '/api/v1/auth/reset-password',
+            data={
+                'token': token,
+                'new_password': new_password,
+            },
+        )
+
+
+class AsyncEnvironment:
+    """异步环境检测 API"""
+    
+    def __init__(self, client: 'AsyncCaptchaClient'):
+        self.client = client
+    
+    async def get_detection_script(self, callback: Optional[str] = None) -> str:
+        """
+        获取检测脚本
+        
+        Args:
+            callback: 回调函数名
+            
+        Returns:
+            脚本内容
+        """
+        params = {}
+        if callback:
+            params['callback'] = callback
+        
+        url = f"{self.client.base_url}/api/v1/detect/script"
+        session = await self.client._get_session()
+        
+        async with session.get(url, params=params, timeout=self.client.timeout) as response:
+            response.raise_for_status()
+            return await response.text()
+    
+    async def submit_detection(self, data: Dict) -> Dict:
+        """
+        提交检测数据
+        
+        Args:
+            data: 检测数据
+            
+        Returns:
+            提交结果
+        """
+        return await self.client._request('POST', '/api/v1/detect/submit', data=data)
+    
+    async def check_environment(self, data: Dict) -> Dict:
+        """
+        环境检测
+        
+        Args:
+            data: 检测数据
+            
+        Returns:
+            检测结果
+        """
+        return await self.client._request('POST', '/api/v1/detect/check', data=data)
 
 
 async def main():

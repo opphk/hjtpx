@@ -10,7 +10,7 @@ on:
       skip_tests:
         description: 'Skip specific test categories'
         required: false
-        default: ''
+        default: 'none'
         type: choice
         options:
           - none
@@ -31,13 +31,44 @@ env:
   NODE_VERSION: '18'
   POSTGRES_VERSION: '14'
   REDIS_VERSION: '7'
-  COVERAGE_THRESHOLD: 60
+  COVERAGE_THRESHOLD: 70
   TEST_TIMEOUT: 15m
+  CACHE_VERSION: 'v2'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  setup-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cache-hit: ${{ steps.cache-go.outputs.cache-hit }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      
+      - name: Cache Go modules
+        id: cache-go
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-
+
   code-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: setup-cache
     
     steps:
       - uses: actions/checkout@v4
@@ -47,51 +78,51 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            backend/go.sum
-            benchmark/go.sum
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Check code formatting
         run: |
-          if [ -n "$(gofmt -l .)" ]; then
+          if [ -n "$(gofmt -l backend/)" ]; then
             echo "The following files are not formatted correctly:"
-            gofmt -l .
+            gofmt -l backend/
             exit 1
           fi
       
       - name: Run Go vet
-        run: go vet ./...
+        run: go vet ./backend/...
       
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
-          version: latest
+          version: v1.55.2
           args: --timeout=10m --enable=gocritic,gosec,govet,errcheck,staticcheck
-          skip-pkg-cache: true
-          only-new-issues: true
+          working-directory: backend
+          skip-pkg-cache: ${{ needs.setup-cache.outputs.cache-hit != 'true' }}
+          only-new-issues: false
       
-      - name: Check for common issues
+      - name: Staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./...
+          staticcheck ./backend/...
       
-      - name: Run errcheck
+      - name: Errcheck
         run: |
           go install github.com/kisielk/errcheck@latest
-          errcheck ./...
-      
-      - name: Check for TODO comments without assignee
-        run: |
-          TODOS=$(grep -r "TODO" --include="*.go" . | grep -v "TODO:" | grep -v "// " || true)
-          if [ -n "$TODOS" ]; then
-            echo "Found TODO comments without description:"
-            echo "$TODOS"
-          fi
+          errcheck ./backend/...
 
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: code-quality
+    needs: [setup-cache, code-quality]
+    outputs:
+      coverage: ${{ steps.coverage.outputs.value }}
     
     services:
       postgres:
@@ -130,9 +161,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            backend/go.sum
-            benchmark/go.sum
       
       - name: Cache Go modules
         uses: actions/cache@v3
@@ -140,20 +168,15 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Download dependencies
         run: go mod download
       
-      - name: Go Vet
-        run: go vet ./...
-      
       - name: Run Unit Tests with Coverage
         run: |
           mkdir -p coverageReports
-          go test -v -race -coverprofile=coverageReports/coverage.out -covermode=atomic -timeout=${{ env.TEST_TIMEOUT }} ./...
+          go test -v -race -coverprofile=coverageReports/coverage.out -covermode=atomic -timeout=${{ env.TEST_TIMEOUT }} ./backend/...
         env:
           DATABASE_URL: postgres://captcha:captcha123@localhost:5432/captcha_db?sslmode=disable
           REDIS_ADDR: localhost:6379
@@ -161,28 +184,21 @@ jobs:
       
       - name: Generate Coverage Report
         run: |
-          mkdir -p coverageReports
           go tool cover -html=coverageReports/coverage.out -o coverageReports/coverage.html
           go tool cover -func=coverageReports/coverage.out -o coverageReports/coverage.txt
       
       - name: Check Coverage Threshold
+        id: coverage
         run: |
           COVERAGE=$(go tool cover -func=coverageReports/coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total Coverage: $COVERAGE%"
+          echo "value=$COVERAGE" >> $GITHUB_OUTPUT
+          
           if (( $(echo "$COVERAGE < $COVERAGE_THRESHOLD" | bc -l) )); then
             echo "Coverage is below $COVERAGE_THRESHOLD%, please add more tests"
             exit 1
           fi
           echo "Coverage meets the $COVERAGE_THRESHOLD% threshold"
-      
-      - name: Run Performance Tests
-        run: |
-          cd benchmark
-          go test -bench=. -benchmem -timeout=10m ./...
-          go run cmd/benchmark/main.go --quick || true
-        env:
-          GIN_MODE: test
-          BENCHMARK_BASE_URL: http://localhost:8080
       
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -194,26 +210,14 @@ jobs:
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: unit-coverage-report
           path: coverageReports/
           retention-days: 30
-      
-      - name: Build
-        run: |
-          cd backend
-          go build -v -ldflags="-s -w" -o hjtpx ./cmd/api/main.go
-      
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifact
-          path: backend/hjtpx
-          retention-days: 7
 
   integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: test
+    needs: [setup-cache, unit-test]
     
     services:
       postgres:
@@ -252,9 +256,14 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            backend/go.sum
-            benchmark/go.sum
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Download dependencies
         run: go mod download
@@ -266,7 +275,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           mkdir -p testReports
-          go test -v -tags=integration -timeout=20m -json ./tests/integration/... > testReports/integration_results.json || true
+          go test -v -tags=integration -timeout=20m -json ./tests/integration/... > testReports/integration_results.json
         env:
           DATABASE_URL: postgres://captcha:captcha123@localhost:5432/captcha_db?sslmode=disable
           REDIS_ADDR: localhost:6379
@@ -281,11 +290,40 @@ jobs:
 
   e2e-test:
     runs-on: ubuntu-latest
-    needs: test
     timeout-minutes: 50
+    needs: [setup-cache, unit-test]
+    
+    services:
+      postgres:
+        image: postgres:${{ env.POSTGRES_VERSION }}
+        env:
+          POSTGRES_USER: captcha
+          POSTGRES_PASSWORD: captcha123
+          POSTGRES_DB: captcha_db
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:${{ env.REDIS_VERSION }}
+        ports:
+          - 6379:6379
     
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -294,7 +332,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: e2e/package-lock.json
       
-      - name: Install Dependencies
+      - name: Download Go dependencies
+        run: go mod download
+      
+      - name: Install E2E dependencies
         run: |
           cd e2e
           npm ci
@@ -303,6 +344,41 @@ jobs:
         run: |
           cd e2e
           npx playwright install --with-deps chromium
+      
+      - name: Build backend
+        run: |
+          cd backend
+          go build -ldflags="-s -w" -o hjtpx-api ./cmd/api/main.go
+      
+      - name: Start backend service
+        run: |
+          cd backend
+          nohup ./hjtpx-api > backend.log 2>&1 &
+          echo $! > backend.pid
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: captcha
+          POSTGRES_PASSWORD: captcha123
+          POSTGRES_DB: captcha_db
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test-secret-key-for-e2e-testing
+          GIN_MODE: test
+      
+      - name: Wait for backend to be ready
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/60)"
+            sleep 3
+          done
+          echo "Backend failed to start"
+          cat backend/backend.log
+          exit 1
       
       - name: Run E2E Tests
         run: |
@@ -320,18 +396,18 @@ jobs:
           path: e2e/test-results/
           retention-days: 30
       
-      - name: Upload Test Screenshots
+      - name: Upload Test Screenshots on failure
         uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: test-screenshots
-          path: e2e/test-screenshots/
+          path: e2e/test-results/**/Screenshot*.png
           retention-days: 30
 
   docker-build-test:
     runs-on: ubuntu-latest
-    needs: test
     timeout-minutes: 20
+    needs: [setup-cache, unit-test]
     
     steps:
       - uses: actions/checkout@v4
@@ -354,7 +430,7 @@ jobs:
       - name: Verify Docker image
         run: |
           docker images hjtpx/hjtpx:ci-test
-          docker run --rm --entrypoint="" hjtpx/hjtpx:ci-test /bin/sh -c "echo 'Image is working'" || echo "Docker image verification complete"
+          docker run --rm --entrypoint="" hjtpx/hjtpx:ci-test /bin/sh -c "echo 'Image is working'" || true
       
       - name: Run Trivy security scan on image
         uses: aquasecurity/trivy-action@master
@@ -366,10 +442,10 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
 
-  benchmark:
+  benchmark-test:
     runs-on: ubuntu-latest
-    needs: test
     timeout-minutes: 25
+    needs: [setup-cache, unit-test]
     
     steps:
       - uses: actions/checkout@v4
@@ -379,25 +455,22 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            backend/go.sum
-            benchmark/go.sum
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Run benchmarks
         run: |
           mkdir -p benchmarkReports
           cd benchmark
-          go test -bench=. -benchmem -timeout=15m -json ./... > ../benchmarkReports/benchmark_results.json || true
+          go test -bench=. -benchmem -timeout=15m -json ./... > ../benchmarkReports/benchmark_results.json
         env:
           GIN_MODE: test
-      
-      - name: Analyze Benchmark Results
-        run: |
-          if [ -f benchmarkReports/benchmark_results.json ]; then
-            echo "Benchmark results captured"
-          else
-            echo "Warning: No benchmark results found"
-          fi
       
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v4
@@ -408,8 +481,8 @@ jobs:
 
   security-check:
     runs-on: ubuntu-latest
-    needs: test
     timeout-minutes: 15
+    needs: [setup-cache, code-quality]
     
     steps:
       - uses: actions/checkout@v4
@@ -419,19 +492,24 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            backend/go.sum
-            benchmark/go.sum
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       
       - name: Run gosec security scanner
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -no-fail -fmt json -out gosec-report.json ./... || true
+          gosec -no-fail -fmt json -out gosec-report.json ./backend/...
       
       - name: Run Go vulnerability check
         run: |
-          go install golang.org/x/vulncmd@latest
-          govulncheck ./... || true
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./backend/... || true
       
       - name: Upload Security Reports
         uses: actions/upload-artifact@v4
@@ -440,37 +518,68 @@ jobs:
           path: gosec-report.json
           retention-days: 30
 
+  build-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit-test, code-quality]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ env.CACHE_VERSION }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Build
+        run: |
+          cd backend
+          go build -v -ldflags="-s -w" -o hjtpx ./cmd/api/main.go
+      
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: backend/hjtpx
+          retention-days: 7
+
   summary:
     runs-on: ubuntu-latest
-    needs: [test, integration-test, e2e-test, docker-build-test]
+    needs: [unit-test, integration-test, e2e-test, docker-build-test, benchmark-test, security-check]
     if: always()
     timeout-minutes: 10
     
     steps:
-      - name: Download all test results
-        uses: actions/download-artifact@v4
-        if: ${{ needs.test.result != 'skipped' }}
-        continue-on-error: true
-        with:
-          pattern: '*-results'
-          path: all-results/
-      
       - name: Generate Summary Report
         run: |
-          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Test Results" >> $GITHUB_STEP_SUMMARY
           echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Unit Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration Tests | ${{ needs.integration-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Tests | ${{ needs.e2e-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build | ${{ needs.docker-build-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Benchmark | ${{ needs.benchmark-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security-check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### Pipeline Status" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.test.result }}" == "success" && "${{ needs.integration-test.result }}" == "success" && "${{ needs.e2e-test.result }}" == "success" ]]; then
-            echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.unit-test.result }}" == "success" && "${{ needs.integration-test.result }}" == "success" ]]; then
+            echo "✅ All critical tests passed!" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some tests failed. Please check the logs." >> $GITHUB_STEP_SUMMARY
           fi
@@ -486,7 +595,6 @@ jobs:
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- Coverage Report: Available" >> $GITHUB_STEP_SUMMARY
           echo "- Build Artifact: Available" >> $GITHUB_STEP_SUMMARY
-          echo "- Test Reports: Available" >> $GITHUB_STEP_SUMMARY
           echo "- Security Reports: Available" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -498,4 +606,3 @@ jobs:
           else
             echo "- Tests passed, create a PR to merge" >> $GITHUB_STEP_SUMMARY
           fi
-

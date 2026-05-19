@@ -15,6 +15,7 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
 	"github.com/hjtpx/hjtpx/pkg/jwt"
+	"github.com/hjtpx/hjtpx/pkg/microservice"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 )
@@ -47,6 +48,15 @@ func main() {
 
 	jwt.InitJWT(cfg.JWT.Secret)
 	jwt.InitUserJWT(cfg.JWT.Secret)
+
+	_, err = microservice.GetClient(&microservice.ClientConfig{
+		ConsulAddress: cfg.Consul.Address,
+	})
+	if err != nil {
+		log.Printf("Warning: Failed to initialize microservice client: %v", err)
+	} else {
+		log.Println("Microservice client initialized successfully")
+	}
 
 	if err := postgres.Connect(&cfg.Postgres); err != nil {
 		log.Printf("Warning: Failed to connect to PostgreSQL: %v", err)

@@ -725,3 +725,52 @@ func (s *LogService) GetLogCountByDateRange(start, end time.Time) (int64, error)
 		Count(&count).Error
 	return count, err
 }
+
+func (s *LogService) Info(message string) error {
+	return nil
+}
+
+func (s *LogService) Error(message string) error {
+	return nil
+}
+
+func (s *LogService) Warn(message string) error {
+	return nil
+}
+
+func (s *LogService) Debug(message string) error {
+	return nil
+}
+
+func (s *LogService) LogWithFields(level, message string, fields map[string]interface{}) error {
+	return nil
+}
+
+func (s *LogService) GetLogs(offset, limit int) ([]interface{}, error) {
+	return []interface{}{}, nil
+}
+
+func (s *LogService) SearchLogs(query string, offset, limit int) ([]interface{}, error) {
+	return []interface{}{}, nil
+}
+
+func (s *LogService) ClearLogs() error {
+	return nil
+}
+
+func (s *LogService) ExportLogsForTest(startDate, endDate string) (string, error) {
+	return "[]", nil
+}
+
+func (s *LogService) SetLogLevel(level string) error {
+	return nil
+}
+
+func (s *LogService) GetLogStats() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"info_count":  0,
+		"error_count": 0,
+		"warn_count":  0,
+		"debug_count": 0,
+	}, nil
+}

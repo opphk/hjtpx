@@ -26,7 +26,7 @@ type EnhancedAdaptiveDifficultyService struct {
 type EnhancedHistoricalDataAnalyzer struct {
 	userHistory        map[string]*EnhancedUserHistoricalData
 	analyticsDB        map[string]*EnhancedDifficultyAnalytics
-	patternRecognizer  *PatternRecognizer
+	patternRecognizer  *AdaptivePatternRecognizer
 	timeSeriesAnalyzer *TimeSeriesAnalyzer
 	cohortAnalyzer     *CohortAnalyzer
 	mu                 sync.RWMutex
@@ -95,8 +95,8 @@ type BehavioralBiometrics struct {
 	TrajectoryEntropy float64
 }
 
-// PatternRecognizer 模式识别器
-type PatternRecognizer struct {
+// AdaptivePatternRecognizer 自适应模式识别器
+type AdaptivePatternRecognizer struct {
 	patterns      map[string]*RecognizedPattern
 	learningRate  float64
 	mu            sync.RWMutex
@@ -574,7 +574,7 @@ func NewEnhancedAdaptiveDifficultyService() *EnhancedAdaptiveDifficultyService {
 		historicalAnalyzer: &EnhancedHistoricalDataAnalyzer{
 			userHistory:        make(map[string]*EnhancedUserHistoricalData),
 			analyticsDB:        make(map[string]*EnhancedDifficultyAnalytics),
-			patternRecognizer:  NewPatternRecognizer(),
+			patternRecognizer:  NewAdaptivePatternRecognizer(),
 			timeSeriesAnalyzer: NewTimeSeriesAnalyzer(),
 			cohortAnalyzer:     NewCohortAnalyzer(),
 		},
@@ -615,9 +615,9 @@ func NewEnhancedAdaptiveDifficultyService() *EnhancedAdaptiveDifficultyService {
 	return service
 }
 
-// NewPatternRecognizer 创建模式识别器
-func NewPatternRecognizer() *PatternRecognizer {
-	return &PatternRecognizer{
+// NewAdaptivePatternRecognizer 创建自适应模式识别器
+func NewAdaptivePatternRecognizer() *AdaptivePatternRecognizer {
+	return &AdaptivePatternRecognizer{
 		patterns:     make(map[string]*RecognizedPattern),
 		learningRate: 0.1,
 	}
@@ -1292,7 +1292,7 @@ func (tsa *TimeSeriesAnalyzer) addDataPoint(userID string, value float64) {
 }
 
 // recognizePattern 识别模式
-func (pr *PatternRecognizer) recognizePattern(userID string, difficulty DifficultyLevel, success bool, responseTime time.Duration) {
+func (pr *AdaptivePatternRecognizer) recognizePattern(userID string, difficulty DifficultyLevel, success bool, responseTime time.Duration) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	

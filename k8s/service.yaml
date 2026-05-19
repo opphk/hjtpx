@@ -54,6 +54,28 @@ spec:
   selector:
     app: hjtpx-app
     component: backend
+    track: stable
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hjtpx-app-canary
+  namespace: hjtpx
+  labels:
+    app: hjtpx-app
+    component: backend
+    track: canary
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: hjtpx-app
+    component: backend
+    track: canary
 ---
 apiVersion: v1
 kind: Service
@@ -74,3 +96,4 @@ spec:
   selector:
     app: hjtpx-app
     component: backend
+    track: stable

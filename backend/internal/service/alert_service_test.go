@@ -11,6 +11,7 @@ func TestNewAlertAggregator(t *testing.T) {
 	aggregator := NewAlertAggregator()
 	assert.NotNil(t, aggregator)
 	assert.NotNil(t, aggregator.AlertCounts)
+	assert.Equal(t, 5*time.Minute, aggregator.CleanupInterval)
 }
 
 func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
@@ -99,17 +100,14 @@ func TestAlertAggregator_WindowExpiry(t *testing.T) {
 	aggregator := NewAlertAggregator()
 	ruleID := uint(1)
 	aggKey := "expiry-test"
-	windowSecs := 1 // Very short window for testing
+	windowSecs := 1
 
-	// First event
 	shouldSend, count := aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5, "warning", "test message")
 	assert.True(t, shouldSend)
 	assert.Equal(t, 1, count)
 
-	// Wait for window to expire
 	time.Sleep(2 * time.Second)
 
-	// New event should reset count
 	shouldSend, count = aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5, "warning", "test message")
 	assert.True(t, shouldSend)
 	assert.Equal(t, 1, count)
@@ -122,6 +120,7 @@ func TestAlertAggregator_Cleanup(t *testing.T) {
 		RuleID:         1,
 		AggregationKey: "key1",
 		Count:          5,
+		FirstSeen:      time.Now().Add(-2 * time.Hour),
 		LastSeen:       time.Now().Add(-2 * time.Hour),
 		Severity:       "warning",
 	}
@@ -129,6 +128,7 @@ func TestAlertAggregator_Cleanup(t *testing.T) {
 		RuleID:         2,
 		AggregationKey: "key2",
 		Count:          3,
+		FirstSeen:      time.Now(),
 		LastSeen:       time.Now(),
 		Severity:       "critical",
 	}
@@ -180,12 +180,24 @@ func TestAlertService_parseCondition(t *testing.T) {
 			name:      "equality no match",
 			condition: `status == "error"`,
 			context:   map[string]interface{}{"status": "success"},
-			expected:  true, // Simple parser defaults to true for now
+			expected:  false,
 		},
 		{
 			name:      "inequality",
 			condition: `level != "info"`,
 			context:   map[string]interface{}{"level": "warning"},
+			expected:  true,
+		},
+		{
+			name:      "greater than",
+			condition: `count > 10`,
+			context:   map[string]interface{}{"count": 20},
+			expected:  true,
+		},
+		{
+			name:      "less than",
+			condition: `count < 10`,
+			context:   map[string]interface{}{"count": 5},
 			expected:  true,
 		},
 	}
@@ -195,9 +207,7 @@ func TestAlertService_parseCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := service.parseCondition(tt.condition, tt.context)
-			// With our simple parser, most cases return true
-			// This is acceptable for basic functionality
-			assert.True(t, result)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -227,7 +237,6 @@ func TestAlertService_contextToJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := service.contextToJSON(tt.context)
 			assert.NotEmpty(t, result)
-			// Should be valid JSON
 			assert.Contains(t, result, "{")
 		})
 	}
