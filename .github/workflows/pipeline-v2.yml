@@ -1,0 +1,205 @@
+name: CI/CD Pipeline v2
+
+on:
+  push:
+    branches: [main, develop, release/*]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go dependencies
+        run: |
+          cd backend
+          go mod download
+          cd ..
+
+      - name: Build backend
+        run: |
+          cd backend
+          go build -o hjtpx ./cmd/api
+          go build -o behavior_test ./cmd/behavior-test
+          go build -o benchmark ./cmd/benchmark
+          cd ..
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+
+      - name: Run tests
+        run: |
+          cd backend
+          go test -v -coverprofile=coverage.out ./...
+          cd ..
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage.out
+          flags: unittests
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} .
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.DOCKER_REGISTRY }} -u "${{ github.actor }}" --password-stdin
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }}
+          docker tag ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} \
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:latest
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:latest
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            backend/hjtpx
+            backend/coverage.out
+            frontend/dist
+
+  test-e2e:
+    name: E2E Tests
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright
+        run: |
+          cd e2e
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Run E2E tests
+        run: |
+          cd e2e
+          npm run test:ci
+        env:
+          BASE_URL: http://localhost:8080
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: e2e/test-results
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [build, test-e2e]
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.example.com
+
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          kubectl config use-context staging
+          kubectl set image deployment/hjtpx hjtpx=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }}
+          kubectl rollout status deployment/hjtpx -n staging --timeout=300s
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build, test-e2e]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+
+    steps:
+      - name: Canary deployment
+        run: |
+          echo "Starting canary deployment..."
+          kubectl config use-context production
+          
+          # 部署10%金丝雀
+          kubectl set image deployment/hjtpx hjtpx=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }}
+          kubectl patch deployment hjtpx -n production -p '{"spec":{"replicas":1}}'
+          kubectl rollout status deployment/hjtpx -n production --timeout=300s
+          
+          echo "Canary deployment complete, running smoke tests..."
+
+      - name: Smoke tests
+        run: |
+          echo "Running smoke tests..."
+          curl -f https://staging.example.com/health || exit 1
+
+      - name: Full deployment
+        if: success()
+        run: |
+          echo "Smoke tests passed, completing full deployment..."
+          kubectl patch deployment/hjtpx -n production -p '{"spec":{"replicas":5}}'
+          kubectl rollout status deployment/hjtpx -n production --timeout=300s
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          kubectl rollout undo deployment/hjtpx -n production

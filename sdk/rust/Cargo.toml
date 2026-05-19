@@ -1,0 +1,40 @@
+[package]
+name = "hjtpx-captcha"
+version = "1.0.0"
+edition = "2021"
+authors = ["HJTPX Team"]
+description = "HJTPX Captcha SDK for Rust"
+license = "MIT"
+keywords = ["captcha", "verification", "security"]
+repository = "https://github.com/hjtpx/hjtpx"
+documentation = "https://docs.rs/hjtpx-captcha"
+readme = "README.md"
+
+[dependencies]
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+async-trait = "0.1"
+tracing = "0.1"
+url = "2.5"
+anyhow = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.0"
+wiremock = "0.6"
+
+[[example]]
+name = "basic_example"
+path = "examples/basic_example.rs"
+
+[[example]]
+name = "async_example"
+path = "examples/async_example.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
