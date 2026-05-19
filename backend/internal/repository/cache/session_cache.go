@@ -306,3 +306,180 @@ func (s *SessionCache) GetRaw(ctx context.Context, key string) (string, error) {
 	}
 	return data, nil
 }
+
+const (
+	VoiceprintCaptchaSessionPrefix = "captcha:voiceprint:"
+	HapticCaptchaSessionPrefix     = "captcha:haptic:"
+)
+
+func (s *SessionCache) getVoiceprintKey(sessionID string) string {
+	return VoiceprintCaptchaSessionPrefix + sessionID
+}
+
+func (s *SessionCache) getHapticKey(sessionID string) string {
+	return HapticCaptchaSessionPrefix + sessionID
+}
+
+func (s *SessionCache) SetVoiceprint(ctx context.Context, session *models.VoiceprintCaptchaSession) error {
+	if s.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("failed to marshal voiceprint session: %w", err)
+	}
+
+	key := s.getVoiceprintKey(session.SessionID)
+	ttl := time.Until(session.ExpiredAt)
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+
+	return s.client.Set(ctx, key, string(data), ttl).Err()
+}
+
+func (s *SessionCache) GetVoiceprint(ctx context.Context, sessionID string) (*models.VoiceprintCaptchaSession, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+
+	key := s.getVoiceprintKey(sessionID)
+	data, err := s.client.Get(ctx, key).Result()
+	if err != nil {
+		if err == goredis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var session models.VoiceprintCaptchaSession
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal voiceprint session: %w", err)
+	}
+
+	return &session, nil
+}
+
+func (s *SessionCache) IncrementVoiceprintVerifyCount(ctx context.Context, sessionID string) error {
+	session, err := s.GetVoiceprint(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("voiceprint session not found")
+	}
+
+	session.VerifyCount++
+	return s.SetVoiceprint(ctx, session)
+}
+
+func (s *SessionCache) UpdateVoiceprintSimilarity(ctx context.Context, sessionID string, score float64) error {
+	session, err := s.GetVoiceprint(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("voiceprint session not found")
+	}
+
+	session.SimilarityScore = score
+	return s.SetVoiceprint(ctx, session)
+}
+
+func (s *SessionCache) MarkVoiceprintAsVerified(ctx context.Context, sessionID string) error {
+	session, err := s.GetVoiceprint(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("voiceprint session not found")
+	}
+
+	session.Status = "verified"
+	now := time.Now()
+	session.VerifiedAt = &now
+	return s.SetVoiceprint(ctx, session)
+}
+
+func (s *SessionCache) SetHaptic(ctx context.Context, session *models.HapticCaptchaSession) error {
+	if s.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("failed to marshal haptic session: %w", err)
+	}
+
+	key := s.getHapticKey(session.SessionID)
+	ttl := time.Until(session.ExpiredAt)
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+
+	return s.client.Set(ctx, key, string(data), ttl).Err()
+}
+
+func (s *SessionCache) GetHaptic(ctx context.Context, sessionID string) (*models.HapticCaptchaSession, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+
+	key := s.getHapticKey(sessionID)
+	data, err := s.client.Get(ctx, key).Result()
+	if err != nil {
+		if err == goredis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var session models.HapticCaptchaSession
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal haptic session: %w", err)
+	}
+
+	return &session, nil
+}
+
+func (s *SessionCache) IncrementHapticVerifyCount(ctx context.Context, sessionID string) error {
+	session, err := s.GetHaptic(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("haptic session not found")
+	}
+
+	session.VerifyCount++
+	return s.SetHaptic(ctx, session)
+}
+
+func (s *SessionCache) UpdateHapticMatchScore(ctx context.Context, sessionID string, score float64) error {
+	session, err := s.GetHaptic(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("haptic session not found")
+	}
+
+	session.MatchScore = score
+	return s.SetHaptic(ctx, session)
+}
+
+func (s *SessionCache) MarkHapticAsVerified(ctx context.Context, sessionID string) error {
+	session, err := s.GetHaptic(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("haptic session not found")
+	}
+
+	session.Status = "verified"
+	now := time.Now()
+	session.VerifiedAt = &now
+	return s.SetHaptic(ctx, session)
+}

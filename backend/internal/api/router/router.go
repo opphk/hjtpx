@@ -16,6 +16,18 @@ func SetupRoutes(r *gin.Engine) {
 	r.Use(middleware.CORS())
 
 	api := r.Group("/api/v1")
+
+	api.Use(middleware.AdaptiveSecurityMiddleware(middleware.MiddlewareConfig{
+		Enabled:           true,
+		ExcludePaths:      []string{"/api/v1/health"},
+		RequireAllChecks:  false,
+		BlockOnAnyThreat:  false,
+		ChallengeOnMedium: true,
+		NotifyOnBlock:     true,
+		UseHoneypots:      true,
+		UseAutoResponse:   true,
+	}))
+
 	{
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{"status": "ok"})
@@ -80,11 +92,39 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/combo/verify", handler.ComboCaptchaVerify)
 		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
 
+		// ============ v17.1 新增生物特征验证码路由 ============
+		// 声纹验证码
+		api.POST("/captcha/voiceprint/create", handler.CreateVoiceprintCaptcha)
+		api.POST("/captcha/voiceprint/verify", handler.VerifyVoiceprintCaptcha)
+		api.GET("/captcha/voiceprint/options", handler.GetVoiceprintCaptchaOptions)
+
+		// 触觉验证码
+		api.POST("/captcha/haptic/create", handler.CreateHapticCaptcha)
+		api.POST("/captcha/haptic/verify", handler.VerifyHapticCaptcha)
+		api.GET("/captcha/haptic/options", handler.GetHapticCaptchaOptions)
+		api.POST("/captcha/haptic/analyze", handler.AnalyzeHapticPattern)
+
+		// 生物特征验证码状态查询
+		api.GET("/captcha/biometric/status", handler.GetBiometricCaptchaStatus)
+
 		// ============ v17.0 新增 AI 模型 v3 路由 ============
 		api.POST("/ai/v3/smart-captcha/generate", aiModelV3Handler.GenerateSmartCaptcha)
 		api.POST("/ai/v3/risk-assessment", aiModelV3Handler.ComprehensiveRiskAssessment)
 		api.POST("/ai/v3/feedback", aiModelV3Handler.RecordFeedback)
 		api.GET("/ai/v3/stats", aiModelV3Handler.GetLearningStats)
+
+		// ============ v17.1 新增零知识证明模块路由 ============
+		api.POST("/zk/generate-proof", handler.GenerateProof)
+		api.POST("/zk/verify-proof", handler.VerifyProof)
+		api.POST("/zk/privacy-verify", handler.PrivacyVerify)
+		api.POST("/zk/mask-data", handler.MaskData)
+		api.POST("/zk/budget-check", handler.CheckBudget)
+		api.POST("/zk/batch-verify", handler.BatchVerifyProofs)
+		api.GET("/zk/stats", handler.GetStats)
+		api.POST("/zk/consent/create", handler.CreateConsent)
+		api.POST("/zk/consent/revoke", handler.RevokeConsent)
+		api.POST("/zk/rules/add", handler.AddMaskingRule)
+		api.GET("/zk/rules/list", handler.ListMaskingRules)
 
 		// ============ v17.0 新增高级加密模块路由 ============
 		api.POST("/crypto/v2/generate-key", handler.GenerateAdvancedKey)

@@ -175,3 +175,133 @@ func (r *CaptchaRepository) MarkVoiceAsVerified(sessionID string) error {
 			"verified_at": &now,
 		}).Error
 }
+
+func (r *CaptchaRepository) CreateVoiceprintSession(session *models.VoiceprintCaptchaSession) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Create(session).Error
+}
+
+func (r *CaptchaRepository) GetVoiceprintSession(sessionID string) (*models.VoiceprintCaptchaSession, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var session models.VoiceprintCaptchaSession
+	err := db.Where("session_id = ?", sessionID).First(&session).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+func (r *CaptchaRepository) IncrementVoiceprintVerifyCount(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Model(&models.VoiceprintCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Update("verify_count", gorm.Expr("verify_count + 1")).Error
+}
+
+func (r *CaptchaRepository) UpdateVoiceprintSimilarity(sessionID string, score float64) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Model(&models.VoiceprintCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Update("similarity_score", score).Error
+}
+
+func (r *CaptchaRepository) MarkVoiceprintAsVerified(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	now := time.Now()
+	return db.Model(&models.VoiceprintCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"status":           "verified",
+			"similarity_score": gorm.Expr("similarity_score"),
+			"verified_at":      &now,
+		}).Error
+}
+
+func (r *CaptchaRepository) CreateHapticSession(session *models.HapticCaptchaSession) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Create(session).Error
+}
+
+func (r *CaptchaRepository) GetHapticSession(sessionID string) (*models.HapticCaptchaSession, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var session models.HapticCaptchaSession
+	err := db.Where("session_id = ?", sessionID).First(&session).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+func (r *CaptchaRepository) IncrementHapticVerifyCount(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Model(&models.HapticCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Update("verify_count", gorm.Expr("verify_count + 1")).Error
+}
+
+func (r *CaptchaRepository) UpdateHapticMatchScore(sessionID string, score float64) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Model(&models.HapticCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Update("match_score", score).Error
+}
+
+func (r *CaptchaRepository) MarkHapticAsVerified(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	now := time.Now()
+	return db.Model(&models.HapticCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"status":      "verified",
+			"match_score": gorm.Expr("match_score"),
+			"verified_at": &now,
+		}).Error
+}
