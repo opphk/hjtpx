@@ -1994,17 +1994,6 @@ func (e *LSTMFeatureExtractor) computeTemporalRegularity(traceData *model.TraceD
 	return math.Max(0, math.Min(1, regularity))
 }
 
-func (e *LSTMFeatureExtractor) mean(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, v := range values {
-		sum += v
-	}
-	return sum / float64(len(values))
-}
-
 func (e *LSTMFeatureExtractor) variance(values []float64) float64 {
 	if len(values) < 2 {
 		return 0

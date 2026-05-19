@@ -1,19 +1,53 @@
 openapi: 3.0.0
 info:
-  title: Behavior Verification System API
+  title: HJTPX 行为验证系统 API
   description: |
-    行为验证系统API文档
+    HJTPX 行为验证系统 API 文档 v15.0
     
     提供多种验证码类型、用户认证、环境检测、风险分析等功能。
-  version: 2.0.0
+    支持滑块验证码、点击验证码、手势验证码、3D验证码、语音验证码等多种验证方式。
+    
+    ## 核心功能
+    
+    - **验证码服务**：支持多种验证码类型的生成和验证
+    - **用户认证**：提供完整的用户注册、登录、Token管理功能
+    - **环境检测**：Browser指纹检测、代理检测、自动化工具检测
+    - **风险分析**：基于行为轨迹的实时风险评分
+    - **管理后台**：完整的应用管理、日志查询、黑名单管理功能
+    
+    ## 认证方式
+    
+    所有管理接口都需要通过 Bearer Token 进行认证。
+    用户接口需要在请求头中携带 `Authorization: Bearer <token>`。
+    
+    ## 错误处理
+    
+    所有错误响应遵循统一格式，详见错误码文档。
+    
+    ## 速率限制
+    
+    - 默认限制：1000 请求/分钟
+    - 验证接口：100 请求/分钟
+    - 管理接口：100 请求/分钟
+    
+  version: 15.0.0
   contact:
-    name: API Support
-    email: support@example.com
+    name: HJTPX 技术支持
+    email: support@hjtpx.com
+    url: https://github.com/opphk/hjtpx
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://github.com/opphk/hjtpx/blob/main/LICENSE
+
 servers:
-  - url: https://api.example.com/api/v1
+  - url: https://api.hjtpx.com/api/v1
     description: 生产环境
   - url: http://localhost:8080/api/v1
     description: 开发环境
+  - url: http://localhost:8080/api/v1
+    description: 本地测试环境
+
 tags:
   - name: captcha
     description: 验证码相关接口
@@ -37,8 +71,766 @@ tags:
     description: 管理端风控规则接口
   - name: admin-analytics
     description: 高级分析接口
+  - name: health
+    description: 健康检查接口
+  - name: websocket
+    description: WebSocket实时接口
 paths:
-  /captcha/slider:
+  /health:
+    get:
+      tags:
+        - health
+      summary: 健康检查
+      description: 检查系统健康状态
+      responses:
+        '200':
+          description: 系统健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: 15.0.0
+                  services:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: up
+                      redis:
+                        type: string
+                        example: up
+  /health/detailed:
+    get:
+      tags:
+        - health
+      summary: 详细健康检查
+      description: 获取详细的系统健康状态和性能指标
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 系统健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  uptime:
+                    type: integer
+                  memory:
+                    type: object
+                  cpu:
+                    type: object
+                  database:
+                    type: object
+                  redis:
+                    type: object
+  /captcha/lianliankan:
+    get:
+      tags:
+        - captcha
+      summary: 获取连连看验证码
+      description: 生成连连看验证码，要求用户找出所有匹配的图案对
+      parameters:
+        - name: pairs
+          in: query
+          description: 配对数量
+          required: false
+          schema:
+            type: integer
+            default: 6
+            minimum: 3
+            maximum: 10
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard, expert]
+            default: medium
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                      grid:
+                        type: array
+                        items:
+                          type: array
+                          items:
+                            type: integer
+                      image_url:
+                        type: string
+                        format: byte
+                      pairs:
+                        type: integer
+                      time_limit:
+                        type: integer
+                        description: 时间限制（秒）
+  /captcha/lianliankan/verify:
+    post:
+      tags:
+        - captcha
+      summary: 验证连连看验证码
+      description: 验证用户选择的连连看图案配对是否正确
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - pairs
+              properties:
+                session_id:
+                  type: string
+                  description: 验证码会话ID
+                pairs:
+                  type: array
+                  description: 用户选择的配对列表
+                  items:
+                    type: object
+                    properties:
+                      first:
+                        type: object
+                        properties:
+                          row:
+                            type: integer
+                          col:
+                            type: integer
+                      second:
+                        type: object
+                        properties:
+                          row:
+                            type: integer
+                          col:
+                            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      remaining_pairs:
+                        type: integer
+                      time_remaining:
+                        type: integer
+  /captcha/3d:
+    get:
+      tags:
+        - captcha
+      summary: 获取3D验证码
+      description: 生成3D验证码，要求用户旋转物体到指定角度
+      parameters:
+        - name: difficulty
+          in: query
+          description: 难度级别
+          required: false
+          schema:
+            type: string
+            enum: [easy, medium, hard, expert]
+            default: medium
+        - name: model_type
+          in: query
+          description: 模型类型
+          required: false
+          schema:
+            type: string
+            enum: [cube, sphere, pyramid, cylinder]
+            default: cube
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                      model_url:
+                        type: string
+                        format: byte
+                      target_rotation:
+                        type: object
+                        properties:
+                          x:
+                            type: number
+                          y:
+                            type: number
+                          z:
+                            type: number
+                      tolerance:
+                        type: number
+                      time_limit:
+                        type: integer
+  /captcha/3d/verify:
+    post:
+      tags:
+        - captcha
+      summary: 验证3D验证码
+      description: 验证用户旋转3D物体的角度是否正确
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - rotation
+              properties:
+                session_id:
+                  type: string
+                  description: 验证码会话ID
+                rotation:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                    y:
+                      type: number
+                    z:
+                      type: number
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      accuracy:
+                        type: number
+                      time_taken:
+                        type: integer
+  /captcha/voice:
+    get:
+      tags:
+        - captcha
+      summary: 获取语音验证码
+      description: 生成语音验证码，播放数字或字母供用户识别
+      parameters:
+        - name: mode
+          in: query
+          description: 验证码模式
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, mixed]
+            default: mixed
+        - name: count
+          in: query
+          description: 字符数量
+          required: false
+          schema:
+            type: integer
+            default: 4
+            minimum: 3
+            maximum: 6
+        - name: lang
+          in: query
+          description: 语言
+          required: false
+          schema:
+            type: string
+            default: zh-CN
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                      audio_url:
+                        type: string
+                        format: byte
+                      text:
+                        type: string
+                        description: 验证码文本（仅用于测试）
+                      duration:
+                        type: integer
+                        description: 音频时长（秒）
+  /captcha/voice/verify:
+    post:
+      tags:
+        - captcha
+      summary: 验证语音验证码
+      description: 验证用户输入的语音验证码是否正确
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - answer
+              properties:
+                session_id:
+                  type: string
+                  description: 验证码会话ID
+                answer:
+                  type: string
+                  description: 用户输入的验证码答案
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      remaining_attempts:
+                        type: integer
+  /captcha/seamless:
+    post:
+      tags:
+        - captcha
+      summary: 无感验证检测
+      description: 进行无感验证，判断是否为真实用户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_fingerprint:
+                  type: string
+                  description: 设备指纹
+                behavior_data:
+                  type: object
+                  properties:
+                    mouse_movements:
+                      type: array
+                      items:
+                        type: object
+                    keyboard_events:
+                      type: array
+                      items:
+                        type: object
+                context:
+                  type: object
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      requires_captcha:
+                        type: boolean
+                      trust_level:
+                        type: string
+                        enum: [low, medium, high, very_high]
+                      risk_score:
+                        type: number
+                      confidence:
+                        type: number
+  /admin/mfa/setup:
+    post:
+      tags:
+        - admin-auth
+      summary: 配置MFA
+      description: 为当前管理员配置多因素认证
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      qr_code_url:
+                        type: string
+                      secret:
+                        type: string
+                      backup_codes:
+                        type: array
+                        items:
+                          type: string
+  /admin/mfa/verify:
+    post:
+      tags:
+        - admin-auth
+      summary: 验证MFA
+      description: 验证MFA代码
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  description: MFA验证码
+      responses:
+        '200':
+          description: 成功
+  /admin/rate-limit:
+    get:
+      tags:
+        - admin-auth
+      summary: 获取速率限制配置
+      description: 获取当前的速率限制配置和状态
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      global_limit:
+                        type: integer
+                      per_ip_limit:
+                        type: integer
+                      per_user_limit:
+                        type: integer
+                      current_usage:
+                        type: object
+    put:
+      tags:
+        - admin-auth
+      summary: 更新速率限制配置
+      description: 更新速率限制配置
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                global_limit:
+                  type: integer
+                per_ip_limit:
+                  type: integer
+                per_user_limit:
+                  type: integer
+      responses:
+        '200':
+          description: 成功
+  /admin/backup:
+    get:
+      tags:
+        - admin-auth
+      summary: 获取备份列表
+      description: 获取所有可用备份
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        size:
+                          type: integer
+                        created_at:
+                          type: string
+                          format: date-time
+                        type:
+                          type: string
+                        status:
+                          type: string
+    post:
+      tags:
+        - admin-auth
+      summary: 创建备份
+      description: 创建新的数据备份
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [full, incremental]
+                  default: full
+                include_logs:
+                  type: boolean
+                  default: false
+                compress:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      backup_id:
+                        type: string
+                      status:
+                        type: string
+  /admin/backup/{id}/restore:
+    post:
+      tags:
+        - admin-auth
+      summary: 恢复备份
+      description: 从备份恢复数据
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+  /admin/export:
+    post:
+      tags:
+        - admin-auth
+      summary: 导出数据
+      description: 导出数据到指定格式
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - format
+              properties:
+                type:
+                  type: string
+                  enum: [logs, users, applications, statistics]
+                format:
+                  type: string
+                  enum: [csv, json, xlsx]
+                filters:
+                  type: object
+                date_range:
+                  type: object
+                  properties:
+                    start:
+                      type: string
+                      format: date
+                    end:
+                      type: string
+                      format: date
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      task_id:
+                        type: string
+                      status:
+                        type: string
+                      download_url:
+                        type: string
+  /admin/config/whitelabel:
+    get:
+      tags:
+        - admin-auth
+      summary: 获取白标配置
+      description: 获取当前的白标配置
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+    put:
+      tags:
+        - admin-auth
+      summary: 更新白标配置
+      description: 更新白标配置
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brand_name:
+                  type: string
+                logo_url:
+                  type: string
+                primary_color:
+                  type: string
+                secondary_color:
+                  type: string
+                custom_css:
+                  type: string
+      responses:
+        '200':
+          description: 成功
     get:
       tags:
         - captcha
@@ -1897,13 +2689,342 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT Bearer Token认证
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API密钥认证
+    basicAuth:
+      type: http
+      scheme: basic
+      description: 基本认证（仅用于测试环境）
+  
   schemas:
     Error:
       type: object
       properties:
         code:
           type: integer
+          description: 错误码
+          example: 1001
         message:
           type: string
+          description: 错误信息
+          example: Invalid request
+        details:
+          type: string
+          description: 错误详情
+        timestamp:
+          type: string
+          format: date-time
+          description: 错误发生时间
+        request_id:
+          type: string
+          description: 请求唯一标识
+      required:
+        - code
+        - message
+    CaptchaSession:
+      type: object
+      description: 验证码会话对象
+      properties:
+        session_id:
+          type: string
+          description: 会话ID
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, verified, expired, failed]
+    CaptchaVerifyRequest:
+      type: object
+      description: 验证码验证请求
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+          description: 验证码会话ID
+        user_answer:
+          type: object
+          description: 用户答案（根据验证码类型不同而不同）
+    CaptchaVerifyResponse:
+      type: object
+      description: 验证码验证响应
+      properties:
+        success:
+          type: boolean
+          description: 是否验证通过
+        message:
+          type: string
+          description: 验证消息
+        remaining_attempts:
+          type: integer
+          description: 剩余尝试次数
+        risk_score:
+          type: number
+          format: float
+          description: 风险评分
+        token:
+          type: string
+          description: 验证成功后返回的Token
+    Pagination:
+      type: object
+      description: 分页对象
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+        total:
+          type: integer
+          description: 总记录数
+        total_pages:
+          type: integer
+          description: 总页数
+    PaginationRequest:
+      type: object
+      description: 分页请求参数
+      properties:
+        page:
+          type: integer
+          default: 1
+          minimum: 1
+        page_size:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+    DateRangeRequest:
+      type: object
+      description: 日期范围请求
+      properties:
+        start_date:
+          type: string
+          format: date
+          description: 开始日期
+        end_date:
+          type: string
+          format: date
+          description: 结束日期
+    UserProfile:
+      type: object
+      description: 用户资料
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        nickname:
+          type: string
+        avatar:
+          type: string
+        phone:
+          type: string
+        bio:
+          type: string
+        is_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Application:
+      type: object
+      description: 应用对象
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        app_key:
+          type: string
+          description: 应用Key
+        app_secret:
+          type: string
+          description: 应用密钥（仅在创建时返回）
+        status:
+          type: string
+          enum: [active, inactive]
+        domain:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    VerificationLog:
+      type: object
+      description: 验证日志
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: string
+        app_id:
+          type: integer
+        captcha_type:
+          type: string
+          enum: [slider, click, gesture, 3d, voice, lianliankan]
+        status:
+          type: string
+          enum: [success, failed]
+        risk_score:
+          type: number
+          format: float
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        fingerprint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    BlacklistEntry:
+      type: object
+      description: 黑名单条目
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [ip, fingerprint, user_id]
+        value:
+          type: string
+        reason:
+          type: string
+        created_by:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    RiskRule:
+      type: object
+      description: 风控规则
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [behavior, device, network]
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        conditions:
+          type: object
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DashboardStats:
+      type: object
+      description: 仪表盘统计数据
+      properties:
+        total_requests:
+          type: integer
+          description: 总请求数
+        successful_verifications:
+          type: integer
+          description: 成功验证数
+        failed_verifications:
+          type: integer
+          description: 失败验证数
+        blocked_requests:
+          type: integer
+          description: 拦截请求数
+        average_response_time:
+          type: number
+          format: float
+          description: 平均响应时间（毫秒）
+        current_qps:
+          type: number
+          format: float
+          description: 当前QPS
+        active_sessions:
+          type: integer
+          description: 活跃会话数
+    HealthStatus:
+      type: object
+      description: 健康状态
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        uptime:
+          type: integer
+          description: 运行时间（秒）
+        timestamp:
+          type: string
+          format: date-time
+        services:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+                latency:
+                  type: number
+            redis:
+              type: object
+              properties:
+                status:
+                  type: string
+                latency:
+                  type: number
+        system:
+          type: object
+          properties:
+            cpu_usage:
+              type: number
+            memory_usage:
+              type: number
+            disk_usage:
+              type: number
+    WebSocketMessage:
+      type: object
+      description: WebSocket消息格式
+      properties:
+        type:
+          type: string
+          enum: [metrics, alert, notification]
         data:
-          nullable: true
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+externalDocs:
+  description: 查找更多关于HJTPX的信息
+  url: https://github.com/opphk/hjtpx
+

@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hjtpx-config
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+data:
+  GIN_MODE: "release"
+  SERVER_PORT: "8080"
+  SERVER_READ_TIMEOUT: "60s"
+  SERVER_WRITE_TIMEOUT: "60s"
+  DATABASE_HOST: "hjtpx-postgres.hjtpx.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "hjtpx"
+  DATABASE_SSLMODE: "disable"
+  DATABASE_MAX_OPEN_CONNS: "25"
+  DATABASE_MAX_IDLE_CONNS: "5"
+  DATABASE_CONN_MAX_LIFETIME: "300s"
+  REDIS_HOST: "hjtpx-redis.hjtpx.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_POOL_SIZE: "10"
+  JWT_EXPIRE_HOURS: "24"
+  GOMAXPROCS: "2"
+  GOGC: "100"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  CAPTCHA_EXPIRE_MINUTES: "5"
+  CAPTCHA_MAX_ATTEMPTS: "3"
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS: "1000"
+  RATE_LIMIT_WINDOW: "60s"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hjtpx-postgres-config
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+data:
+  POSTGRES_DB: "hjtpx"
+  POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+  POSTGRES_MAX_CONNECTIONS: "100"
+  POSTGRES_SHARED_BUFFERS: "256MB"
+  POSTGRES_EFFECTIVE_CACHE_SIZE: "1GB"
+  POSTGRES_MAINTENANCE_WORK_MEM: "64MB"
+  POSTGRES_WAL_BUFFERS: "4MB"
+  POSTGRES_CHECKPOINT_COMPLETION_TARGET: "0.9"
+  POSTGRES_MAX_WAL_SIZE: "1GB"
+  POSTGRES_MIN_WAL_SIZE: "80MB"
+  POSTGRES_WORK_MEM: "4MB"
+  POSTGRES_MAX_WORKER_PROCESSES: "8"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hjtpx-secrets
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+type: Opaque
+stringData:
+  DATABASE_USER: "hjtpx"
+  DATABASE_PASSWORD: "hjtpx123456"
+  REDIS_PASSWORD: "hjtpx123456"
+  JWT_SECRET: "your-super-secret-jwt-key-min-32-characters-here"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hjtpx-service-account
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hjtpx-role
+  namespace: hjtpx
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hjtpx-role-binding
+  namespace: hjtpx
+subjects:
+  - kind: ServiceAccount
+    name: hjtpx-service-account
+    namespace: hjtpx
+roleRef:
+  kind: Role
+  name: hjtpx-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hjtpx-ingress
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  rules:
+    - host: hjtpx.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hjtpx-backend
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - hjtpx.example.com
+      secretName: hjtpx-tls-secret

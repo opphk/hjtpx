@@ -1,510 +1,496 @@
-const CACHE_NAME = 'hjtpx-v2.1.0';
-const CAPTCHA_CACHE = 'hjtpx-captcha-v2';
-const OFFLINE_VERIFICATION = 'hjtpx-offline-v2';
-const IMAGE_CACHE = 'hjtpx-images-v1';
-const FONT_CACHE = 'hjtpx-fonts-v1';
-const API_CACHE = 'hjtpx-api-v1';
+// Service Worker for HJTPX v15.0 - Enhanced PWA Support
+const CACHE_NAME = 'hjtpx-v15.0';
+const OFFLINE_URL = '/offline.html';
 
-const ASSETS_TO_CACHE = [
-  '/',
-  '/captcha',
-  '/static/manifest.json',
-  '/static/js/pwa.js',
-  '/static/js/i18n.js',
-  '/static/js/theme.js',
-  '/static/js/captcha.js',
-  '/static/js/main.js',
-  '/static/js/mobile-optimization.js',
-  '/static/js/performance-optimization.js',
-  '/static/js/gesture-handler.js',
-  '/static/js/trace.js',
-  '/static/css/captcha-ui-optimized.css'
+const STATIC_CACHE = 'hjtpx-static-v15.0';
+const DYNAMIC_CACHE = 'hjtpx-dynamic-v15.0';
+const IMAGE_CACHE = 'hjtpx-images-v15.0';
+const API_CACHE = 'hjtpx-api-v15.0';
+
+const PRECACHE_ASSETS = [
+    '/',
+    '/offline.html',
+    '/manifest.json',
+    '/static/css/mobile.css',
+    '/static/css/desktop.css',
+    '/static/js/main.js',
+    '/static/js/i18n.js',
+    '/static/js/captcha.js',
+    '/static/js/mobile-optimization.js',
+    '/static/images/logo.png',
+    '/static/images/icon-192.png',
+    '/static/images/icon-512.png',
+    '/static/images/splash.png',
+    '/translations/zh-CN.json',
+    '/translations/en-US.json',
+    '/translations/ja-JP.json',
+    '/translations/ko-KR.json'
 ];
 
-const CDN_ASSETS = [
-  'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css',
-  'https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css',
-  'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js'
-];
-
-const API_CACHE_RULES = [
-  { pattern: /\/api\/v1\/captcha\/(slider|click|rotation)/, maxAge: 3600 },
-  { pattern: /\/api\/v1\/health/, maxAge: 300 },
-  { pattern: /\/api\/v1\/captcha\/verify/, maxAge: 0 }
-];
-
-self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] 安装 Service Worker v2.1');
-  event.waitUntil(
-    Promise.all([
-      caches.open(CACHE_NAME).then((cache) => {
-        console.log('[ServiceWorker] 缓存核心资源');
-        return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-          console.warn('[ServiceWorker] 核心资源缓存失败，继续安装:', err);
-        });
-      }),
-      caches.open(CAPTCHA_CACHE).then(() => {
-        console.log('[ServiceWorker] 验证码缓存就绪');
-        return Promise.resolve();
-      }),
-      caches.open(OFFLINE_VERIFICATION).then(() => {
-        console.log('[ServiceWorker] 离线验证缓存就绪');
-        return Promise.resolve();
-      }),
-      caches.open(IMAGE_CACHE).then(() => {
-        console.log('[ServiceWorker] 图片缓存就绪');
-        return Promise.resolve();
-      }),
-      caches.open(FONT_CACHE).then(() => {
-        console.log('[ServiceWorker] 字体缓存就绪');
-        return Promise.resolve();
-      }),
-      caches.open(API_CACHE).then(() => {
-        console.log('[ServiceWorker] API缓存就绪');
-        return Promise.resolve();
-      })
-    ]).then(() => {
-      console.log('[ServiceWorker] 缓存初始化完成');
-      return self.skipWaiting();
-    })
-  );
-});
-
-self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] 激活 Service Worker v2');
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          const validCaches = [CACHE_NAME, CAPTCHA_CACHE, OFFLINE_VERIFICATION, IMAGE_CACHE];
-          if (!validCaches.includes(cacheName)) {
-            console.log('[ServiceWorker] 清理旧缓存:', cacheName);
-            return caches.delete(cacheName);
-          }
-        }).filter(Boolean)
-      );
-    }).then(() => {
-      console.log('[ServiceWorker] 缓存清理完成');
-      return self.clients.claim();
-    })
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  const request = event.request;
-
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  if (isApiRequest(request.url)) {
-    event.respondWith(handleApiRequest(request));
-    return;
-  }
-
-  if (isImageRequest(request.url)) {
-    event.respondWith(handleImageRequest(request));
-    return;
-  }
-
-  if (CDN_ASSETS.some(url => request.url === url)) {
-    event.respondWith(handleCDNRequest(request));
-    return;
-  }
-
-  if (request.url.startsWith('http')) {
-    event.respondWith(handleDefaultRequest(request));
-  }
-});
-
-function isApiRequest(url) {
-  return url.includes('/api/');
-}
-
-function isImageRequest(url) {
-  return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(url);
-}
-
-async function handleApiRequest(request) {
-  const cacheRule = API_CACHE_RULES.find(rule => rule.pattern.test(request.url));
-
-  if (request.url.includes('/api/v1/captcha/verify')) {
-    return handleVerificationRequest(request);
-  }
-
-  try {
-    const networkResponse = await fetch(request);
-
-    if (networkResponse.ok) {
-      const cache = await caches.open(CAPTCHA_CACHE);
-      cache.put(request, networkResponse.clone());
-
-      if (cacheRule && cacheRule.maxAge > 0) {
-        const headers = new Headers(networkResponse.headers);
-        headers.set('Cache-Timestamp', Date.now().toString());
-        headers.set('Cache-MaxAge', cacheRule.maxAge.toString());
-
-        const responseWithHeaders = new Response(await networkResponse.clone().blob(), {
-          status: networkResponse.status,
-          statusText: networkResponse.statusText,
-          headers: headers
-        });
-        cache.put(request, responseWithHeaders);
-      }
+const CACHE_STRATEGIES = {
+    static: {
+        pattern: /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/,
+        strategy: 'cacheFirst',
+        cacheName: STATIC_CACHE,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    },
+    images: {
+        pattern: /\.(png|jpg|jpeg|gif|svg|webp|avif)$/,
+        strategy: 'cacheFirst',
+        cacheName: IMAGE_CACHE,
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    },
+    api: {
+        pattern: /\/api\//,
+        strategy: 'networkFirst',
+        cacheName: API_CACHE,
+        maxAge: 5 * 60 * 1000,
+        networkTimeout: 3000
+    },
+    dynamic: {
+        pattern: /.*/,
+        strategy: 'staleWhileRevalidate',
+        cacheName: DYNAMIC_CACHE,
+        maxAge: 24 * 60 * 60 * 1000
     }
+};
 
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] API请求失败，尝试缓存:', error);
-    const cache = await caches.open(CAPTCHA_CACHE);
-    const cachedResponse = await cache.match(request);
+const SYNC_TAGS = {
+    backgroundSync: 'hjtpx-sync',
+    periodicSync: 'hjtpx-periodic-sync'
+};
 
-    if (cachedResponse) {
-      const cacheTimestamp = parseInt(cachedResponse.headers.get('Cache-Timestamp') || '0');
-      const maxAge = parseInt(cachedResponse.headers.get('Cache-MaxAge') || '3600') * 1000;
+installEvent();
+activateEvent();
+fetchEvent();
+syncEvent();
+messageEvent();
+periodicSyncEvent();
 
-      if (Date.now() - cacheTimestamp < maxAge) {
-        console.log('[ServiceWorker] 使用缓存的API响应');
-        return cachedResponse;
-      }
-    }
-
-    return new Response(JSON.stringify({
-      success: false,
-      error: '网络请求失败'
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-      status: 503
+function installEvent() {
+    self.addEventListener('install', (event) => {
+        console.log('[ServiceWorker] Installing...');
+        
+        event.waitUntil(
+            caches.open(STATIC_CACHE)
+                .then((cache) => {
+                    console.log('[ServiceWorker] Precaching assets');
+                    return cache.addAll(PRECACHE_ASSETS);
+                })
+                .then(() => {
+                    console.log('[ServiceWorker] Skip waiting');
+                    return self.skipWaiting();
+                })
+        );
     });
-  }
 }
 
-async function handleVerificationRequest(request) {
-  try {
-    const networkResponse = await fetch(request);
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] 验证请求失败:', error);
-    return handleOfflineVerification(request);
-  }
-}
-
-async function handleImageRequest(request) {
-  try {
-    const networkResponse = await fetch(request);
-
-    if (networkResponse.ok) {
-      const cache = await caches.open(IMAGE_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    const cache = await caches.open(IMAGE_CACHE);
-    const cachedResponse = await cache.match(request);
-
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    return new Response('', {
-      status: 503
+function activateEvent() {
+    self.addEventListener('activate', (event) => {
+        console.log('[ServiceWorker] Activating...');
+        
+        event.waitUntil(
+            caches.keys()
+                .then((cacheNames) => {
+                    return Promise.all(
+                        cacheNames
+                            .filter((cacheName) => {
+                                return ![
+                                    STATIC_CACHE,
+                                    DYNAMIC_CACHE,
+                                    IMAGE_CACHE,
+                                    API_CACHE
+                                ].includes(cacheName);
+                            })
+                            .map((cacheName) => {
+                                console.log('[ServiceWorker] Deleting old cache:', cacheName);
+                                return caches.delete(cacheName);
+                            })
+                    );
+                })
+                .then(() => {
+                    console.log('[ServiceWorker] Claiming clients');
+                    return self.clients.claim();
+                })
+        );
     });
-  }
 }
 
-async function handleCDNRequest(request) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cache = await caches.open(CACHE_NAME);
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response('CDN resource unavailable offline', {
-      status: 503
-    });
-  }
-}
-
-async function handleDefaultRequest(request) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cache = await caches.open(CACHE_NAME);
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response('您当前离线', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    });
-  }
-}
-
-async function handleOfflineVerification(request) {
-  try {
-    const cache = await caches.open(OFFLINE_VERIFICATION);
-    const storedData = await cache.match('offline-verification-data');
-
-    if (storedData) {
-      const verificationData = await storedData.json();
-      const requestClone = request.clone();
-      const requestBody = await requestClone.json().catch(() => null);
-
-      if (requestBody && verificationData.expected) {
-        const isValid = verifyOffline(requestBody, verificationData.expected);
-        return new Response(JSON.stringify({
-          success: isValid,
-          message: isValid ? '离线验证成功' : '离线验证失败',
-          offline: true,
-          verification_id: verificationData.verification_id
-        }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    }
-  } catch (e) {
-    console.error('[ServiceWorker] 离线验证错误:', e);
-  }
-
-  return new Response(JSON.stringify({
-    success: false,
-    error: '离线验证不可用',
-    offline: true
-  }), {
-    headers: { 'Content-Type': 'application/json' },
-    status: 503
-  });
-}
-
-function verifyOffline(userInput, expected) {
-  if (expected.type === 'slider') {
-    const tolerance = expected.tolerance || 5;
-    return Math.abs(userInput.x - expected.x) <= tolerance;
-  }
-
-  if (expected.type === 'click') {
-    if (!Array.isArray(userInput.clicks) || !Array.isArray(expected.points)) {
-      return false;
-    }
-    if (userInput.clicks.length !== expected.points.length) {
-      return false;
-    }
-
-    const tolerance = expected.tolerance || 15;
-    for (let i = 0; i < expected.points.length; i++) {
-      const dx = Math.abs(userInput.clicks[i].x - expected.points[i].x);
-      const dy = Math.abs(userInput.clicks[i].y - expected.points[i].y);
-      if (dx > tolerance || dy > tolerance) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  if (expected.type === 'rotation') {
-    const tolerance = expected.tolerance || 10;
-    return Math.abs(userInput.angle - expected.angle) <= tolerance;
-  }
-
-  return false;
-}
-
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'STORE_OFFLINE_DATA') {
-    console.log('[ServiceWorker] 存储离线验证数据');
-    caches.open(OFFLINE_VERIFICATION).then((cache) => {
-      cache.put('offline-verification-data', new Response(JSON.stringify({
-        expected: event.data.expected,
-        verification_id: event.data.verification_id || generateVerificationId(),
-        timestamp: Date.now()
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      }));
-    });
-  }
-
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    console.log('[ServiceWorker] 清理缓存');
-    caches.keys().then((cacheNames) => {
-      return Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-    });
-  }
-
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-
-  if (event.data && event.data.type === 'GET_CACHE_STATUS') {
-    caches.keys().then((cacheNames) => {
-      event.source.postMessage({
-        type: 'CACHE_STATUS',
-        caches: cacheNames
-      });
-    });
-  }
-});
-
-self.addEventListener('sync', (event) => {
-  console.log('[ServiceWorker] 收到后台同步事件:', event.tag);
-
-  if (event.tag === 'sync-verification') {
-    event.waitUntil(syncOfflineVerifications());
-  }
-
-  if (event.tag === 'sync-failed-requests') {
-    event.waitUntil(syncFailedRequests());
-  }
-});
-
-async function syncOfflineVerifications() {
-  try {
-    console.log('[ServiceWorker] 同步离线验证数据');
-    const cache = await caches.open(OFFLINE_VERIFICATION);
-    const storedData = await cache.match('offline-verification-data');
-
-    if (storedData) {
-      const data = await storedData.json();
-      const response = await fetch('/api/v1/captcha/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (response.ok) {
-        console.log('[ServiceWorker] 离线数据同步成功');
-        await cache.delete('offline-verification-data');
-      } else {
-        console.log('[ServiceWorker] 离线数据同步失败，将重试');
-      }
-    }
-  } catch (error) {
-    console.error('[ServiceWorker] 离线数据同步失败:', error);
-    throw error;
-  }
-}
-
-async function syncFailedRequests() {
-  try {
-    console.log('[ServiceWorker] 同步失败请求');
-    const cache = await caches.open(API_CACHE);
-    const failedRequests = await cache.match('failed-requests');
-
-    if (failedRequests) {
-      const requests = await failedRequests.json();
-
-      for (const requestData of requests) {
-        try {
-          const response = await fetch(requestData.url, {
-            method: requestData.method,
-            headers: requestData.headers,
-            body: requestData.body
-          });
-
-          if (response.ok) {
-            console.log('[ServiceWorker] 请求重试成功:', requestData.url);
-          }
-        } catch (error) {
-          console.error('[ServiceWorker] 请求重试失败:', requestData.url, error);
+function fetchEvent() {
+    self.addEventListener('fetch', (event) => {
+        const { request } = event;
+        const url = new URL(request.url);
+        
+        if (url.origin !== location.origin && !request.url.startsWith(self.location.origin)) {
+            return;
         }
-      }
-
-      await cache.delete('failed-requests');
-    }
-  } catch (error) {
-    console.error('[ServiceWorker] 同步失败请求错误:', error);
-  }
-}
-
-function storeFailedRequest(request) {
-  caches.open(API_CACHE).then(cache => {
-    return cache.match('failed-requests').then(failedRequests => {
-      let requests = [];
-
-      if (failedRequests) {
-        failedRequests.json().then(data => {
-          requests = data;
-        });
-      }
-
-      requests.push(request);
-
-      return cache.put('failed-requests', new Response(JSON.stringify(requests), {
-        headers: { 'Content-Type': 'application/json' }
-      }));
+        
+        const strategy = getCacheStrategy(request);
+        
+        switch (strategy.strategy) {
+            case 'cacheFirst':
+                event.respondWith(cacheFirst(request, strategy));
+                break;
+            case 'networkFirst':
+                event.respondWith(networkFirst(request, strategy));
+                break;
+            case 'staleWhileRevalidate':
+                event.respondWith(staleWhileRevalidate(request, strategy));
+                break;
+            default:
+                event.respondWith(networkFirst(request, strategy));
+        }
     });
-  });
 }
 
-self.addEventListener('push', (event) => {
-  if (!event.data) {
-    return;
-  }
+function getCacheStrategy(request) {
+    const url = request.url;
+    
+    for (const [name, config] of Object.entries(CACHE_STRATEGIES)) {
+        if (config.pattern.test(url)) {
+            return config;
+        }
+    }
+    
+    return CACHE_STRATEGIES.dynamic;
+}
 
-  try {
-    const data = event.data.json();
-    const options = {
-      body: data.body || '验证码相关通知',
-      icon: '/static/icons/icon-192x192.png',
-      badge: '/static/icons/badge-72x72.png',
-      vibrate: [100, 50, 100],
-      data: {
-        url: data.url || '/'
-      },
-      actions: [
-        { action: 'open', title: '查看' },
-        { action: 'close', title: '关闭' }
-      ]
-    };
+async function cacheFirst(request, strategy) {
+    const cachedResponse = await caches.match(request);
+    
+    if (cachedResponse) {
+        const cacheTime = cachedResponse.headers.get('sw-cache-time');
+        if (cacheTime) {
+            const age = Date.now() - parseInt(cacheTime);
+            if (age < strategy.maxAge) {
+                return cachedResponse;
+            }
+        } else {
+            return cachedResponse;
+        }
+    }
+    
+    try {
+        const networkResponse = await fetch(request);
+        
+        if (networkResponse.ok) {
+            const cache = await caches.open(strategy.cacheName);
+            const responseToCache = networkResponse.clone();
+            
+            const headers = new Headers(responseToCache.headers);
+            headers.append('sw-cache-time', Date.now().toString());
+            
+            const cachedResponse = new Response(await responseToCache.blob(), {
+                status: responseToCache.status,
+                statusText: responseToCache.statusText,
+                headers: headers
+            });
+            
+            cache.put(request, cachedResponse);
+        }
+        
+        return networkResponse;
+    } catch (error) {
+        console.error('[ServiceWorker] Cache first fetch failed:', error);
+        return caches.match(OFFLINE_URL);
+    }
+}
 
-    event.waitUntil(
-      self.registration.showNotification(data.title || '墨盾验证', options)
+async function networkFirst(request, strategy) {
+    const cache = await caches.open(strategy.cacheName);
+    
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), strategy.networkTimeout || 3000);
+        
+        const networkResponse = await fetch(request, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (networkResponse.ok) {
+            const responseToCache = networkResponse.clone();
+            
+            const headers = new Headers(responseToCache.headers);
+            headers.append('sw-cache-time', Date.now().toString());
+            
+            const cachedResponse = new Response(await responseToCache.blob(), {
+                status: responseToCache.status,
+                statusText: responseToCache.statusText,
+                headers: headers
+            });
+            
+            cache.put(request, cachedResponse);
+        }
+        
+        return networkResponse;
+    } catch (error) {
+        console.log('[ServiceWorker] Network first, falling back to cache');
+        
+        const cachedResponse = await cache.match(request);
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+        
+        return caches.match(OFFLINE_URL);
+    }
+}
+
+async function staleWhileRevalidate(request, strategy) {
+    const cache = await caches.open(strategy.cacheName);
+    const cachedResponse = await cache.match(request);
+    
+    const fetchPromise = fetch(request)
+        .then((networkResponse) => {
+            if (networkResponse.ok) {
+                const headers = new Headers(networkResponse.headers);
+                headers.append('sw-cache-time', Date.now().toString());
+                
+                const cachedResponse = new Response(await networkResponse.blob(), {
+                    status: networkResponse.status,
+                    statusText: networkResponse.statusText,
+                    headers: headers
+                });
+                
+                cache.put(request, cachedResponse);
+            }
+            return networkResponse;
+        })
+        .catch((error) => {
+            console.error('[ServiceWorker] Stale while revalidate fetch failed:', error);
+        });
+    
+    return cachedResponse || fetchPromise;
+}
+
+function syncEvent() {
+    self.addEventListener('sync', (event) => {
+        console.log('[ServiceWorker] Sync event:', event.tag);
+        
+        if (event.tag === SYNC_TAGS.backgroundSync) {
+            event.waitUntil(doBackgroundSync());
+        }
+    });
+}
+
+async function doBackgroundSync() {
+    try {
+        const cache = await caches.open(DYNAMIC_CACHE);
+        const requests = await cache.keys();
+        
+        const pendingRequests = requests.filter((request) => {
+            return request.method === 'POST' || request.method === 'PUT';
+        });
+        
+        for (const request of pendingRequests) {
+            try {
+                const response = await fetch(request);
+                if (response.ok) {
+                    await cache.delete(request);
+                    console.log('[ServiceWorker] Synced request:', request.url);
+                }
+            } catch (error) {
+                console.error('[ServiceWorker] Sync failed for:', request.url, error);
+            }
+        }
+        
+        notifyClients({ type: 'SYNC_COMPLETE' });
+    } catch (error) {
+        console.error('[ServiceWorker] Background sync failed:', error);
+    }
+}
+
+function messageEvent() {
+    self.addEventListener('message', (event) => {
+        console.log('[ServiceWorker] Message received:', event.data);
+        
+        switch (event.data.type) {
+            case 'SKIP_WAITING':
+                self.skipWaiting();
+                break;
+                
+            case 'GET_VERSION':
+                event.ports[0].postMessage({ version: CACHE_NAME });
+                break;
+                
+            case 'CLEAR_CACHE':
+                event.waitUntil(clearAllCaches());
+                event.ports[0].postMessage({ success: true });
+                break;
+                
+            case 'CACHE_URLS':
+                event.waitUntil(cacheUrls(event.data.urls));
+                event.ports[0].postMessage({ success: true });
+                break;
+                
+            case 'GET_CACHE_SIZE':
+                event.waitUntil(getCacheSize().then((size) => {
+                    event.ports[0].postMessage({ size: size });
+                }));
+                break;
+                
+            case 'PREFETCH':
+                event.waitUntil(prefetchAssets(event.data.assets));
+                event.ports[0].postMessage({ success: true });
+                break;
+        }
+    });
+}
+
+async function clearAllCaches() {
+    const cacheNames = await caches.keys();
+    return Promise.all(
+        cacheNames.map((cacheName) => caches.delete(cacheName))
     );
-  } catch (error) {
-    console.error('[ServiceWorker] 推送通知解析失败:', error);
-  }
-});
+}
+
+async function cacheUrls(urls) {
+    const cache = await caches.open(DYNAMIC_CACHE);
+    
+    for (const url of urls) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                await cache.put(url, response);
+            }
+        } catch (error) {
+            console.error('[ServiceWorker] Failed to cache URL:', url, error);
+        }
+    }
+}
+
+async function getCacheSize() {
+    const cacheNames = await caches.keys();
+    let totalSize = 0;
+    
+    for (const cacheName of cacheNames) {
+        const cache = await caches.open(cacheName);
+        const requests = await cache.keys();
+        
+        for (const request of requests) {
+            const response = await cache.match(request);
+            if (response) {
+                const blob = await response.clone().blob();
+                totalSize += blob.size;
+            }
+        }
+    }
+    
+    return totalSize;
+}
+
+async function prefetchAssets(assets) {
+    const cache = await caches.open(STATIC_CACHE);
+    
+    for (const asset of assets) {
+        try {
+            const response = await fetch(asset);
+            if (response.ok) {
+                await cache.put(asset, response);
+                console.log('[ServiceWorker] Prefetched:', asset);
+            }
+        } catch (error) {
+            console.error('[ServiceWorker] Prefetch failed:', asset, error);
+        }
+    }
+}
+
+function periodicSyncEvent() {
+    if ('periodicSync' in self.registration) {
+        self.addEventListener('periodicsync', (event) => {
+            console.log('[ServiceWorker] Periodic sync:', event.tag);
+            
+            if (event.tag === SYNC_TAGS.periodicSync) {
+                event.waitUntil(doPeriodicSync());
+            }
+        });
+    }
+}
+
+async function doPeriodicSync() {
+    try {
+        const cache = await caches.open(API_CACHE);
+        
+        const requests = await cache.keys();
+        
+        for (const request of requests) {
+            try {
+                const response = await fetch(request);
+                if (response.ok) {
+                    await cache.put(request, response);
+                }
+            } catch (error) {
+                console.error('[ServiceWorker] Periodic sync refresh failed:', error);
+            }
+        }
+        
+        console.log('[ServiceWorker] Periodic sync completed');
+    } catch (error) {
+        console.error('[ServiceWorker] Periodic sync failed:', error);
+    }
+}
+
+async function notifyClients(message) {
+    const clients = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true
+    });
+    
+    for (const client of clients) {
+        client.postMessage(message);
+    }
+}
 
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  if (event.action === 'close') {
-    return;
-  }
-
-  const url = event.notification.data?.url || '/';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url === url && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(url);
-      }
-    })
-  );
+    console.log('[ServiceWorker] Notification clicked:', event);
+    
+    event.notification.close();
+    
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then((clientList) => {
+                for (const client of clientList) {
+                    if (client.url.includes(self.location.origin) && 'focus' in client) {
+                        return client.focus();
+                    }
+                }
+                
+                if (self.clients.openWindow) {
+                    return self.clients.openWindow('/');
+                }
+            })
+    );
 });
 
 self.addEventListener('notificationclose', (event) => {
-  console.log('[ServiceWorker] 通知被关闭');
+    console.log('[ServiceWorker] Notification closed');
 });
 
-function generateVerificationId() {
-  return 'offline_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
+self.addEventListener('push', (event) => {
+    console.log('[ServiceWorker] Push received');
+    
+    let data = {
+        title: 'HJTPX',
+        body: 'You have a new notification',
+        icon: '/static/images/icon-192.png',
+        badge: '/static/images/badge.png'
+    };
+    
+    if (event.data) {
+        try {
+            data = { ...data, ...event.data.json() };
+        } catch (error) {
+            data.body = event.data.text();
+        }
+    }
+    
+    event.waitUntil(
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: data.icon,
+            badge: data.badge,
+            tag: data.tag || 'hjtpx-notification',
+            data: data.data
+        })
+    );
+});
+
+console.log('[ServiceWorker] Script loaded');

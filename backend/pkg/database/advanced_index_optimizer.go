@@ -388,8 +388,8 @@ func (o *AdvancedIndexOptimizer) GetOptimizationPlanDetailed() (map[string]inter
 func (o *AdvancedIndexOptimizer) getIndexStatistics() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	var totalIndexes, totalSize int64
-	var unusedIndexes, redundantIndexes int
+	var totalIndexes int64
+	var unusedIndexes int
 
 	o.db.Raw("SELECT COUNT(*) FROM pg_stat_user_indexes").Scan(&totalIndexes)
 	o.db.Raw("SELECT COUNT(*) FROM pg_stat_user_indexes WHERE idx_scan = 0").Scan(&unusedIndexes)

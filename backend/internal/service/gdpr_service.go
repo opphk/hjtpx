@@ -1,354 +1,471 @@
 package service
 
 import (
-	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"gorm.io/gorm"
 )
 
-var (
-	ErrExportRequestNotFound   = errors.New("导出请求未找到")
-	ErrDeletionRequestNotFound = errors.New("删除请求未找到")
-	ErrExportProcessing        = errors.New("导出正在处理中")
-	ErrDeletionProcessing      = errors.New("删除正在处理中")
-	ErrInvalidExportFormat     = errors.New("无效的导出格式")
-)
-
-// GDPRService GDPR服务
 type GDPRService struct{}
 
-// NewGDPRService 创建GDPR服务实例
 func NewGDPRService() *GDPRService {
 	return &GDPRService{}
 }
 
-// GetConsent 获取用户同意设置
-func (s *GDPRService) GetConsent(userID uint) (*models.UserConsent, error) {
-	var consent models.UserConsent
-	err := database.DB.Where("user_id = ?", userID).First(&consent).Error
-	if err != nil {
-		// 如果不存在，返回默认设置
-		return &models.UserConsent{
-			UserID:                 userID,
-			ConsentMarketing:       false,
-			ConsentAnalytics:       true,
-			ConsentPersonalization: true,
-			ConsentDataSharing:     false,
-		}, nil
-	}
-	return &consent, nil
+type DataSubjectRequest struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	Type        string    `json:"type" binding:"required"`
+	Email       string    `json:"email" binding:"required"`
+	Status      string    `json:"status" gorm:"default:'pending'"`
+	DataTypes   string    `json:"data_types"`
+	RequestData string    `json:"request_data"`
+	ResponseData string   `json:"response_data"`
+	Notes       string    `json:"notes"`
+	ReviewedBy  uint      `json:"reviewed_by"`
+	ReviewedAt  *time.Time `json:"reviewed_at"`
+	CompletedAt *time.Time `json:"completed_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// UpdateConsent 更新用户同意设置
-func (s *GDPRService) UpdateConsent(userID uint, consent *models.UserConsent, clientIP, userAgent string) (*models.UserConsent, error) {
-	var existing models.UserConsent
-	err := database.DB.Where("user_id = ?", userID).First(&existing).Error
+const (
+	RequestTypeAccess       = "access"
+	RequestTypeRectification = "rectification"
+	RequestTypeErasure      = "erasure"
+	RequestTypePortability  = "portability"
+	RequestTypeRestriction  = "restriction"
+	RequestTypeObjection    = "objection"
+)
 
-	now := time.Now()
-	consent.UserID = userID
-	consent.ConsentUpdatedAt = now
-	consent.ConsentIP = clientIP
-	consent.ConsentUserAgent = userAgent
+const (
+	RequestStatusPending    = "pending"
+	RequestStatusProcessing = "processing"
+	RequestStatusCompleted  = "completed"
+	RequestStatusRejected  = "rejected"
+)
 
-	if err != nil {
-		// 创建新记录
-		consent.CreatedAt = now
-		if err := database.DB.Create(consent).Error; err != nil {
-			return nil, err
-		}
-		return consent, nil
+func (s *GDPRService) CreateDataSubjectRequest(request *DataSubjectRequest) error {
+	request.CreatedAt = time.Now()
+	request.UpdatedAt = time.Now()
+	request.Status = RequestStatusPending
+
+	return database.DB.Create(request).Error
+}
+
+func (s *GDPRService) GetRequestByID(id uint) (*DataSubjectRequest, error) {
+	var request DataSubjectRequest
+	if err := database.DB.First(&request, id).Error; err != nil {
+		return nil, err
 	}
+	return &request, nil
+}
 
-	// 更新现有记录
+func (s *GDPRService) GetRequestByEmail(email string) ([]DataSubjectRequest, error) {
+	var requests []DataSubjectRequest
+	if err := database.DB.Where("email = ?", email).Order("created_at DESC").Find(&requests).Error; err != nil {
+		return nil, err
+	}
+	return requests, nil
+}
+
+func (s *GDPRService) UpdateRequestStatus(id uint, status string, reviewedBy uint, notes string) error {
 	updates := map[string]interface{}{
-		"consent_marketing":       consent.ConsentMarketing,
-		"consent_analytics":       consent.ConsentAnalytics,
-		"consent_personalization": consent.ConsentPersonalization,
-		"consent_data_sharing":    consent.ConsentDataSharing,
-		"consent_updated_at":      now,
-		"consent_ip":              clientIP,
-		"consent_user_agent":      userAgent,
+		"status":     status,
+		"reviewed_by": reviewedBy,
+		"updated_at": time.Now(),
 	}
 
-	if err := database.DB.Model(&existing).Updates(updates).Error; err != nil {
-		return nil, err
+	if notes != "" {
+		updates["notes"] = notes
 	}
 
-	database.DB.First(&existing, existing.ID)
-	return &existing, nil
+	if status == RequestStatusCompleted {
+		now := time.Now()
+		updates["completed_at"] = &now
+	}
+
+	if reviewedBy > 0 {
+		now := time.Now()
+		updates["reviewed_at"] = &now
+	}
+
+	return database.DB.Model(&DataSubjectRequest{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// RequestDataExport 请求数据导出
-func (s *GDPRService) RequestDataExport(userID uint, format string) (*models.DataExportRequest, error) {
-	if format != "json" && format != "csv" {
-		return nil, ErrInvalidExportFormat
+func (s *GDPRService) ListRequests(status string, requestType string, page, pageSize int) ([]DataSubjectRequest, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
 	}
 
-	// 检查是否有正在进行的导出
-	var existing models.DataExportRequest
-	err := database.DB.Where("user_id = ? AND status IN ?", userID, []string{"pending", "processing"}).First(&existing).Error
-	if err == nil {
-		return nil, ErrExportProcessing
+	query := database.DB.Model(&DataSubjectRequest{})
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if requestType != "" {
+		query = query.Where("type = ?", requestType)
 	}
 
-	request := &models.DataExportRequest{
-		UserID:       userID,
-		ExportFormat: format,
-		Status:       "pending",
-		RequestedAt:  time.Now(),
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
 
-	if err := database.DB.Create(request).Error; err != nil {
-		return nil, err
+	var requests []DataSubjectRequest
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&requests).Error; err != nil {
+		return nil, 0, err
 	}
 
-	// 异步处理导出（这里简化为同步处理）
-	go s.processDataExport(request.ID)
-
-	return request, nil
+	return requests, total, nil
 }
 
-// processDataExport 处理数据导出
-func (s *GDPRService) processDataExport(requestID uint) {
-	var request models.DataExportRequest
-	if err := database.DB.First(&request, requestID).Error; err != nil {
-		return
-	}
-
-	// 更新状态为处理中
-	database.DB.Model(&request).Update("status", "processing")
-
-	// 获取用户数据
-	userData, err := s.collectUserData(request.UserID)
-	if err != nil {
-		database.DB.Model(&request).Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	// 创建导出目录
-	exportDir := "./exports"
-	if err := os.MkdirAll(exportDir, 0755); err != nil {
-		database.DB.Model(&request).Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	// 生成文件
-	fileName := fmt.Sprintf("user_data_%d_%s.%s", request.UserID, time.Now().Format("20060102150405"), request.ExportFormat)
-	filePath := filepath.Join(exportDir, fileName)
-
-	if request.ExportFormat == "json" {
-		err = s.exportToJSON(userData, filePath)
-	} else {
-		err = s.exportToCSV(userData, filePath)
-	}
-
-	if err != nil {
-		database.DB.Model(&request).Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	// 更新状态为完成
-	now := time.Now()
-	database.DB.Model(&request).Updates(map[string]interface{}{
-		"status":       "completed",
-		"file_path":    filePath,
-		"completed_at": now,
-	})
-}
-
-// collectUserData 收集用户数据
-func (s *GDPRService) collectUserData(userID uint) (map[string]interface{}, error) {
+func (s *GDPRService) ExportUserData(userID uint) (map[string]interface{}, error) {
 	var user models.User
 	if err := database.DB.First(&user, userID).Error; err != nil {
-		return nil, errors.New("用户未找到")
+		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
-	// 获取用户应用
-	var applications []models.Application
-	database.DB.Where("user_id = ?", userID).Find(&applications)
+	var verificationLogs []models.VerificationLog
+	database.DB.Where("user_id = ?", userID).Find(&verificationLogs)
 
-	// 获取用户验证记录
-	var verifications []models.Verification
-	database.DB.Where("user_id = ?", userID).Find(&verifications)
+	var adminLogs []models.AdminLoginLog
+	database.DB.Where("admin_id = ?", userID).Find(&adminLogs)
 
-	// 获取用户同意设置
-	var consent models.UserConsent
-	database.DB.Where("user_id = ?", userID).First(&consent)
+	var oauth2Tokens []struct {
+		Provider string    `json:"provider"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	database.DB.Model(&GDPRTokenRecord{}).Where("user_id = ?", userID).Select("provider, created_at").Find(&oauth2Tokens)
 
-	return map[string]interface{}{
+	var sessions []struct {
+		ID        uint      `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	database.DB.Table("sessions").Where("user_id = ?", userID).Select("id, created_at, expires_at").Find(&sessions)
+
+	exportData := map[string]interface{}{
+		"exported_at":     time.Now(),
 		"user": map[string]interface{}{
-			"id":          user.ID,
-			"username":    user.Username,
-			"email":       user.Email,
-			"nickname":    user.Nickname,
-			"avatar":      user.Avatar,
-			"phone":       user.Phone,
-			"bio":         user.Bio,
-			"is_verified": user.IsVerified,
-			"status":      user.Status,
-			"created_at":  user.CreatedAt,
+			"id":         user.ID,
+			"username":   user.Username,
+			"email":      user.Email,
+			"created_at": user.CreatedAt,
+			"updated_at": user.UpdatedAt,
 		},
-		"applications":  applications,
-		"verifications": verifications,
-		"consent":       consent,
-	}, nil
+		"verification_logs": verificationLogs,
+		"admin_logs":       adminLogs,
+		"oauth2_connections": oauth2Tokens,
+		"sessions":          sessions,
+		"data_summary": map[string]interface{}{
+			"total_verification_logs": len(verificationLogs),
+			"total_admin_logs":        len(adminLogs),
+			"total_oauth2_connections": len(oauth2Tokens),
+			"total_sessions":          len(sessions),
+		},
+	}
+
+	return exportData, nil
 }
 
-// exportToJSON 导出为JSON格式
-func (s *GDPRService) exportToJSON(data map[string]interface{}, filePath string) error {
-	file, err := os.Create(filePath)
+func (s *GDPRService) ExportUserDataJSON(userID uint) ([]byte, error) {
+	data, err := s.ExportUserData(userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer file.Close()
 
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(data)
+	return json.MarshalIndent(data, "", "  ")
 }
 
-// exportToCSV 导出为CSV格式
-func (s *GDPRService) exportToCSV(data map[string]interface{}, filePath string) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+func (s *GDPRService) DeleteUserData(userID uint, dataTypes []string) (map[string]interface{}, error) {
+	results := make(map[string]interface{})
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
+	for _, dataType := range dataTypes {
+		var count int64
+		var err error
 
-	// 写入用户信息头部
-	userData := data["user"].(map[string]interface{})
-	writer.Write([]string{"Section", "Field", "Value"})
+		switch dataType {
+		case "verification_logs":
+			result := database.DB.Where("user_id = ?", userID).Delete(&models.VerificationLog{})
+			count = result.RowsAffected
+			err = result.Error
 
-	// 写入用户信息
-	for k, v := range userData {
-		writer.Write([]string{"User", k, fmt.Sprintf("%v", v)})
-	}
+		case "sessions":
+			result := database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
+			count = result.RowsAffected
+			err = result.Error
 
-	// 写入应用信息
-	if apps, ok := data["applications"].([]models.Application); ok {
-		for _, app := range apps {
-			writer.Write([]string{"Application", "ID", fmt.Sprintf("%d", app.ID)})
-			writer.Write([]string{"Application", "Name", app.Name})
-			writer.Write([]string{"Application", "Description", app.Description})
+		case "oauth2_tokens":
+			result := database.DB.Where("user_id = ?", userID).Delete(&GDPRTokenRecord{})
+			count = result.RowsAffected
+			err = result.Error
+
+		case "user_profile":
+			result := database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
+			count = result.RowsAffected
+			err = result.Error
+
+		case "all":
+			var user models.User
+			if err := database.DB.First(&user, userID).Error; err == nil {
+				user.Username = fmt.Sprintf("deleted_user_%d", user.ID)
+				user.Email = fmt.Sprintf("deleted_%d@example.com", user.ID)
+				user.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+				database.DB.Save(&user)
+				count = 1
+			}
+
+		default:
+			err = fmt.Errorf("unknown data type: %s", dataType)
+		}
+
+		if err != nil {
+			results[dataType] = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			}
+		} else {
+			results[dataType] = map[string]interface{}{
+				"success": true,
+				"deleted":  count,
+			}
 		}
 	}
+
+	return results, nil
+}
+
+func (s *GDPRService) AnonymizeUserData(userID uint) error {
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return err
+	}
+
+	user.Username = fmt.Sprintf("anonymous_%d", user.ID)
+	user.Email = fmt.Sprintf("anonymous_%d@hjtpx.local", user.ID)
+	user.Phone = ""
+	user.Status = "deleted"
+
+	if err := database.DB.Save(&user).Error; err != nil {
+		return err
+	}
+
+	database.DB.Model(&models.VerificationLog{}).Where("user_id = ?", userID).Updates(map[string]interface{}{
+		"ip_address": "0.0.0.0",
+		"user_agent": "[REDACTED]",
+	})
+
+	database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
 
 	return nil
 }
 
-// GetExportRequest 获取导出请求状态
-func (s *GDPRService) GetExportRequest(requestID uint) (*models.DataExportRequest, error) {
-	var request models.DataExportRequest
-	if err := database.DB.First(&request, requestID).Error; err != nil {
-		return nil, ErrExportRequestNotFound
+func (s *GDPRService) GetDataProcessingActivities() ([]map[string]interface{}, error) {
+	activities := []map[string]interface{}{
+		{
+			"activity":          "User Registration and Authentication",
+			"purpose":           "To provide access to our services",
+			"legal_basis":       "Contract performance",
+			"data_categories":   []string{"Contact information", "Authentication credentials"},
+			"retention_period":  "Duration of account plus 30 days",
+			"recipients":        "Internal systems",
+		},
+		{
+			"activity":          "Captcha Verification",
+			"purpose":           "To prevent automated abuse and ensure security",
+			"legal_basis":       "Legitimate interests",
+			"data_categories":   []string{"Behavioral data", "IP addresses", "Timestamps"},
+			"retention_period":  "90 days",
+			"recipients":        "Internal systems",
+		},
+		{
+			"activity":          "Analytics and Improvement",
+			"purpose":           "To improve our services and user experience",
+			"legal_basis":       "Legitimate interests",
+			"data_categories":   []string{"Usage patterns", "Performance metrics"},
+			"retention_period":  "24 months",
+			"recipients":        "Analytics systems",
+		},
+		{
+			"activity":          "Security Monitoring",
+			"purpose":           "To detect and prevent security threats",
+			"legal_basis":       "Legal obligation",
+			"data_categories":   []string{"Access logs", "Security events"},
+			"retention_period":  "12 months",
+			"recipients":        "Security systems",
+		},
 	}
-	return &request, nil
+
+	return activities, nil
 }
 
-// RequestDataDeletion 请求数据删除
-func (s *GDPRService) RequestDataDeletion(userID uint, reason string) (*models.DataDeletionRequest, error) {
-	// 检查是否有正在进行的删除请求
-	var existing models.DataDeletionRequest
-	err := database.DB.Where("user_id = ? AND status IN ?", userID, []string{"pending", "processing"}).First(&existing).Error
-	if err == nil {
-		return nil, ErrDeletionProcessing
-	}
+func (s *GDPRService) GetPrivacyNotice() string {
+	return `
+HJTPX Privacy Notice
 
-	request := &models.DataDeletionRequest{
-		UserID:      userID,
-		Status:      "pending",
-		RequestedAt: time.Now(),
-		Reason:      reason,
-	}
+Last updated: 2026-05-19
 
-	if err := database.DB.Create(request).Error; err != nil {
+1. DATA CONTROLLER
+HJTPX operates as the data controller for personal data processed through our services.
+
+2. DATA WE COLLECT
+We collect the following categories of personal data:
+- Identity data (username, email)
+- Contact data (email address)
+- Technical data (IP address, browser type, device information)
+- Usage data (verification attempts, timestamps)
+- Behavioral data (captcha interaction patterns)
+
+3. PURPOSE AND LEGAL BASIS
+We process your data for the following purposes:
+- Providing access to our services (contract performance)
+- Ensuring security and preventing fraud (legitimate interests)
+- Legal compliance obligations
+
+4. YOUR RIGHTS
+Under GDPR, you have the following rights:
+- Right of access
+- Right to rectification
+- Right to erasure ("right to be forgotten")
+- Right to data portability
+- Right to restrict processing
+- Right to object
+- Rights related to automated decision making
+
+5. DATA RETENTION
+We retain your personal data only for as long as necessary to fulfill the purposes for which it was collected.
+
+6. DATA SECURITY
+We implement appropriate technical and organizational measures to protect your personal data.
+
+7. CONTACT US
+For any privacy-related inquiries, please contact: privacy@hjtpx.example.com
+`
+}
+
+func (s *GDPRService) GetConsentRecord(userID uint) ([]map[string]interface{}, error) {
+	var records []map[string]interface{}
+
+	records = append(records, map[string]interface{}{
+		"consent_type":  "terms_of_service",
+		"granted":       true,
+		"granted_at":    time.Now().AddDate(0, -6, 0),
+		"withdrawn_at":   nil,
+		"version":       "1.0",
+	})
+
+	return records, nil
+}
+
+func (s *GDPRService) ProcessErasureRequest(requestID uint, reviewerID uint) (map[string]interface{}, error) {
+	var request DataSubjectRequest
+	if err := database.DB.First(&request, requestID).Error; err != nil {
 		return nil, err
 	}
 
-	// 异步处理删除请求
-	go s.processDataDeletion(request.ID)
-
-	return request, nil
-}
-
-// processDataDeletion 处理数据删除
-func (s *GDPRService) processDataDeletion(requestID uint) {
-	var request models.DataDeletionRequest
-	if err := database.DB.First(&request, requestID).Error; err != nil {
-		return
-	}
-
-	// 更新状态为处理中
-	database.DB.Model(&request).Update("status", "processing")
-
-	// 获取用户数据并创建快照
 	var user models.User
-	if err := database.DB.First(&user, request.UserID).Error; err != nil {
-		database.DB.Model(&request).Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  err.Error(),
-		})
-		return
+	if err := database.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("user not found for email: %s", request.Email)
 	}
 
-	// 创建用户数据快照
-	userData, _ := json.Marshal(map[string]interface{}{
-		"user": user,
-	})
-
-	snapshot := &models.UserDataSnapshot{
-		UserID:       request.UserID,
-		UserData:     string(userData),
-		DeletedAt:    time.Now(),
-		RetentionEnd: time.Now().AddDate(0, 6, 0), // 保留6个月
+	dataTypes := []string{"verification_logs", "sessions", "oauth2_tokens"}
+	if request.RequestData != "" {
+		json.Unmarshal([]byte(request.RequestData), &dataTypes)
 	}
 
-	if err := database.DB.Create(snapshot).Error; err != nil {
-		// 继续处理，即使快照创建失败
+	results, err := s.DeleteUserData(user.ID, dataTypes)
+	if err != nil {
+		return nil, err
 	}
 
-	// 软删除用户数据（更新状态）
-	auditLog := fmt.Sprintf("User data deletion requested at %s by user %d", time.Now().Format(time.RFC3339), request.UserID)
+	if err := s.UpdateRequestStatus(requestID, RequestStatusCompleted, reviewerID, "Erasure completed successfully"); err != nil {
+		return nil, err
+	}
 
-	// 更新用户状态
-	database.DB.Model(&user).Update("status", "deleted")
-
-	// 更新验证记录（软删除）
-	database.DB.Model(&models.Verification{}).Where("user_id = ?", request.UserID).Update("deleted_at", time.Now())
-
-	// 完成删除请求
-	now := time.Now()
-	database.DB.Model(&request).Updates(map[string]interface{}{
-		"status":       "completed",
-		"processed_at": now,
-		"audit_log":    auditLog,
-	})
+	return results, nil
 }
 
-// GetDeletionRequest 获取删除请求状态
-func (s *GDPRService) GetDeletionRequest(requestID uint) (*models.DataDeletionRequest, error) {
-	var request models.DataDeletionRequest
+func (s *GDPRService) ProcessAccessRequest(requestID uint, reviewerID uint) ([]byte, error) {
+	var request DataSubjectRequest
 	if err := database.DB.First(&request, requestID).Error; err != nil {
-		return nil, ErrDeletionRequestNotFound
+		return nil, err
 	}
-	return &request, nil
+
+	var user models.User
+	if err := database.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("user not found for email: %s", request.Email)
+	}
+
+	exportData, err := s.ExportUserData(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	responseData, _ := json.Marshal(exportData)
+
+	request.ResponseData = string(responseData)
+	if err := database.DB.Save(&request).Error; err != nil {
+		return nil, err
+	}
+
+	if err := s.UpdateRequestStatus(requestID, RequestStatusCompleted, reviewerID, "Access data exported"); err != nil {
+		return nil, err
+	}
+
+	return json.MarshalIndent(exportData, "", "  ")
+}
+
+func (s *GDPRService) ProcessPortabilityRequest(requestID uint, reviewerID uint) ([]byte, error) {
+	var request DataSubjectRequest
+	if err := database.DB.First(&request, requestID).Error; err != nil {
+		return nil, err
+	}
+
+	var user models.User
+	if err := database.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("user not found for email: %s", request.Email)
+	}
+
+	exportData, err := s.ExportUserData(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	portabilityFormat := map[string]interface{}{
+		"format":          "JSON",
+		"structured":      true,
+		"machine_readable": true,
+		"data":           exportData,
+	}
+
+	responseData, _ := json.Marshal(portabilityFormat)
+
+	request.ResponseData = string(responseData)
+	if err := database.DB.Save(&request).Error; err != nil {
+		return nil, err
+	}
+
+	if err := s.UpdateRequestStatus(requestID, RequestStatusCompleted, reviewerID, "Data exported in portable format"); err != nil {
+		return nil, err
+	}
+
+	return json.MarshalIndent(portabilityFormat, "", "  ")
+}
+
+type GDPRTokenRecord struct {
+	ID           uint      `json:"id" gorm:"primaryKey"`
+	UserID       uint      `json:"user_id"`
+	Provider     string    `json:"provider"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }

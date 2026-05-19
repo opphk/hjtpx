@@ -1,0 +1,128 @@
+{
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": {
+      "console": {
+        "enabled": true,
+        "colorize": true
+      },
+      "file": {
+        "enabled": true,
+        "filename": "/var/log/hjtpx/app.log",
+        "max_size": "100MB",
+        "max_backups": 10,
+        "max_age": 30,
+        "compress": true
+      },
+      "syslog": {
+        "enabled": false,
+        "network": "udp",
+        "address": "localhost:514"
+      }
+    },
+    "fields": {
+      "service": "hjtpx",
+      "version": "15.0.0",
+      "environment": "production"
+    },
+    "sampling": {
+      "enabled": true,
+      "initial": 100,
+      "thereafter": 100
+    }
+  },
+  "loki": {
+    "enabled": true,
+    "url": "http://loki:3100/loki/api/v1/push",
+    "tenant_id": "hjtpx",
+    "batch_size": 102400,
+    "batch_timeout": "10s",
+    "timeout": "30s",
+    "retries": 3
+  },
+  "filters": {
+    "sensitive_data": {
+      "enabled": true,
+      "patterns": [
+        "password",
+        "token",
+        "secret",
+        "api_key",
+        "Authorization"
+      ],
+      "replacement": "[REDACTED]"
+    }
+  },
+  "levels": {
+    "debug": {
+      "enabled": false,
+      "only_in_debug_mode": true
+    },
+    "info": {
+      "enabled": true
+    },
+    "warn": {
+      "enabled": true
+    },
+    "error": {
+      "enabled": true
+    }
+  },
+  "log_types": {
+    "access_log": {
+      "enabled": true,
+      "fields": [
+        "timestamp",
+        "method",
+        "path",
+        "status_code",
+        "response_time",
+        "ip",
+        "user_agent"
+      ]
+    },
+    "error_log": {
+      "enabled": true,
+      "fields": [
+        "timestamp",
+        "level",
+        "message",
+        "stack_trace",
+        "request_id"
+      ]
+    },
+    "security_log": {
+      "enabled": true,
+      "fields": [
+        "timestamp",
+        "event_type",
+        "user_id",
+        "ip",
+        "risk_score",
+        "action"
+      ]
+    },
+    "performance_log": {
+      "enabled": true,
+      "fields": [
+        "timestamp",
+        "operation",
+        "duration",
+        "memory_usage",
+        "goroutines"
+      ]
+    }
+  },
+  "query": {
+    "max_results": 1000,
+    "default_timeout": "60s",
+    "recent_window": "24h",
+    "archive_after": "7d"
+  },
+  "visualization": {
+    "enabled": true,
+    "dashboard_url": "http://grafana:3000",
+    "refresh_interval": "30s"
+  }
+}

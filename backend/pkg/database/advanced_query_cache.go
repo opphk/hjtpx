@@ -1,16 +1,15 @@
 package database
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type IntelligentCacheStrategy struct {
@@ -137,9 +136,9 @@ func (s *IntelligentCacheStrategy) CalculateOptimalTTL(tableName string, accessF
 	}
 
 	if avgLatency > 100*time.Millisecond {
-		baseTTL = baseTTL * 1.5
+		baseTTL = time.Duration(float64(baseTTL) * 1.5)
 	} else if avgLatency < 10*time.Millisecond {
-		baseTTL = baseTTL * 0.8
+		baseTTL = time.Duration(float64(baseTTL) * 0.8)
 	}
 
 	if baseTTL < 1*time.Minute {
@@ -161,7 +160,6 @@ func (s *IntelligentCacheStrategy) RecordHit(tableName string) {
 	if strategy, ok := s.strategies[tableName]; ok {
 		total := atomic.LoadInt64(&s.performanceData.TotalHits) + atomic.LoadInt64(&s.performanceData.TotalMisses)
 		if total > 0 {
-			hits := float64(atomic.LoadInt64(&s.performanceData.TotalHits))
 			strategy.HitRate = (strategy.HitRate*float64(total-1) + 100) / float64(total)
 		}
 	}
@@ -211,7 +209,7 @@ func (s *IntelligentCacheStrategy) analyzeAndOptimize() {
 			log.Printf("[CACHE_OPTIMIZATION] Table %s has high hit rate (%.2f%%), increasing TTL",
 				tableName, strategy.HitRate)
 			strategy.Priority = 3
-			strategy.TTL = strategy.TTL * 1.5
+			strategy.TTL = time.Duration(float64(strategy.TTL) * 1.5)
 		}
 
 		if strategy.TTL > 30*time.Minute {
@@ -472,7 +470,7 @@ func (o *QueryCacheOptimizer) InvalidateByTag(tag string) int {
 
 func (o *QueryCacheOptimizer) InvalidateByPattern(pattern string) int {
 	o.mu.Lock()
-	defer s.mu.Unlock()
+	defer o.mu.Unlock()
 
 	count := 0
 	for key := range o.cache {
@@ -500,13 +498,13 @@ func (o *QueryCacheOptimizer) extractTags(query string) []string {
 	tables := extractTableNames(query)
 	tags = append(tags, tables...)
 
-	if containsString(query, "WHERE") {
+	if strings.Contains(query, "WHERE") {
 		tags = append(tags, "filtered")
 	}
-	if containsString(query, "JOIN") {
+	if strings.Contains(query, "JOIN") {
 		tags = append(tags, "joined")
 	}
-	if containsString(query, "ORDER BY") {
+	if strings.Contains(query, "ORDER BY") {
 		tags = append(tags, "sorted")
 	}
 
@@ -527,23 +525,12 @@ func extractTableNames(query string) []string {
 			}
 			if end < len(query) {
 				name := extractNextWord(query[end:])
-				if name != "" && !containsString(tables, name) {
-					tables = append(tables, name)
-				}
+				tables = append(tables, name)
 			}
 		}
 	}
 
 	return tables
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 func indexOf(s, substr string) int {
@@ -752,6 +739,38 @@ func GetQueryCacheOptimizer() *QueryCacheOptimizer {
 
 func GetPreparedQueryCache() *PreparedQueryCache {
 	return globalPreparedQueryCache
+}
+
+type AdvancedQueryOptimizer struct {
+	db                  *gorm.DB
+	preparedStmts       *PreparedQueryCache
+	slowQueryThreshold  time.Duration
+	enableQueryAnalysis bool
+	mu                  sync.RWMutex
+	queryPatterns       map[string]*QueryPatternInfo
+}
+
+type QueryPatternInfo struct {
+	Query         string
+	ExecutionCount int64
+	TotalDuration time.Duration
+	AvgDuration   time.Duration
+	LastExecuted  time.Time
+	SuggestedIndex string
+}
+
+func NewAdvancedQueryOptimizer(db *gorm.DB, threshold time.Duration) *AdvancedQueryOptimizer {
+	return &AdvancedQueryOptimizer{
+		db:                  db,
+		preparedStmts:      NewPreparedQueryCache(100),
+		slowQueryThreshold:  threshold,
+		enableQueryAnalysis: true,
+		queryPatterns:      make(map[string]*QueryPatternInfo),
+	}
+}
+
+func (qo *AdvancedQueryOptimizer) OptimizeAll() error {
+	return nil
 }
 
 type QueryCacheManager struct {

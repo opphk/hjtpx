@@ -11,15 +11,6 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-type ConsistencyMode int
-
-const (
-	ConsistencyModeEventual ConsistencyMode = iota
-	ConsistencyModeCausal
-	ConsistencyModeSequential
-	ConsistencyModeStrict
-)
-
 type UpdateStrategy int
 
 const (

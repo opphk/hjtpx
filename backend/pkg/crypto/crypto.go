@@ -1029,3 +1029,300 @@ func VerifyDualSignature(message []byte, primarySig, secondarySig string, primar
 
 	return primaryValid, secondaryValid, nil
 }
+
+// KeyManager 密钥管理器
+type KeyManager struct {
+	masterKey        []byte
+	keyEncryptionKey []byte
+	keyVersion       int
+	keys             map[int][]byte
+	mu               sync.RWMutex
+}
+
+// NewKeyManager 创建新的密钥管理器
+func NewKeyManager(masterKey []byte) (*KeyManager, error) {
+	if len(masterKey) < 32 {
+		return nil, errors.New("master key must be at least 32 bytes")
+	}
+
+	km := &KeyManager{
+		masterKey:        masterKey,
+		keyEncryptionKey: masterKey[:32],
+		keyVersion:       1,
+		keys:             make(map[int][]byte),
+	}
+
+	initialKey, _ := secureRandomBytes(32)
+	km.keys[1] = initialKey
+
+	return km, nil
+}
+
+// GenerateDataEncryptionKey 生成数据加密密钥
+func (km *KeyManager) GenerateDataEncryptionKey() ([]byte, error) {
+	return secureRandomBytes(32)
+}
+
+// EncryptKey 加密密钥
+func (km *KeyManager) EncryptKey(keyToEncrypt []byte) ([]byte, string, error) {
+	km.mu.RLock()
+	currentKey := km.keys[km.keyVersion]
+	km.mu.RUnlock()
+
+	encrypted, err := AESEncrypt(keyToEncrypt, currentKey)
+	if err != nil {
+		return nil, "", err
+	}
+
+	versionStr := fmt.Sprintf("v%d", km.keyVersion)
+	return encrypted, versionStr, nil
+}
+
+// DecryptKey 解密密钥
+func (km *KeyManager) DecryptKey(encryptedKey []byte, versionStr string) ([]byte, error) {
+	var version int
+	fmt.Sscanf(versionStr, "v%d", &version)
+
+	km.mu.RLock()
+	key, ok := km.keys[version]
+	km.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("key version %d not found", version)
+	}
+
+	return AESDecrypt(encryptedKey, key)
+}
+
+// RotateKeys 轮换密钥
+func (km *KeyManager) RotateKeys() error {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+
+	newKey, err := secureRandomBytes(32)
+	if err != nil {
+		return err
+	}
+
+	km.keyVersion++
+	km.keys[km.keyVersion] = newKey
+
+	if len(km.keys) > 10 {
+		oldestVersion := km.keyVersion - 10
+		delete(km.keys, oldestVersion)
+	}
+
+	return nil
+}
+
+// GetCurrentVersion 获取当前密钥版本
+func (km *KeyManager) GetCurrentVersion() int {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+	return km.keyVersion
+}
+
+// HashSensitiveDataFields 批量哈希敏感数据字段
+func HashSensitiveDataFields(data map[string]string, fields []string, secret string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range data {
+		result[k] = v
+	}
+
+	for _, field := range fields {
+		if value, exists := data[field]; exists {
+			h := hmac.New(sha256.New, []byte(secret))
+			h.Write([]byte(value))
+			result[field+"_hash"] = hex.EncodeToString(h.Sum(nil))
+		}
+	}
+
+	return result
+}
+
+// GenerateOneTimePassword 生成一次性密码
+func GenerateOneTimePassword(length int) (string, error) {
+	if length < 6 || length > 10 {
+		length = 6
+	}
+
+	digits := "0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		b, err := secureRandomBytes(1)
+		if err != nil {
+			return "", err
+		}
+		result[i] = digits[int(b[0])%len(digits)]
+	}
+
+	return string(result), nil
+}
+
+// VerifyOneTimePassword 验证一次性密码
+func VerifyOneTimePassword(otp, expected string) bool {
+	if len(otp) != len(expected) {
+		return false
+	}
+	return ConstantTimeCompare(otp, expected)
+}
+
+// GenerateSecureRecoveryCode 生成恢复码
+func GenerateSecureRecoveryCode(count, length int) ([]string, error) {
+	codes := make([]string, count)
+	for i := 0; i < count; i++ {
+		code, err := GenerateRandomString(length)
+		if err != nil {
+			return nil, err
+		}
+		codes[i] = code
+	}
+	return codes, nil
+}
+
+// HashRecoveryCodes 哈希恢复码用于存储
+func HashRecoveryCodes(codes []string) ([]string, error) {
+	hashedCodes := make([]string, len(codes))
+	for i, code := range codes {
+		h := sha256.New()
+		h.Write([]byte(code))
+		hashedCodes[i] = hex.EncodeToString(h.Sum(nil))
+	}
+	return hashedCodes, nil
+}
+
+// VerifyRecoveryCode 验证恢复码
+func VerifyRecoveryCode(code string, hashedCodes []string) bool {
+	h := sha256.New()
+	h.Write([]byte(code))
+	hash := hex.EncodeToString(h.Sum(nil))
+
+	for _, hashedCode := range hashedCodes {
+		if ConstantTimeCompare(hash, hashedCode) {
+			return true
+		}
+	}
+	return false
+}
+
+// EncryptedField 用于加密字段的结构
+type EncryptedField struct {
+	Ciphertext  string `json:"ciphertext"`
+	Version     string `json:"version"`
+	Algorithm   string `json:"algorithm"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+// EncryptField 加密字段
+func EncryptField(plaintext string, km *KeyManager) (*EncryptedField, error) {
+	encrypted, version, err := km.EncryptKey([]byte(plaintext))
+	if err != nil {
+		return nil, err
+	}
+
+	return &EncryptedField{
+		Ciphertext: base64.StdEncoding.EncodeToString(encrypted),
+		Version:    version,
+		Algorithm:  "AES-256-GCM",
+		CreatedAt:  time.Now().Unix(),
+	}, nil
+}
+
+// DecryptField 解密字段
+func DecryptField(field *EncryptedField, km *KeyManager) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(field.Ciphertext)
+	if err != nil {
+		return "", err
+	}
+
+	plaintext, err := km.DecryptKey(ciphertext, field.Version)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
+
+// FieldEncryptionConfig 字段加密配置
+type FieldEncryptionConfig struct {
+	Fields    []string `json:"fields"`
+	Algorithm string   `json:"algorithm"`
+	Enabled   bool     `json:"enabled"`
+}
+
+// EncryptStructuredData 加密结构化数据
+func EncryptStructuredData(data map[string]interface{}, config *FieldEncryptionConfig, km *KeyManager) (map[string]interface{}, error) {
+	if config == nil || !config.Enabled {
+		return data, nil
+	}
+
+	result := make(map[string]interface{})
+	for k, v := range data {
+		result[k] = v
+	}
+
+	for _, field := range config.Fields {
+		if value, exists := data[field]; exists {
+			if strValue, ok := value.(string); ok {
+				encrypted, err := EncryptField(strValue, km)
+				if err != nil {
+					return nil, err
+				}
+				result[field] = encrypted
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// DecryptStructuredData 解密结构化数据
+func DecryptStructuredData(data map[string]interface{}, config *FieldEncryptionConfig, km *KeyManager) (map[string]interface{}, error) {
+	if config == nil || !config.Enabled {
+		return data, nil
+	}
+
+	result := make(map[string]interface{})
+	for k, v := range data {
+		if encryptedField, ok := v.(*EncryptedField); ok {
+			decrypted, err := DecryptField(encryptedField, km)
+			if err != nil {
+				return nil, err
+			}
+			result[k] = decrypted
+		} else {
+			result[k] = v
+		}
+	}
+
+	return result, nil
+}
+
+// SecureMemoryCompare 安全内存比较
+func SecureMemoryCompare(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	var result byte
+	for i := 0; i < len(a); i++ {
+		result |= a[i] ^ b[i]
+	}
+
+	return result == 0
+}
+
+// ZeroMemory 将内存区域置零
+func ZeroMemory(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
+// SecureDelete 安全删除敏感数据
+func SecureDelete(data *[]byte) {
+	if data != nil && *data != nil {
+		ZeroMemory(*data)
+		*data = nil
+	}
+}

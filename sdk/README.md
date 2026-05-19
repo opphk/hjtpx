@@ -1,579 +1,389 @@
-# SDK 使用指南
+# HJTPX Mobile SDK v15.0
 
-本文档详细介绍了各语言SDK的功能、使用方法和最佳实践。
+## 概述
 
-## 目录
+HJTPX Mobile SDK 提供跨平台的验证码集成方案，支持 iOS 和 Android 原生开发，以及 Flutter 和 React Native 跨平台框架。
 
-- [Go SDK](#go-sdk)
-- [Python SDK](#python-sdk)
-- [JavaScript SDK](#javascript-sdk)
-- [Node.js SDK](#nodejs-sdk)
-- [最佳实践](#最佳实践)
+## iOS SDK
 
----
+### 快速开始
 
-## Go SDK
+#### 1. 使用 CocoaPods 安装
 
-### 安装
-
-```bash
-go get github.com/hjtpx/hjtpx/sdk/go
+```ruby
+pod 'HjtpxSDK', :git => 'https://github.com/your-org/hjtpx-ios-sdk.git', :tag => 'v15.0'
 ```
 
-### 基础用法
+#### 2. 配置 AppDelegate
 
-```go
-package main
+```swift
+import HjtpxSDK
 
-import (
-    "fmt"
-    "github.com/hjtpx/hjtpx/sdk/go"
-)
-
-func main() {
-    client := captcha.NewClient("http://localhost:8080")
-
-    captcha, err := client.GetSliderCaptcha(320, 160, 8)
-    if err != nil {
-        panic(err)
-    }
-
-    fmt.Printf("Session ID: %s\n", captcha.SessionID)
-
-    verifyReq := &captcha.VerifyCaptchaRequest{
-        SessionID: captcha.SessionID,
-        X:         185,
-        Y:         captcha.SecretY,
-    }
-
-    result, err := client.VerifyCaptcha(verifyReq)
-    if err != nil {
-        panic(err)
-    }
-
-    fmt.Printf("Success: %v\n", result.Success)
+func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    
+    HjtpxSDK.shared.configure(
+        apiKey: "YOUR_API_KEY",
+        apiSecret: "YOUR_API_SECRET",
+        serverURL: "https://your-server.com"
+    )
+    
+    HjtpxSDK.shared.setLanguage(.english)
+    HjtpxSDK.shared.setTimeout(30.0)
+    
+    return true
 }
 ```
 
-### 批量请求
+#### 3. 显示验证码
 
-```go
-batchClient := captcha.NewBatchClient(client, 5, 3)
+```swift
+import UIKit
+import HjtpxSDK
 
-requests := []captcha.BatchRequest{
-    {
-        SessionID: "session-001",
-        Type:      "slider",
-        Data: map[string]interface{}{"x": 150, "y": 50},
-    },
-    {
-        SessionID: "session-002",
-        Type:      "slider",
-        Data: map[string]interface{}{"x": 180, "y": 60},
-    },
-}
-
-ctx := context.Background()
-result := batchClient.BatchVerify(ctx, requests)
-
-fmt.Printf("成功: %d/%d\n", result.Successful, result.Total)
-```
-
-### API批量验证
-
-```go
-req := &captcha.BatchVerifyRequest{
-    Items: []captcha.BatchVerifyItem{
-        {
-            Index:     0,
-            SessionID: "session-001",
-            Type:      "slider",
-            X:         150,
-            Y:         50,
-        },
-    },
-}
-
-resp, err := client.BatchVerifyCaptcha(req)
-if err != nil {
-    log.Fatal(err)
-}
-
-for _, item := range resp.Results {
-    fmt.Printf("索引 %d: %s\n", item.Index, item.Message)
-}
-```
-
-### 错误处理
-
-```go
-verifyReq := &captcha.VerifyCaptchaRequest{
-    SessionID: "invalid-session",
-    X:         100,
-}
-
-result, err := client.VerifyCaptcha(verifyReq)
-if err != nil {
-    if captcha.IsSDKError(err) {
-        code := captcha.GetSDKErrorCode(err)
-        switch code {
-        case captcha.StatusUnauthorized:
-            fmt.Println("API密钥无效")
-        case captcha.StatusRateLimited:
-            fmt.Println("请求频率超限")
-        case captcha.StatusInternalError:
-            fmt.Println("服务器错误")
-        }
-
-        if captcha.IsRetryableError(err) {
-            delay := captcha.RetryStrategy(1, 100*time.Millisecond)
-            fmt.Printf("建议等待: %v\n", delay)
-        }
-    }
-}
-```
-
-### 完整示例
-
-参考 [examples/batch_examples.go](examples/batch_examples.go)
-
----
-
-## Python SDK
-
-### 安装
-
-```bash
-pip install aiohttp
-```
-
-### 同步客户端
-
-```python
-from captcha import CaptchaClient, TrajectoryPoint
-
-client = CaptchaClient(
-    base_url="http://localhost:8080",
-    api_key="your-api-key",
-    timeout=30,
-    max_retries=3,
-)
-
-slider = client.get_slider_captcha(width=320, height=160, tolerance=8)
-print(f"Session ID: {slider.session_id}")
-
-result = client.verify_slider_captcha(
-    session_id=slider.session_id,
-    x=185,
-    y=slider.secret_y,
-    trajectory=[
-        TrajectoryPoint(x=0, y=slider.secret_y, t=1000),
-        TrajectoryPoint(x=50, y=slider.secret_y + 2, t=1200),
-        TrajectoryPoint(x=185, y=slider.secret_y, t=1500),
-    ]
-)
-
-print(f"Success: {result.success}")
-```
-
-### 异步客户端
-
-```python
-import asyncio
-from async_captcha import AsyncCaptchaClient
-
-async def main():
-    async with AsyncCaptchaClient(
-        base_url="http://localhost:8080",
-        timeout=30,
-        max_retries=3,
-    ) as client:
-        slider = await client.get_slider_captcha()
-        print(f"Session ID: {slider.session_id}")
-
-        result = await client.verify_slider_captcha(
-            session_id=slider.session_id,
-            x=185,
-            y=slider.secret_y,
+class LoginViewController: UIViewController, HjtpxCaptchaViewDelegate {
+    
+    private var captchaView: HjtpxCaptchaView!
+    
+    func showCaptcha() {
+        let rect = CGRect(x: 20, y: 100, width: view.bounds.width - 40, height: 300)
+        captchaView = HjtpxCaptchaView(
+            frame: rect,
+            captchaType: .slider,
+            appId: "YOUR_APP_ID",
+            serverURL: "https://your-server.com"
         )
-        print(f"Success: {result.success}")
-
-asyncio.run(main())
+        captchaView.delegate = self
+        captchaView.setLanguage(HjtpxSDK.shared.language)
+        view.addSubview(captchaView)
+        captchaView.loadCaptcha()
+    }
+    
+    // MARK: - HjtpxCaptchaViewDelegate
+    
+    func captchaViewDidVerify(_ captchaView: HjtpxCaptchaView, verifyId: String) {
+        print("Verification successful: \(verifyId)")
+        captchaView.removeFromSuperview()
+        // 验证成功后继续登录流程
+    }
+    
+    func captchaViewDidFail(_ captchaView: HjtpxCaptchaView, error: Error) {
+        print("Verification failed: \(error.localizedDescription)")
+        // 处理验证失败
+    }
+    
+    func captchaViewDidClose(_ captchaView: HjtpxCaptchaView) {
+        captchaView.removeFromSuperview()
+    }
+}
 ```
 
-### 异步批量请求
+#### 4. 手动验证
 
-```python
-import asyncio
-from async_captcha import AsyncCaptchaClient
+```swift
+HjtpxSDK.shared.verifyCaptcha(
+    captchaId: "captcha_id_from_view",
+    token: "user_token",
+    appId: "YOUR_APP_ID"
+) { result in
+    switch result {
+    case .success(let response):
+        if response.success {
+            print("Verify ID: \(response.verifyId ?? "")")
+        }
+    case .failure(let error):
+        print("Error: \(error)")
+    }
+}
+```
 
-async def batch_example():
-    async with AsyncCaptchaClient("http://localhost:8080") as client:
-        tasks = [
-            client.get_slider_captcha()
-            for _ in range(10)
-        ]
-        sliders = await asyncio.gather(*tasks)
+### 支持的验证码类型
 
-        verify_tasks = [
-            client.verify_slider_captcha(
-                session_id=slider.session_id,
-                x=150,
-                y=slider.secret_y,
+- `CaptchaType.slider` - 滑块验证码
+- `CaptchaType.click` - 点选验证码
+- `CaptchaType.rotate` - 旋转验证码
+- `CaptchaType.voice` - 语音验证码
+- `CaptchaType.gesture` - 手势验证码
+
+### 支持的语言
+
+```swift
+enum Language: String {
+    case chineseSimplified = "zh-CN"
+    case chineseTraditional = "zh-TW"
+    case english = "en-US"
+    case japanese = "ja-JP"
+    case korean = "ko-KR"
+    case french = "fr-FR"
+    case german = "de-DE"
+    case spanish = "es-ES"
+    case portuguese = "pt-BR"
+    case russian = "ru-RU"
+    case arabic = "ar-SA"
+    case hindi = "hi-IN"
+    case vietnamese = "vi-VN"
+    case thai = "th-TH"
+    case indonesian = "id-ID"
+}
+```
+
+## Android SDK
+
+### 快速开始
+
+#### 1. 添加依赖
+
+```gradle
+dependencies {
+    implementation 'com.hjtpx:captcha:15.0.0'
+}
+```
+
+#### 2. 初始化 SDK
+
+```kotlin
+class MyApplication : Application() {
+    
+    override fun onCreate() {
+        super.onCreate()
+        
+        HjtpxClient.getInstance(this).apply {
+            configure(
+                apiKey = "YOUR_API_KEY",
+                apiSecret = "YOUR_API_SECRET",
+                serverUrl = "https://your-server.com"
             )
-            for slider in sliders
-        ]
-
-        results = await asyncio.gather(*verify_tasks, return_exceptions=True)
-
-        success_count = sum(
-            1 for r in results
-            if not isinstance(r, Exception) and r.success
-        )
-
-        print(f"成功率: {success_count}/{len(results)}")
-
-asyncio.run(batch_example())
-```
-
-### 完整示例
-
-参考 [async_examples.py](async_examples.py)
-
----
-
-## JavaScript SDK
-
-### 浏览器端使用
-
-```html
-<script src="captcha.js"></script>
-<script>
-    const client = new CaptchaClient('http://localhost:8080', {
-        apiKey: 'your-api-key',
-        timeout: 30000,
-        retryCount: 3,
-    });
-
-    async function initCaptcha() {
-        try {
-            const slider = await client.getSliderCaptcha({
-                width: 320,
-                height: 160,
-                tolerance: 8
-            });
-            console.log('Session ID:', slider.session_id);
-
-            const result = await client.verifySliderCaptcha({
-                session_id: slider.session_id,
-                x: 185,
-                y: slider.secret_y,
-            });
-            console.log('Success:', result.success);
-        } catch (error) {
-            console.error('Error:', error);
+            setLanguage("en-US")
+            setTimeout(30)
         }
     }
-
-    initCaptcha();
-</script>
+}
 ```
 
-### 使用UI组件
+#### 3. 显示验证码
 
-```html
-<div id="captcha-container"></div>
+```kotlin
+class LoginActivity : AppCompatActivity(), CaptchaViewDelegate {
+    
+    private lateinit var captchaView: CaptchaView
+    
+    private fun showCaptcha() {
+        captchaView = CaptchaView(this).apply {
+            layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                400.dp
+            )
+            setDelegate(this@LoginActivity)
+            setCaptchaType(CaptchaType.SLIDER)
+            setAppId("YOUR_APP_ID")
+            setServerUrl("https://your-server.com")
+            setLanguage("en-US")
+        }
+        
+        container.addView(captchaView)
+        captchaView.loadCaptcha()
+    }
+    
+    override fun onCaptchaVerified(view: CaptchaView, verifyId: String) {
+        Log.d(TAG, "Verification successful: $verifyId")
+        container.removeView(view)
+        // 验证成功后继续登录流程
+    }
+    
+    override fun onCaptchaError(view: CaptchaView, error: String) {
+        Log.e(TAG, "Verification failed: $error")
+        // 处理验证失败
+    }
+    
+    override fun onCaptchaClose(view: CaptchaView) {
+        container.removeView(view)
+    }
+}
+```
 
-<script src="captcha.js"></script>
-<script>
-    const client = new CaptchaClient('http://localhost:8080');
+#### 4. 手动验证
 
-    const widget = new SliderCaptchaWidget(
-        document.getElementById('captcha-container'),
-        client,
-        {
-            width: 320,
-            height: 160,
-            tolerance: 8,
-            onSuccess: (result) => {
-                console.log('Verification successful:', result);
-                document.getElementById('token').value = result.token;
-            },
-            onFail: (message) => {
-                console.error('Verification failed:', message);
+```kotlin
+HjtpxClient.getInstance(this).verifyCaptcha(
+    captchaId = "captcha_id_from_view",
+    token = "user_token",
+    appId = "YOUR_APP_ID",
+    callback = object : VerifyCallback {
+        override fun onSuccess(response: VerifyResponse) {
+            if (response.success) {
+                Log.d(TAG, "Verify ID: ${response.verifyId}")
             }
         }
-    );
-</script>
-```
-
-### 批量请求
-
-```javascript
-const { client, batchVerify } = createBatchClient('http://localhost:8080', {
-    concurrency: 5,
-    maxRetries: 3,
-});
-
-const requests = [
-    { session_id: 'session-1', type: 'slider', x: 150 },
-    { session_id: 'session-2', type: 'slider', x: 180 },
-    { session_id: 'session-3', type: 'slider', x: 200 },
-];
-
-const results = await batchVerify(requests);
-console.log(`成功率: ${(results.successRate * 100).toFixed(1)}%`);
-```
-
-### 错误处理
-
-```javascript
-try {
-    const result = await client.verifySliderCaptcha({
-        session_id: 'invalid-session',
-        x: 100,
-    });
-} catch (error) {
-    if (error instanceof CaptchaAPIError) {
-        console.error(`API错误 ${error.code}: ${error.message}`);
-    } else if (error instanceof CaptchaTimeoutError) {
-        console.error('请求超时');
-    } else if (error instanceof CaptchaNetworkError) {
-        console.error('网络错误');
+        
+        override fun onError(error: Exception) {
+            Log.e(TAG, "Error: ${error.message}")
+        }
     }
-}
+)
 ```
 
-### TypeScript类型
-
-```typescript
-import { SliderCaptchaResponse, VerifyCaptchaResponse } from './types';
-
-const client = new CaptchaClient('http://localhost:8080');
-
-const slider: SliderCaptchaResponse = await client.getSliderCaptcha({
-    width: 320,
-    height: 160,
-});
-
-const result: VerifyCaptchaResponse = await client.verifySliderCaptcha({
-    session_id: slider.session_id,
-    x: 185,
-    y: slider.secret_y,
-});
-```
-
-### 完整示例
-
-参考 [examples/browser-examples.js](examples/browser-examples.js)
-
----
-
-## Node.js SDK
-
-Node.js SDK位于 `sdk/nodejs/` 目录，支持完整的TypeScript类型定义。
+## React Native SDK
 
 ### 安装
 
 ```bash
-npm install @hjtpx/captcha-sdk
+npm install @hjtpx/react-native-captcha
 ```
 
-### 基础用法
-
-```typescript
-import { CaptchaClient, SliderCaptchaResponse } from '@hjtpx/captcha-sdk';
-
-const client = new CaptchaClient({
-    baseUrl: 'http://localhost:8080',
-    apiKey: 'your-api-key',
-    timeout: 30000,
-    retryConfig: {
-        maxRetries: 3,
-        initialDelayMs: 100,
-    },
-});
-
-const slider: SliderCaptchaResponse = await client.getSliderCaptcha({
-    width: 320,
-    height: 160,
-    tolerance: 8,
-});
-
-const result = await client.verifySliderCaptcha({
-    session_id: slider.session_id,
-    x: 185,
-    y: slider.secret_y,
-    trajectory: [
-        { x: 0, y: slider.secret_y, t: 1000 },
-        { x: 50, y: slider.secret_y + 2, t: 1200 },
-        { x: 185, y: slider.secret_y, t: 1500 },
-    ],
-});
-
-console.log('Success:', result.success);
-```
-
----
-
-## 最佳实践
-
-### 1. 超时配置
-
-根据实际网络环境调整超时时间：
-
-```go
-client := captcha.NewClient(
-    "http://localhost:8080",
-    captcha.WithTimeout(10 * time.Second),
-)
-```
-
-```python
-client = CaptchaClient(
-    base_url="http://localhost:8080",
-    timeout=10,
-)
-```
+### 使用
 
 ```javascript
-const client = new CaptchaClient('http://localhost:8080', {
-    timeout: 10000,
-});
+import HjtpxCaptcha from '@hjtpx/react-native-captcha';
+
+const App = () => {
+  const [captchaKey, setCaptchaKey] = useState(0);
+  
+  const handleVerify = (verifyId) => {
+    console.log('Verification successful:', verifyId);
+    setCaptchaKey(prev => prev + 1);
+  };
+  
+  const handleError = (error) => {
+    console.error('Verification failed:', error);
+  };
+  
+  return (
+    <HjtpxCaptcha
+      key={captchaKey}
+      apiKey="YOUR_API_KEY"
+      appId="YOUR_APP_ID"
+      serverUrl="https://your-server.com"
+      type="slider"
+      language="en-US"
+      onVerify={handleVerify}
+      onError={handleError}
+      onClose={() => console.log('Captcha closed')}
+    />
+  );
+};
 ```
 
-### 2. 重试机制
+## Flutter SDK
 
-所有SDK都内置重试机制：
+### 安装
 
-```go
-batchClient := captcha.NewBatchClient(client, 5, 3)
+```yaml
+dependencies:
+  hjtpx_captcha: ^15.0.0
 ```
 
-```python
-async with AsyncCaptchaClient(
-    base_url="http://localhost:8080",
-    max_retries=3,
-    retry_backoff_factor=0.5,
-) as client:
-```
+### 使用
 
-```javascript
-const { client, batchManager } = createBatchClient('http://localhost:8080', {
-    maxRetries: 3,
-});
-```
+```dart
+import 'package:hjtpx_captcha/hjtpx_captcha.dart';
 
-### 3. 并发控制
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
 
-批量请求时控制并发数：
-
-```go
-batchClient := captcha.NewBatchClient(client, 10, 3)
-```
-
-```python
-async with AsyncCaptchaClient(
-    base_url="http://localhost:8080",
-    max_connections=20,
-) as client:
-```
-
-```javascript
-const { client, batchManager } = createBatchClient('http://localhost:8080', {
-    concurrency: 10,
-});
-```
-
-### 4. 错误处理
-
-根据错误类型进行不同处理：
-
-```go
-if captcha.IsRetryableError(err) {
-    delay := captcha.RetryStrategy(attempt, 100*time.Millisecond)
-    time.Sleep(delay)
+class _LoginPageState extends State<LoginPage> {
+  @override
+  void initState() {
+    super.initState();
+    HjtpxCaptcha.configure(
+      apiKey: 'YOUR_API_KEY',
+      appId: 'YOUR_APP_ID',
+      serverUrl: 'https://your-server.com',
+    );
+  }
+  
+  void _showCaptcha() async {
+    final result = await HjtpxCaptcha.show(
+      type: CaptchaType.slider,
+      language: 'en-US',
+    );
+    
+    if (result != null) {
+      print('Verify ID: ${result.verifyId}');
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: _showCaptcha,
+      child: Text('Verify'),
+    );
+  }
 }
 ```
 
-```python
-try:
-    result = await client.verify_slider_captcha(...)
-except AsyncCaptchaTimeoutError:
-    print("请求超时，需要重试")
-except AsyncCaptchaAPIError as e:
-    print(f"API错误: {e.code}, {e.message}")
-```
+## 常见问题
 
-```javascript
-if (isRetryableError(error)) {
-    console.log('该错误可重试');
-}
-```
+### 1. 验证码加载失败
 
-### 5. 资源管理
+- 检查网络连接
+- 确认 API Key 和服务器地址配置正确
+- 检查服务器是否正常运行
 
-使用上下文管理器确保资源正确释放：
+### 2. 验证回调未触发
 
-```python
-async with AsyncCaptchaClient("http://localhost:8080") as client:
-    slider = await client.get_slider_captcha()
-```
+- 确保正确实现了代理接口
+- 检查 WebView 配置是否允许 JavaScript
 
-```go
-// Client不需要手动关闭，但BatchClient的结果应该及时处理
-defer func() {
-    result := batchClient.BatchVerify(ctx, requests)
-    fmt.Printf("成功率: %v\n", float64(result.Successful)/float64(result.Total))
-}()
-```
+### 3. 国际化不生效
 
-### 6. 轨迹数据
+- 确保传入正确的语言代码
+- 检查服务器是否支持该语言
 
-提供真实的人类轨迹可以显著提高通过率：
+### 4. WebView 兼容性问题
 
-```go
-trajectory := []captcha.TrajectoryPoint{
-    {X: 0, Y: secretY, T: now - 1000},
-    {X: 50, Y: secretY + 2, T: now - 800},
-    {X: 100, Y: secretY - 1, T: now - 500},
-    {X: 150, Y: secretY + 1, T: now - 200},
-    {X: 185, Y: secretY, T: now},
-}
-```
+- iOS: 确保设置 `allowsInlineMediaPlayback = true`
+- Android: 确保设置 `mixedContentMode = MIXED_CONTENT_ALWAYS_ALLOW`
 
-```python
-trajectory = [
-    TrajectoryPoint(x=0, y=secret_y, t=1000),
-    TrajectoryPoint(x=50, y=secret_y + 2, t=1200),
-    TrajectoryPoint(x=185, y=secret_y, t=1500),
-]
-```
+## 性能优化
 
-### 7. 安全建议
+### iOS
 
-- 永远不要在前端代码中硬编码API密钥
-- 使用环境变量或安全的密钥管理服务
-- 在服务器端验证验证码结果，不要仅依赖前端验证
+- 使用 WKWebView 而非 UIWebView
+- 预加载验证码资源
+- 复用 WebView 实例
 
-```go
-if !result.Success {
-    return c.JSON(400, gin.H{"error": "验证码验证失败"})
-}
-```
+### Android
 
----
+- 启用 WebView 硬件加速
+- 合理设置 WebView 缓存模式
+- 在 Activity/Fragment 销毁时清理 WebView
+
+## 安全建议
+
+- 勿在前端存储 API Secret
+- 使用 HTTPS 传输所有请求
+- 验证服务器返回的签名
+- 限制验证码使用频率
 
 ## 技术支持
 
-如遇问题，请参考：
+- 邮箱: support@hjtpx.com
+- 文档: https://docs.hjtpx.com
+- GitHub: https://github.com/your-org/hjtpx-sdk
 
-- [Go SDK README](go/README.md)
-- [Python SDK README](python/README.md)
-- [JavaScript SDK README](javascript/README.md)
-- [Node.js SDK README](nodejs/README.md)
+## 版本历史
 
----
+### v15.0.0
 
-本文档版本: 2.0.0
-最后更新: 2026-05-18
+- 新增滑块、点选、旋转、语音、手势验证码支持
+- 新增 15 种语言国际化支持
+- 优化移动端性能
+- 增强安全机制
+
+### v14.0.0
+
+- 新增 React Native 和 Flutter 支持
+- 优化 WebView 兼容性
+- 修复已知问题
+
+### v13.0.0
+
+- 重构 SDK 架构
+- 提升加载速度 50%
+- 新增性能监控
+
+## 许可证
+
+MIT License - 详见 LICENSE 文件

@@ -655,3 +655,393 @@ func (s *ABTestService) generateRecommendations(variants []VariantStats, status 
 
 	return recommendations
 }
+
+type VariantComparison struct {
+	Variant1       VariantStats `json:"variant1"`
+	Variant2       VariantStats `json:"variant2"`
+	RelativeDiff   float64      `json:"relative_diff"`
+	AbsoluteDiff   float64      `json:"absolute_diff"`
+	StatisticalSig bool         `json:"statistical_significance"`
+	Conclusion     string       `json:"conclusion"`
+}
+
+func (s *ABTestService) CompareVariants(testID uint) ([]VariantComparison, error) {
+	test, err := s.GetABTestByID(testID)
+	if err != nil {
+		return nil, err
+	}
+
+	report, err := s.GetTestReport(testID)
+	if err != nil {
+		return nil, err
+	}
+
+	comparisons := make([]VariantComparison, 0)
+	for i := 0; i < len(report.Variants); i++ {
+		for j := i + 1; j < len(report.Variants); j++ {
+			v1 := report.Variants[i]
+			v2 := report.Variants[j]
+
+			relativeDiff := 0.0
+			if v1.ConversionRate > 0 {
+				relativeDiff = ((v2.ConversionRate - v1.ConversionRate) / v1.ConversionRate) * 100
+			}
+
+			absoluteDiff := v2.ConversionRate - v1.ConversionRate
+
+			statSig := false
+			if v1.Confidence > 95 {
+				statSig = true
+			}
+
+			conclusion := s.generateComparisonConclusion(v1, v2, relativeDiff, statSig)
+
+			comparisons = append(comparisons, VariantComparison{
+				Variant1:       v1,
+				Variant2:       v2,
+				RelativeDiff:   relativeDiff,
+				AbsoluteDiff:   absoluteDiff,
+				StatisticalSig: statSig,
+				Conclusion:     conclusion,
+			})
+		}
+	}
+
+	_ = test
+
+	return comparisons, nil
+}
+
+func (s *ABTestService) generateComparisonConclusion(v1, v2 VariantStats, relativeDiff float64, statSig bool) string {
+	if !statSig {
+		return fmt.Sprintf("'%s' 和 '%s' 之间暂无统计显著差异，需更多数据", v1.VariantName, v2.VariantName)
+	}
+
+	if relativeDiff > 5 {
+		return fmt.Sprintf("'%s' 显著优于 '%s' (提升 %.2f%%)", v2.VariantName, v1.VariantName, relativeDiff)
+	} else if relativeDiff < -5 {
+		return fmt.Sprintf("'%s' 显著劣于 '%s' (降低 %.2f%%)", v2.VariantName, v1.VariantName, -relativeDiff)
+	} else {
+		return fmt.Sprintf("'%s' 和 '%s' 表现相近 (差异 %.2f%%)", v1.VariantName, v2.VariantName, relativeDiff)
+	}
+}
+
+type VariantAnalytics struct {
+	VariantID     uint        `json:"variant_id"`
+	VariantName   string      `json:"variant_name"`
+	Period        string      `json:"period"`
+	DailyData     []DailyStat `json:"daily_data"`
+	HourlyData    []HourlyStat `json:"hourly_data"`
+	Summary       AnalyticsSummary `json:"summary"`
+}
+
+type DailyStat struct {
+	Date         string  `json:"date"`
+	Visitors     int64   `json:"visitors"`
+	Conversions  int64   `json:"conversions"`
+	ConversionRate float64 `json:"conversion_rate"`
+}
+
+type HourlyStat struct {
+	Hour          int     `json:"hour"`
+	Visitors      int64   `json:"visitors"`
+	Conversions   int64   `json:"conversions"`
+	ConversionRate float64 `json:"conversion_rate"`
+}
+
+type AnalyticsSummary struct {
+	AvgVisitors      float64 `json:"avg_visitors"`
+	AvgConversions   float64 `json:"avg_conversions"`
+	AvgConversionRate float64 `json:"avg_conversion_rate"`
+	Trend            string  `json:"trend"`
+	TrendPercent     float64 `json:"trend_percent"`
+}
+
+func (s *ABTestService) GetVariantAnalytics(testID, variantID uint, period string) (*VariantAnalytics, error) {
+	test, err := s.GetABTestByID(testID)
+	if err != nil {
+		return nil, err
+	}
+
+	var variant *models.ABTestVariant
+	for _, v := range test.Variants {
+		if v.ID == variantID {
+			variant = &v
+			break
+		}
+	}
+
+	if variant == nil {
+		return nil, ErrVariantNotFound
+	}
+
+	days := s.parsePeriod(period)
+	startDate := time.Now().AddDate(0, 0, -days)
+
+	dailyData := make([]DailyStat, 0)
+	for i := 0; i < days; i++ {
+		date := startDate.AddDate(0, 0, i)
+		dateStr := date.Format("2006-01-02")
+
+		var visitors int64
+		database.DB.Model(&models.ABTestAssignment{}).
+			Where("ab_test_id = ? AND variant_id = ? AND DATE(assigned_at) = ?", testID, variantID, dateStr).
+			Count(&visitors)
+
+		var conversions int64
+		database.DB.Model(&models.ABTestEvent{}).
+			Where("ab_test_id = ? AND variant_id = ? AND is_conversion = ? AND DATE(timestamp) = ?", testID, variantID, true, dateStr).
+			Count(&conversions)
+
+		conversionRate := 0.0
+		if visitors > 0 {
+			conversionRate = float64(conversions) / float64(visitors) * 100
+		}
+
+		dailyData = append(dailyData, DailyStat{
+			Date:          dateStr,
+			Visitors:      visitors,
+			Conversions:   conversions,
+			ConversionRate: conversionRate,
+		})
+	}
+
+	hourlyData := make([]HourlyStat, 0)
+	for hour := 0; hour < 24; hour++ {
+		var visitors int64
+		database.DB.Model(&models.ABTestAssignment{}).
+			Where("ab_test_id = ? AND variant_id = ? AND EXTRACT(HOUR FROM assigned_at) = ?", testID, variantID, hour).
+			Count(&visitors)
+
+		var conversions int64
+		database.DB.Model(&models.ABTestEvent{}).
+			Where("ab_test_id = ? AND variant_id = ? AND is_conversion = ? AND EXTRACT(HOUR FROM timestamp) = ?", testID, variantID, true, hour).
+			Count(&conversions)
+
+		conversionRate := 0.0
+		if visitors > 0 {
+			conversionRate = float64(conversions) / float64(visitors) * 100
+		}
+
+		hourlyData = append(hourlyData, HourlyStat{
+			Hour:           hour,
+			Visitors:       visitors,
+			Conversions:    conversions,
+			ConversionRate: conversionRate,
+		})
+	}
+
+	summary := s.calculateAnalyticsSummary(dailyData)
+
+	return &VariantAnalytics{
+		VariantID:   variantID,
+		VariantName: variant.Name,
+		Period:      period,
+		DailyData:   dailyData,
+		HourlyData:  hourlyData,
+		Summary:     summary,
+	}, nil
+}
+
+func (s *ABTestService) parsePeriod(period string) int {
+	switch period {
+	case "7d":
+		return 7
+	case "14d":
+		return 14
+	case "30d":
+		return 30
+	default:
+		return 7
+	}
+}
+
+func (s *ABTestService) calculateAnalyticsSummary(dailyData []DailyStat) AnalyticsSummary {
+	if len(dailyData) == 0 {
+		return AnalyticsSummary{}
+	}
+
+	var totalVisitors, totalConversions int64
+	var totalRate float64
+
+	for _, d := range dailyData {
+		totalVisitors += d.Visitors
+		totalConversions += d.Conversions
+		totalRate += d.ConversionRate
+	}
+
+	avgVisitors := float64(totalVisitors) / float64(len(dailyData))
+	avgConversions := float64(totalConversions) / float64(len(dailyData))
+	avgConversionRate := totalRate / float64(len(dailyData))
+
+	trend := "stable"
+	trendPercent := 0.0
+
+	if len(dailyData) >= 2 {
+		firstHalf := dailyData[:len(dailyData)/2]
+		secondHalf := dailyData[len(dailyData)/2:]
+
+		var firstAvg, secondAvg float64
+		for _, d := range firstHalf {
+			firstAvg += d.ConversionRate
+		}
+		firstAvg /= float64(len(firstHalf))
+
+		for _, d := range secondHalf {
+			secondAvg += d.ConversionRate
+		}
+		secondAvg /= float64(len(secondHalf))
+
+		if firstAvg > 0 {
+			trendPercent = ((secondAvg - firstAvg) / firstAvg) * 100
+		}
+
+		if trendPercent > 5 {
+			trend = "improving"
+		} else if trendPercent < -5 {
+			trend = "declining"
+		}
+	}
+
+	return AnalyticsSummary{
+		AvgVisitors:       avgVisitors,
+		AvgConversions:    avgConversions,
+		AvgConversionRate: avgConversionRate,
+		Trend:             trend,
+		TrendPercent:      trendPercent,
+	}
+}
+
+type TestRecommendation struct {
+	Type    string  `json:"type"`
+	Title   string  `json:"title"`
+	Content string  `json:"content"`
+	Priority int    `json:"priority"`
+	Impact  string  `json:"impact"`
+}
+
+func (s *ABTestService) GetTestRecommendations(testID uint) ([]TestRecommendation, error) {
+	test, err := s.GetABTestByID(testID)
+	if err != nil {
+		return nil, err
+	}
+
+	report, err := s.GetTestReport(testID)
+	if err != nil {
+		return nil, err
+	}
+
+	recommendations := make([]TestRecommendation, 0)
+
+	recommendations = append(recommendations, TestRecommendation{
+		Type:    "data_quality",
+		Title:   "数据质量检查",
+		Content: s.generateDataQualityRecommendation(report),
+		Priority: 1,
+		Impact:  "high",
+	})
+
+	if test.Status == "running" {
+		recommendations = append(recommendations, TestRecommendation{
+			Type:    "timing",
+			Title:   "测试时长建议",
+			Content: s.generateTimingRecommendation(report),
+			Priority: 2,
+			Impact:  "medium",
+		})
+	}
+
+	recommendations = append(recommendations, TestRecommendation{
+		Type:    "statistical",
+		Title:   "统计分析建议",
+		Content: s.generateStatisticalRecommendation(report),
+		Priority: 3,
+		Impact:  "high",
+	})
+
+	if test.Status == "stopped" {
+		recommendations = append(recommendations, TestRecommendation{
+			Type:    "next_steps",
+			Title:   "后续步骤",
+			Content: s.generateNextStepsRecommendation(report),
+			Priority: 4,
+			Impact:  "medium",
+		})
+	}
+
+	return recommendations, nil
+}
+
+func (s *ABTestService) generateDataQualityRecommendation(report *TestReport) string {
+	var totalVisitors int64
+	for _, v := range report.Variants {
+		totalVisitors += v.Visitors
+	}
+
+	if totalVisitors < 1000 {
+		return fmt.Sprintf("当前总访客数 %d 较少，建议继续收集数据至少达到1000个访客以确保结果可靠性", totalVisitors)
+	}
+
+	return fmt.Sprintf("数据质量良好，当前已收集 %d 个访客，数据量充足", totalVisitors)
+}
+
+func (s *ABTestService) generateTimingRecommendation(report *TestReport) string {
+	var minVisitors int64 = math.MaxInt64
+	for _, v := range report.Variants {
+		if v.Visitors < minVisitors {
+			minVisitors = v.Visitors
+		}
+	}
+
+	if minVisitors < 1000 {
+		return fmt.Sprintf("建议继续运行测试至每个变体至少1000个访客，当前最少变体访客数为 %d", minVisitors)
+	}
+
+	hasWinner := false
+	for _, v := range report.Variants {
+		if !v.IsControl && v.Confidence > 95 {
+			hasWinner = true
+			break
+		}
+	}
+
+	if hasWinner {
+		return "已检测到统计显著的优胜者，建议考虑结束测试或按预期时长继续运行"
+	}
+
+	return "测试正在进行中，建议保持当前状态继续收集数据"
+}
+
+func (s *ABTestService) generateStatisticalRecommendation(report *TestReport) string {
+	var highConfidenceVariants int
+	for _, v := range report.Variants {
+		if v.Confidence > 95 {
+			highConfidenceVariants++
+		}
+	}
+
+	if highConfidenceVariants > 0 {
+		return fmt.Sprintf("有 %d 个变体达到95%%置信度，统计结果可靠", highConfidenceVariants)
+	}
+
+	var maxConfidence float64
+	for _, v := range report.Variants {
+		if v.Confidence > maxConfidence {
+			maxConfidence = v.Confidence
+		}
+	}
+
+	return fmt.Sprintf("当前最高置信度为 %.1f%%，建议继续收集数据以达到95%%的统计显著性阈值", maxConfidence)
+}
+
+func (s *ABTestService) generateNextStepsRecommendation(report *TestReport) string {
+	if report.WinningVariant != nil {
+		for _, v := range report.Variants {
+			if v.VariantID == *report.WinningVariant {
+				return fmt.Sprintf("建议将 '%s' 作为正式方案部署，并考虑设计后续优化测试", v.VariantName)
+			}
+		}
+	}
+
+	return "建议分析所有变体数据，识别潜在优化方向，设计下一轮A/B测试"
+}

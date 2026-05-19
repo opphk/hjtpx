@@ -1,9 +1,13 @@
 package service
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -251,7 +255,7 @@ var DefaultSessionConfig = SessionConfig{
 	CookiePrefix:     "hjtpx_",
 }
 
-type SessionData struct {
+type SecureSessionData struct {
 	SessionID    string
 	UserID       uint
 	Username     string
@@ -269,23 +273,23 @@ func NewSessionManager(config *SessionConfig) *SessionManager {
 	}
 	return &SessionManager{
 		config: config,
-		sessions: make(map[string]*SessionData),
+		sessions: make(map[string]*SecureSessionData),
 	}
 }
 
 type SessionManager struct {
 	config   *SessionConfig
-	sessions map[string]*SessionData
+	sessions map[string]*SecureSessionData
 }
 
-func (sm *SessionManager) CreateSession(userID uint, username, ip, userAgent string) (*SessionData, error) {
+func (sm *SessionManager) CreateSession(userID uint, username, ip, userAgent string) (*SecureSessionData, error) {
 	sessionID, err := generateSessionID()
 	if err != nil {
 		return nil, err
 	}
 
 	now := time.Now()
-	session := &SessionData{
+	session := &SecureSessionData{
 		SessionID:    sessionID,
 		UserID:       userID,
 		Username:     username,
@@ -347,8 +351,8 @@ func (sm *SessionManager) InvalidateAllUserSessions(userID uint) {
 	}
 }
 
-func (sm *SessionManager) GetActiveSessions(userID uint) []*SessionData {
-	sessions := make([]*SessionData, 0)
+func (sm *SessionManager) GetActiveSessions(userID uint) []*SecureSessionData {
+	sessions := make([]*SecureSessionData, 0)
 	for _, session := range sm.sessions {
 		if session.UserID == userID && session.IsValid {
 			sessions = append(sessions, session)
@@ -455,4 +459,61 @@ func constantTimeCompare(a, b []byte) bool {
 		result |= int(a[i]) ^ int(b[i])
 	}
 	return result == 0
+}
+
+func encryptAES(plaintext, key []byte) ([]byte, error) {
+	block, err := newCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	
+	padding := block.BlockSize() - len(plaintext)%block.BlockSize()
+	padtext := make([]byte, len(plaintext)+padding)
+	copy(padtext, plaintext)
+	for i := len(plaintext); i < len(padtext); i++ {
+		padtext[i] = byte(padding)
+	}
+	
+	ciphertext := make([]byte, block.BlockSize()+len(padtext))
+	block.Encrypt(ciphertext, padtext)
+	return ciphertext, nil
+}
+
+func decryptAES(ciphertext, key []byte) ([]byte, error) {
+	block, err := newCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	
+	if len(ciphertext) < block.BlockSize() {
+		return nil, errors.New("ciphertext too short")
+	}
+	
+	plaintext := make([]byte, len(ciphertext)-block.BlockSize())
+	block.Decrypt(plaintext, ciphertext)
+	
+	padding := int(plaintext[len(plaintext)-1])
+	if padding > len(plaintext) {
+		return nil, errors.New("invalid padding")
+	}
+	return plaintext[:len(plaintext)-padding], nil
+}
+
+func generateHMAC(data, key []byte) ([]byte, error) {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil), nil
+}
+
+func newCipher(key []byte) (cipher.Block, error) {
+	switch len(key) {
+	case 16:
+		return aes.NewCipher(key)
+	case 24:
+		return aes.NewCipher(key)
+	case 32:
+		return aes.NewCipher(key)
+	default:
+		return nil, errors.New("invalid key size")
+	}
 }

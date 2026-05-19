@@ -1,0 +1,87 @@
+server:
+  host: localhost
+  port: 8080
+  base_url: http://localhost:8080/api/v1
+  timeout: 30s
+
+database:
+  host: localhost
+  port: 5432
+  user: hjtpx_test
+  password: hjtpx_test_password
+  name: hjtpx_test
+  sslmode: disable
+  max_connections: 20
+  max_idle_connections: 5
+  connection_max_lifetime: 300s
+
+redis:
+  host: localhost
+  port: 6379
+  password: hjtpx_test_password
+  db: 1
+  pool_size: 10
+  min_idle_conns: 2
+  max_retries: 3
+
+test:
+  parallel: 4
+  timeout: 60s
+  max_retries: 3
+  verbose: true
+  coverage: true
+  report_format: html
+
+admin:
+  username: admin
+  password: admin123
+  email: admin@example.com
+  role: super_admin
+
+user:
+  username: testuser
+  password: Test123456
+  email: test@example.com
+  phone: "+8613800138000"
+
+captcha:
+  slider:
+    width: 320
+    height: 160
+    tolerance: 8
+    expires_in: 300
+    max_attempts: 3
+  
+  click:
+    mode: number
+    points: 3
+    expires_in: 300
+    max_attempts: 3
+  
+  lianliankan:
+    pairs: 6
+    difficulty: medium
+    expires_in: 300
+    max_attempts: 3
+  
+  voice:
+    mode: mixed
+    count: 4
+    expires_in: 180
+    max_attempts: 3
+  
+  3d:
+    difficulty: medium
+    model_type: cube
+    expires_in: 300
+    max_attempts: 3
+
+logging:
+  level: debug
+  format: json
+  output: stdout
+
+cleanup:
+  enabled: true
+  after_tests: true
+  preserve_logs: true

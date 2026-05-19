@@ -5,20 +5,25 @@ const I18n = {
     
     // 支持的语言列表
     supportedLangs: [
-        { code: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
-        { code: 'en-US', name: 'English', flag: '🇺🇸' },
-        { code: 'ja-JP', name: '日本語', flag: '🇯🇵' },
-        { code: 'ko-KR', name: '한국어', flag: '🇰🇷' },
-        { code: 'fr-FR', name: 'Français', flag: '🇫🇷' },
-        { code: 'de-DE', name: 'Deutsch', flag: '🇩🇪' },
-        { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
-        { code: 'pt-BR', name: 'Português', flag: '🇧🇷' },
-        { code: 'it-IT', name: 'Italiano', flag: '🇮🇹' },
-        { code: 'ru-RU', name: 'Русский', flag: '🇷🇺' },
-        { code: 'ar-SA', name: 'العربية', flag: '🇸🇦' },
-        { code: 'fa-IR', name: 'فارسی', flag: '🇮🇷' },
-        { code: 'he-IL', name: 'עברית', flag: '🇮🇱' },
-        { code: 'ur-PK', name: 'اردو', flag: '🇵🇰' }
+        { code: 'zh-CN', name: '简体中文', nativeName: '简体中文', flag: '🇨🇳', isRTL: false, dateFormat: 'YYYY-MM-DD', numberFormat: '1,234.56', currency: '¥' },
+        { code: 'en-US', name: 'English', nativeName: 'English', flag: '🇺🇸', isRTL: false, dateFormat: 'MM/DD/YYYY', numberFormat: '1,234.56', currency: '$' },
+        { code: 'ja-JP', name: '日本語', nativeName: '日本語', flag: '🇯🇵', isRTL: false, dateFormat: 'YYYY/MM/DD', numberFormat: '1,234.56', currency: '¥' },
+        { code: 'ko-KR', name: '한국어', nativeName: '한국어', flag: '🇰🇷', isRTL: false, dateFormat: 'YYYY. MM. DD', numberFormat: '1,234.56', currency: '₩' },
+        { code: 'fr-FR', name: 'Français', nativeName: 'Français', flag: '🇫🇷', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1 234,56', currency: '€' },
+        { code: 'de-DE', name: 'Deutsch', nativeName: 'Deutsch', flag: '🇩🇪', isRTL: false, dateFormat: 'DD.MM.YYYY', numberFormat: '1.234,56', currency: '€' },
+        { code: 'es-ES', name: 'Español', nativeName: 'Español', flag: '🇪🇸', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1.234,56', currency: '€' },
+        { code: 'pt-BR', name: 'Português', nativeName: 'Português', flag: '🇧🇷', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1.234,56', currency: 'R$' },
+        { code: 'it-IT', name: 'Italiano', nativeName: 'Italiano', flag: '🇮🇹', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1.234,56', currency: '€' },
+        { code: 'ru-RU', name: 'Русский', nativeName: 'Русский', flag: '🇷🇺', isRTL: false, dateFormat: 'DD.MM.YYYY', numberFormat: '1 234,56', currency: '₽' },
+        { code: 'ar-SA', name: 'العربية', nativeName: 'العربية', flag: '🇸🇦', isRTL: true, dateFormat: 'DD/MM/YYYY', numberFormat: '١٬٢٣٤٫٥٦', currency: 'ر.س' },
+        { code: 'fa-IR', name: 'فارسی', nativeName: 'فارسی', flag: '🇮🇷', isRTL: true, dateFormat: 'DD/MM/YYYY', numberFormat: '۱٬۲۳۴٫۵۶', currency: 'ریال' },
+        { code: 'he-IL', name: 'עברית', nativeName: 'עברית', flag: '🇮🇱', isRTL: true, dateFormat: 'DD/MM/YYYY', numberFormat: '1,234.56', currency: '₪' },
+        { code: 'ur-PK', name: 'اردو', nativeName: 'اردو', flag: '🇵🇰', isRTL: true, dateFormat: 'DD/MM/YYYY', numberFormat: '1,234.56', currency: '₨' },
+        { code: 'hi-IN', name: 'हिन्दी', nativeName: 'हिन्दी', flag: '🇮🇳', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1,23,456.78', currency: '₹' },
+        { code: 'vi-VN', name: 'Tiếng Việt', nativeName: 'Tiếng Việt', flag: '🇻🇳', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1.234,56', currency: '₫' },
+        { code: 'th-TH', name: 'ไทย', nativeName: 'ไทย', flag: '🇹🇭', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1,234.56', currency: '฿' },
+        { code: 'id-ID', name: 'Bahasa Indonesia', nativeName: 'Bahasa Indonesia', flag: '🇮🇩', isRTL: false, dateFormat: 'DD/MM/YYYY', numberFormat: '1.234,56', currency: 'Rp' },
+        { code: 'tr-TR', name: 'Türkçe', nativeName: 'Türkçe', flag: '🇹🇷', isRTL: false, dateFormat: 'DD.MM.YYYY', numberFormat: '1.234,56', currency: '₺' }
     ],
     
     // 从浏览器获取语言
@@ -184,8 +189,137 @@ const I18n = {
         // 更新HTML lang属性
         document.documentElement.lang = lang;
         
+        // 应用RTL布局
+        this.applyRTLSupport(lang);
+        
         // 触发自定义事件
         document.dispatchEvent(new CustomEvent('languageChange', { detail: { lang } }));
+    },
+    
+    // 应用RTL支持
+    applyRTLSupport: function(lang) {
+        const langInfo = this.supportedLangs.find(l => l.code === lang);
+        const isRTL = langInfo && langInfo.isRTL;
+        
+        if (isRTL) {
+            document.documentElement.setAttribute('dir', 'rtl');
+            document.documentElement.classList.add('rtl');
+            document.documentElement.classList.remove('ltr');
+            this.applyRTLStyles();
+        } else {
+            document.documentElement.setAttribute('dir', 'ltr');
+            document.documentElement.classList.add('ltr');
+            document.documentElement.classList.remove('rtl');
+        }
+    },
+    
+    // 应用RTL样式
+    applyRTLStyles: function() {
+        // 添加RTL特定样式
+        let rtlStyle = document.getElementById('rtl-styles');
+        if (!rtlStyle) {
+            rtlStyle = document.createElement('style');
+            rtlStyle.id = 'rtl-styles';
+            document.head.appendChild(rtlStyle);
+        }
+        
+        rtlStyle.textContent = `
+            [dir="rtl"] .text-left { text-align: right; }
+            [dir="rtl"] .text-right { text-align: left; }
+            [dir="rtl"] .ml-auto { margin-left: 0; margin-right: auto; }
+            [dir="rtl"] .mr-auto { margin-right: 0; margin-left: auto; }
+            [dir="rtl"] .pl-3 { padding-left: 0; padding-right: 1rem; }
+            [dir="rtl"] .pr-3 { padding-right: 0; padding-left: 1rem; }
+            [dir="rtl"] .ml-3 { margin-left: 0; margin-right: 1rem; }
+            [dir="rtl"] .mr-3 { margin-right: 0; margin-left: 1rem; }
+            [dir="rtl"] .float-left { float: right; }
+            [dir="rtl"] .float-right { float: left; }
+            [dir="rtl"] .border-left { border-left: none; border-right: 1px solid; }
+            [dir="rtl"] .border-right { border-right: none; border-left: 1px solid; }
+            [dir="rtl"] .captcha-container { direction: rtl; }
+            [dir="rtl"] .captcha-slider-container { direction: rtl; }
+            [dir="rtl"] input { text-align: right; }
+            [dir="rtl"] input[type="text"], [dir="rtl"] input[type="email"], [dir="rtl"] input[type="password"] {
+                text-align: ${this.getComputedTextAlign()};
+            }
+        `;
+    },
+    
+    // 获取计算后的文本对齐方式
+    getComputedTextAlign: function() {
+        const isRTL = document.documentElement.classList.contains('rtl');
+        return isRTL ? 'right' : 'left';
+    },
+    
+    // 格式化日期
+    formatDate: function(date, format) {
+        const langInfo = this.supportedLangs.find(l => l.code === this.currentLang);
+        const dateFormat = format || (langInfo && langInfo.dateFormat) || 'YYYY-MM-DD';
+        
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        
+        return dateFormat
+            .replace('YYYY', year)
+            .replace('MM', month)
+            .replace('DD', day);
+    },
+    
+    // 格式化数字
+    formatNumber: function(num) {
+        const langInfo = this.supportedLangs.find(l => l.code === this.currentLang);
+        const numberFormat = langInfo && langInfo.numberFormat;
+        
+        if (!numberFormat) {
+            return num.toLocaleString();
+        }
+        
+        // 简单的数字格式化
+        const parts = num.toString().split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.join('.');
+    },
+    
+    // 格式化货币
+    formatCurrency: function(amount, currency) {
+        const langInfo = this.supportedLangs.find(l => l.code === this.currentLang);
+        const currencySymbol = currency || (langInfo && langInfo.currency) || '$';
+        
+        const formatted = this.formatNumber(amount);
+        return `${currencySymbol}${formatted}`;
+    },
+    
+    // 获取语言信息
+    getLangInfo: function(lang) {
+        return this.supportedLangs.find(l => l.code === lang) || null;
+    },
+    
+    // 检查是否为RTL语言
+    isRTL: function(lang) {
+        const langInfo = this.getLangInfo(lang || this.currentLang);
+        return langInfo && langInfo.isRTL;
+    },
+    
+    // 获取支持的语言数量
+    getSupportedLanguagesCount: function() {
+        return this.supportedLangs.length;
+    },
+    
+    // 获取所有语言代码
+    getAllLanguageCodes: function() {
+        return this.supportedLangs.map(l => l.code);
+    },
+    
+    // 搜索语言
+    searchLanguages: function(query) {
+        const lowerQuery = query.toLowerCase();
+        return this.supportedLangs.filter(lang => 
+            lang.name.toLowerCase().includes(lowerQuery) ||
+            lang.nativeName.toLowerCase().includes(lowerQuery) ||
+            lang.code.toLowerCase().includes(lowerQuery)
+        );
     }
 };
 

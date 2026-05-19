@@ -1,16 +1,26 @@
-let requestTrendChart, realtimeChart;
+let requestTrendChart, realtimeChart, distributionChart, riskGaugeChart;
 let ws = null;
 let wsConnected = false;
 let autoRefreshInterval = null;
 let realtimeDataPoints = [];
 let previousStats = null;
+let chartUpdateThrottle = null;
+let dataBuffer = [];
 const REALTIME_UPDATE_INTERVAL = 5000;
 const MAX_REALTIME_POINTS = 60;
 const WS_RECONNECT_DELAY = 3000;
 const AUTO_REFRESH_INTERVAL = 30000;
+const CHART_UPDATE_THROTTLE_MS = 1000;
 let isAutoRefreshEnabled = false;
+const chartCache = new Map();
+const memoryMonitor = {
+    startTime: performance.now(),
+    updateCount: 0,
+    lastMemoryCheck: 0
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
+    startMemoryMonitor();
     initECharts();
     initWebSocket();
     setupEventListeners();
@@ -19,7 +29,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadRecentActivity();
     startAutoRefresh();
     await loadExtendedStats();
+    initAdvancedCharts();
 });
+
+function startMemoryMonitor() {
+    setInterval(() => {
+        if (performance.memory) {
+            const used = Math.round(performance.memory.usedJSHeapSize / 1048576);
+            const limit = Math.round(performance.memory.jsHeapSizeLimit / 1048576);
+            console.log(`Memory: ${used}MB / ${limit}MB`);
+        }
+        memoryMonitor.updateCount++;
+    }, 30000);
+}
 
 function toggleAutoRefresh() {
     isAutoRefreshEnabled = !isAutoRefreshEnabled;
@@ -120,6 +142,165 @@ function updateExtendedStats(data) {
 function initECharts() {
     initRequestTrendChart();
     initRealtimeChart();
+    initDistributionChart();
+    initRiskGaugeChart();
+}
+
+function initAdvancedCharts() {
+    const distributionContainer = document.getElementById('distributionChart');
+    if (distributionContainer && !distributionChart) {
+        distributionChart = echarts.init(distributionContainer);
+        updateDistributionChart(getMockDistributionData());
+    }
+
+    const riskContainer = document.getElementById('riskGaugeChart');
+    if (riskContainer && !riskGaugeChart) {
+        riskGaugeChart = echarts.init(riskContainer);
+        updateRiskGaugeChart(45);
+    }
+
+    window.addEventListener('resize', () => {
+        if (distributionChart) distributionChart.resize();
+        if (riskGaugeChart) riskGaugeChart.resize();
+    });
+}
+
+function initDistributionChart() {
+    const container = document.getElementById('distributionChart');
+    if (!container) return;
+
+    distributionChart = echarts.init(container);
+    updateDistributionChart(getMockDistributionData());
+}
+
+function initRiskGaugeChart() {
+    const container = document.getElementById('riskGaugeChart');
+    if (!container) return;
+
+    riskGaugeChart = echarts.init(container);
+    updateRiskGaugeChart(50);
+}
+
+function updateDistributionChart(data) {
+    if (!distributionChart) return;
+
+    const option = {
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            textStyle: { color: '#666' }
+        },
+        series: [{
+            name: 'Distribution',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2
+            },
+            label: {
+                show: true,
+                formatter: '{b}\n{c}'
+            },
+            emphasis: {
+                label: {
+                    show: true,
+                    fontSize: 14,
+                    fontWeight: 'bold'
+                }
+            },
+            data: data
+        }],
+        animation: true,
+        animationDuration: 1000,
+        animationEasing: 'cubicOut'
+    };
+
+    distributionChart.setOption(option);
+}
+
+function updateRiskGaugeChart(value) {
+    if (!riskGaugeChart) return;
+
+    const option = {
+        series: [{
+            type: 'gauge',
+            startAngle: 180,
+            endAngle: 0,
+            min: 0,
+            max: 100,
+            splitNumber: 5,
+            axisLine: {
+                lineStyle: {
+                    width: 20,
+                    color: [
+                        [0.3, '#10b981'],
+                        [0.7, '#f59e0b'],
+                        [1, '#ef4444']
+                    ]
+                }
+            },
+            pointer: {
+                icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
+                length: '60%',
+                width: 8,
+                offsetCenter: [0, '-10%'],
+                itemStyle: {
+                    color: '#666'
+                }
+            },
+            axisTick: {
+                length: 8,
+                lineStyle: { color: 'auto', width: 1 }
+            },
+            splitLine: {
+                length: 15,
+                lineStyle: { color: 'auto', width: 2 }
+            },
+            axisLabel: {
+                color: '#666',
+                fontSize: 10,
+                distance: -40
+            },
+            title: {
+                show: true,
+                offsetCenter: [0, '30%'],
+                fontSize: 12,
+                color: '#666'
+            },
+            detail: {
+                valueAnimation: true,
+                formatter: function(value) {
+                    return Math.round(value);
+                },
+                color: '#333',
+                fontSize: 24,
+                offsetCenter: [0, '-20%']
+            },
+            data: [{
+                value: value,
+                name: 'Risk Score'
+            }]
+        }]
+    };
+
+    riskGaugeChart.setOption(option, false);
+}
+
+function getMockDistributionData() {
+    return [
+        { value: 45, name: 'Slider', itemStyle: { color: '#3b82f6' } },
+        { value: 25, name: 'Click', itemStyle: { color: '#10b981' } },
+        { value: 15, name: '3D', itemStyle: { color: '#f59e0b' } },
+        { value: 10, name: 'Voice', itemStyle: { color: '#8b5cf6' } },
+        { value: 5, name: 'Other', itemStyle: { color: '#6b7280' } }
+    ];
 }
 
 function initRequestTrendChart() {
@@ -601,23 +782,48 @@ function updateRequestTrendChart(data) {
 function updateRealtimeChart(value) {
     if (!realtimeChart) return;
 
-    const now = new Date();
-    const timeLabel = formatTime(now);
+    dataBuffer.push({ value: value, timestamp: Date.now() });
 
-    realtimeDataPoints.push({ time: timeLabel, value: value });
-
-    if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
-        realtimeDataPoints.shift();
+    if (dataBuffer.length > 10) {
+        const avg = dataBuffer.reduce((sum, item) => sum + item.value, 0) / dataBuffer.length;
+        dataBuffer = [];
+        value = Math.round(avg);
     }
 
-    realtimeChart.setOption({
-        xAxis: {
-            data: realtimeDataPoints.map(p => p.time)
-        },
-        series: [{
-            data: realtimeDataPoints.map(p => p.value)
-        }]
-    }, false);
+    if (chartUpdateThrottle) return;
+    
+    chartUpdateThrottle = setTimeout(() => {
+        chartUpdateThrottle = null;
+        
+        const now = new Date();
+        const timeLabel = formatTime(now);
+
+        realtimeDataPoints.push({ time: timeLabel, value: value });
+
+        if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
+            realtimeDataPoints.shift();
+        }
+
+        const cachedOption = chartCache.get('realtime');
+        if (cachedOption) {
+            cachedOption.xAxis.data = realtimeDataPoints.map(p => p.time);
+            cachedOption.series[0].data = realtimeDataPoints.map(p => p.value);
+            realtimeChart.setOption(cachedOption, false);
+        } else {
+            realtimeChart.setOption({
+                xAxis: {
+                    data: realtimeDataPoints.map(p => p.time)
+                },
+                series: [{
+                    data: realtimeDataPoints.map(p => p.value)
+                }]
+            }, false);
+        }
+    }, CHART_UPDATE_THROTTLE_MS);
+}
+
+function clearChartCache() {
+    chartCache.clear();
 }
 
 async function loadRecentActivity() {

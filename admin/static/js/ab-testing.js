@@ -720,6 +720,11 @@ async function loadTestAnalytics() {
         } else {
             renderAnalytics(getMockReport(parseInt(testId)));
         }
+        
+        await Promise.all([
+            loadComparisonAnalysis(testId),
+            loadTestRecommendations(testId)
+        ]);
     } catch (error) {
         renderAnalytics(getMockReport(parseInt(testId)));
     }
@@ -959,4 +964,155 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+async function loadComparisonAnalysis(testId) {
+    try {
+        const data = await auth.request(`/api/v1/admin/ab-tests/${testId}/compare`);
+        if (data.code === 0 && data.data && data.data.length > 0) {
+            renderComparisonAnalysis(data.data);
+        } else {
+            document.getElementById('comparisonAnalysis').innerHTML = `
+                <div class="text-center py-3">
+                    <p class="text-muted">暂无对比数据</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Failed to load comparison analysis:', error);
+        document.getElementById('comparisonAnalysis').innerHTML = `
+            <div class="text-center py-3">
+                <p class="text-muted">加载对比分析失败</p>
+            </div>
+        `;
+    }
+}
+
+function renderComparisonAnalysis(comparisons) {
+    const container = document.getElementById('comparisonAnalysis');
+    
+    container.innerHTML = comparisons.map(comp => {
+        const isPositive = comp.relative_diff > 0;
+        const significanceClass = comp.statistical_significance ? 'success' : 'secondary';
+        const significanceText = comp.statistical_significance ? '统计显著' : '不显著';
+        
+        return `
+            <div class="card mb-3 border-${significanceClass}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">
+                            <span class="badge bg-primary me-2">${escapeHtml(comp.variant1.variant_name)}</span>
+                            <i class="fas fa-arrows-alt-h mx-2"></i>
+                            <span class="badge bg-info me-2">${escapeHtml(comp.variant2.variant_name)}</span>
+                        </h6>
+                        <span class="badge bg-${significanceClass}">${significanceText}</span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <div class="text-muted small">相对差异</div>
+                            <div class="fw-bold fs-5 ${isPositive ? 'text-success' : 'text-danger'}">
+                                ${isPositive ? '+' : ''}${comp.relative_diff.toFixed(2)}%
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted small">绝对差异</div>
+                            <div class="fw-bold fs-5 ${comp.absolute_diff > 0 ? 'text-success' : 'text-danger'}">
+                                ${comp.absolute_diff > 0 ? '+' : ''}${comp.absolute_diff.toFixed(2)}%
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted small">结论</div>
+                            <div class="fw-bold">${escapeHtml(comp.conclusion)}</div>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-primary" style="width: 50%"></div>
+                        <div class="progress-bar ${isPositive ? 'bg-success' : 'bg-danger'}" 
+                             style="width: ${Math.min(Math.abs(comp.relative_diff), 50)}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadTestAnalytics(testId) {
+    const testIdNum = parseInt(testId);
+    if (!testIdNum) return;
+    
+    await Promise.all([
+        loadTestAnalyticsByPeriod(testIdNum, '7d'),
+        loadComparisonAnalysis(testIdNum)
+    ]);
+}
+
+async function loadTestAnalyticsByPeriod(testId, period) {
+    const tests = getMockTests().data;
+    const test = tests.find(t => t.id === testId);
+    if (!test || !test.variants) return;
+    
+    const variantAnalyticsPromises = test.variants.map(variant => {
+        return loadVariantAnalytics(testId, variant.id, period);
+    });
+    
+    await Promise.all(variantAnalyticsPromises);
+}
+
+async function loadVariantAnalytics(testId, variantId, period) {
+    try {
+        const data = await auth.request(`/api/v1/admin/ab-tests/${testId}/variant/${variantId}/analytics?period=${period}`);
+        if (data.code === 0 && data.data) {
+            console.log('Variant analytics loaded:', data.data);
+        }
+    } catch (error) {
+        console.error('Failed to load variant analytics:', error);
+    }
+}
+
+async function loadTestRecommendations(testId) {
+    try {
+        const data = await auth.request(`/api/v1/admin/ab-tests/${testId}/recommendations`);
+        if (data.code === 0 && data.data && data.data.length > 0) {
+            renderAdvancedRecommendations(data.data);
+        }
+    } catch (error) {
+        console.error('Failed to load recommendations:', error);
+    }
+}
+
+function renderAdvancedRecommendations(recommendations) {
+    const container = document.getElementById('recommendationsList');
+    
+    const impactOrder = { high: 1, medium: 2, low: 3 };
+    recommendations.sort((a, b) => impactOrder[a.impact] - impactOrder[b.impact]);
+    
+    container.innerHTML = recommendations.map(rec => {
+        const impactColors = {
+            high: 'danger',
+            medium: 'warning',
+            low: 'info'
+        };
+        
+        const typeIcons = {
+            data_quality: 'fa-database',
+            timing: 'fa-clock',
+            statistical: 'fa-chart-line',
+            next_steps: 'fa-arrow-right'
+        };
+        
+        return `
+            <div class="alert alert-${impactColors[rec.impact] || 'info'} py-2 mb-2">
+                <div class="d-flex align-items-center">
+                    <i class="fas ${typeIcons[rec.type] || 'fa-info-circle'} me-2"></i>
+                    <div class="flex-grow-1">
+                        <strong>${escapeHtml(rec.title)}</strong>
+                        <div class="small mt-1">${escapeHtml(rec.content)}</div>
+                    </div>
+                    <span class="badge bg-${impactColors[rec.impact] || 'secondary'} ms-2">
+                        ${rec.impact === 'high' ? '高优先级' : rec.impact === 'medium' ? '中优先级' : '低优先级'}
+                    </span>
+                </div>
+            </div>
+        `;
+    }).join('');
 }

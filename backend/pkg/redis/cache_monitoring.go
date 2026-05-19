@@ -69,7 +69,7 @@ type CacheMonitoringCollector struct {
 	
 	hotKeys             sync.Map
 	latencyDistribution map[string]*atomic.Int64
-	keyAccessHistory    map[string]*AccessRecord
+	keyAccessHistory    map[string]*MonitoringAccessRecord
 	memorySnapshots     []MemorySnapshot
 	
 	alerts              []CacheAlert
@@ -82,7 +82,7 @@ type CacheMonitoringCollector struct {
 	lowHitRateCount     int64
 }
 
-type AccessRecord struct {
+type MonitoringAccessRecord struct {
 	Key         string
 	AccessCount int64
 	LastAccess  time.Time
@@ -125,7 +125,7 @@ func NewCacheMonitoringCollector(config *CacheMonitoringConfig) *CacheMonitoring
 		ctx:                 ctx,
 		cancel:              cancel,
 		latencyDistribution: make(map[string]*atomic.Int64),
-		keyAccessHistory:    make(map[string]*AccessRecord),
+		keyAccessHistory:    make(map[string]*MonitoringAccessRecord),
 		memorySnapshots:     make([]MemorySnapshot, 0, 100),
 		alerts:              make([]CacheAlert, 0, 50),
 		maxAlerts:           100,
@@ -265,7 +265,7 @@ func (cmc *CacheMonitoringCollector) RecordKeyAccess(key string) {
 		record.AccessCount++
 		record.LastAccess = now
 	} else {
-		cmc.keyAccessHistory[key] = &AccessRecord{
+		cmc.keyAccessHistory[key] = &MonitoringAccessRecord{
 			Key:         key,
 			AccessCount: 1,
 			LastAccess:  now,
@@ -519,11 +519,11 @@ func (cmc *CacheMonitoringCollector) GetDetailedMetrics() map[string]interface{}
 	return metrics
 }
 
-func (cmc *CacheMonitoringCollector) GetHotKeys(limit int) []AccessRecord {
+func (cmc *CacheMonitoringCollector) GetHotKeys(limit int) []MonitoringAccessRecord {
 	cmc.mu.RLock()
 	defer cmc.mu.RUnlock()
 
-	records := make([]AccessRecord, 0, len(cmc.keyAccessHistory))
+	records := make([]MonitoringAccessRecord, 0, len(cmc.keyAccessHistory))
 	for _, record := range cmc.keyAccessHistory {
 		if record.AccessCount >= cmc.config.HotKeyThreshold {
 			records = append(records, *record)
@@ -591,7 +591,7 @@ func (cmc *CacheMonitoringCollector) Reset() {
 
 	cmc.mu.Lock()
 	cmc.hotKeys = sync.Map{}
-	cmc.keyAccessHistory = make(map[string]*AccessRecord)
+	cmc.keyAccessHistory = make(map[string]*MonitoringAccessRecord)
 	cmc.memorySnapshots = make([]MemorySnapshot, 0, 100)
 	cmc.lastHitRate = 0
 	cmc.peakHitRate = 0

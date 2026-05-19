@@ -5583,4 +5583,425 @@ func GenerateAdvancedCodeProtectionFinal(code string, config ObfuscatorConfig) s
 	return result.String()
 }
 
+func GenerateCodeVirtualization(code string, config ObfuscatorConfig) string {
+	if !config.EnableCodeVirtualization {
+		return code
+	}
+
+	var result strings.Builder
+	vmID := fmt.Sprintf("__VM_%d__", time.Now().UnixNano()%1000000)
+	
+	result.WriteString(fmt.Sprintf(`(function(){
+var %s={
+instructions:[],
+stack:[],
+registers:{},
+pc:0,
+memory:{},
+
+init:function(code){
+	this.instructions=this.compile(code);
+	this.pc=0;
+},
+
+compile:function(code){
+	var instructions=[];
+	var tokens=this.tokenize(code);
+	for(var i=0;i<tokens.length;i++){
+		var tok=tokens[i];
+		if(tok.type==='number'){
+			instructions.push({op:'PUSH',value:tok.value});
+		}else if(tok.type==='string'){
+			instructions.push({op:'PUSH',value:tok.value});
+		}else if(tok.type==='operator'){
+			instructions.push({op:tok.value});
+		}else if(tok.type==='identifier'){
+			instructions.push({op:'LOAD',value:tok.value});
+		}
+	}
+	instructions.push({op:'HALT'});
+	return instructions;
+},
+
+tokenize:function(code){
+	var tokens=[];
+	var re=/(\d+)|("[^"]*")|('[^']*')|([+\-*/%=<>!&|]+)|(\w+)|(\s+)/g;
+	var match;
+	while((match=re.exec(code))!==null){
+		if(match[1])tokens.push({type:'number',value:parseInt(match[1])});
+		else if(match[2]||match[3])tokens.push({type:'string',value:match[2]||match[3]});
+		else if(match[4])tokens.push({type:'operator',value:match[4]});
+		else if(match[5])tokens.push({type:'identifier',value:match[5]});
+	}
+	return tokens;
+},
+
+execute:function(){
+	while(this.pc<this.instructions.length){
+		var inst=this.instructions[this.pc];
+		this.dispatch(inst);
+		this.pc++;
+	}
+},
+
+dispatch:function(inst){
+	switch(inst.op){
+		case 'PUSH':
+			this.stack.push(inst.value);
+			break;
+		case 'POP':
+			this.stack.pop();
+			break;
+		case 'ADD':
+			var b=this.stack.pop();
+			var a=this.stack.pop();
+			this.stack.push(a+b);
+			break;
+		case 'SUB':
+			var b=this.stack.pop();
+			var a=this.stack.pop();
+			this.stack.push(a-b);
+			break;
+		case 'MUL':
+			var b=this.stack.pop();
+			var a=this.stack.pop();
+			this.stack.push(a*b);
+			break;
+		case 'DIV':
+			var b=this.stack.pop();
+			var a=this.stack.pop();
+			this.stack.push(a/b);
+			break;
+		case 'LOAD':
+			this.stack.push(this.registers[inst.value]);
+			break;
+		case 'STORE':
+			var val=this.stack.pop();
+			this.registers[inst.value]=val;
+			break;
+		case 'JMP':
+			this.pc=inst.value;
+			break;
+		case 'JZ':
+			var cond=this.stack.pop();
+			if(!cond)this.pc=inst.value;
+			break;
+		case 'HALT':
+			this.pc=this.instructions.length;
+			break;
+	}
+},
+
+run:function(code){
+	this.init(code);
+	this.execute();
+	return this.stack;
+}
+};
+`, vmID))
+
+	result.WriteString(fmt.Sprintf(`
+window.%s=%s;
+})();
+`, vmID, vmID))
+
+	return result.String()
+}
+
+func GeneratePolymorphicCode(code string, config ObfuscatorConfig) string {
+	if !config.EnablePolymorphicBlocks {
+		return code
+	}
+
+	blocks := splitIntoBlocks(code, 50)
+	var result strings.Builder
+	blockCount := len(blocks)
+
+	result.WriteString("(function(){")
+
+	for i, block := range blocks {
+		encryptedBlock := encryptBlock(block, config)
+		result.WriteString(fmt.Sprintf(`
+(function(){
+	var _0xP%d=function(){
+		var _0xD='%s';
+		var _0xK='%s';
+		return decrypt(_0xD,_0xK);
+	};
+	eval(_0xP%d());
+})();
+`, i, encryptedBlock, string(config.StringEncryptionKey), i))
+	}
+
+	result.WriteString("})();")
+
+	return result.String()
+}
+
+func encryptBlock(block string, config ObfuscatorConfig) string {
+	key := config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-polymorphic-key")
+	}
+
+	var encrypted strings.Builder
+	for i, c := range block {
+		coef := int(key[i%len(key)])
+		encrypted.WriteByte(byte(c) ^ byte(coef))
+	}
+
+	return base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+}
+
+func splitIntoBlocks(code string, size int) []string {
+	var blocks []string
+	for i := 0; i < len(code); i += size {
+		end := i + size
+		if end > len(code) {
+			end = len(code)
+		}
+		blocks = append(blocks, code[i:end])
+	}
+	return blocks
+}
+
+func GenerateVMInstructionSet() string {
+	return `
+var VMInstructionSet={
+	PUSH:function(vm,val){vm.stack.push(val);},
+	POP:function(vm){return vm.stack.pop();},
+	ADD:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a+b);},
+	SUB:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a-b);},
+	MUL:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a*b);},
+	DIV:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a/b);},
+	MOD:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a%b);},
+	AND:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a&&b);},
+	OR:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a||b);},
+	NOT:function(vm){vm.stack.push(!vm.stack.pop());},
+	XOR:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a^b);},
+	SHL:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a<<b);},
+	SHR:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a>>b);},
+	LT:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a<b);},
+	GT:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a>b);},
+	EQ:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a===b);},
+	NE:function(vm){var b=vm.stack.pop(),a=vm.stack.pop();vm.stack.push(a!==b);},
+	LOAD:function(vm,idx){vm.stack.push(vm.memory[idx]);},
+	STORE:function(vm,val){vm.memory[vm.registers.ACC]=val;},
+	JMP:function(vm,addr){vm.pc=addr-1;},
+	JZ:function(vm,addr){if(!vm.stack.pop())vm.pc=addr-1;},
+	JNZ:function(vm,addr){if(vm.stack.pop())vm.pc=addr-1;},
+	CALL:function(vm,addr){vm.stack.push(vm.pc+1);vm.pc=addr-1;},
+	RET:function(vm){vm.pc=vm.stack.pop();},
+	HALT:function(vm){vm.pc=vm.instructions.length+1;}
+};
+`
+}
+
+func GenerateVirtualMachine(code string, config ObfuscatorConfig) string {
+	if !config.EnableCodeVirtualization {
+		return code
+	}
+
+	vmID := fmt.Sprintf("VM_%d", time.Now().UnixNano()%100000)
+
+	compiled := compileToBytecode(code)
+
+	vm := fmt.Sprintf(`
+(function(){
+	var %s={
+		instructions:%s,
+		stack:[],
+		memory:{},
+		registers:{ACC:0,PC:0,SP:0},
+		pc:0,
+
+		init:function(){
+			this.pc=0;
+			this.stack=[];
+			this.memory={};
+		},
+
+		run:function(){
+			this.init();
+			while(this.pc<this.instructions.length){
+				var inst=this.instructions[this.pc];
+				this.execute(inst);
+				this.pc++;
+			}
+			return this.stack;
+		},
+
+		execute:function(inst){
+			var op=inst.op;
+			var val=inst.value;
+			switch(op){
+				case 'PUSH':this.stack.push(val);break;
+				case 'POP':this.stack.pop();break;
+				case 'ADD':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a+b);break;
+				case 'SUB':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a-b);break;
+				case 'MUL':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a*b);break;
+				case 'DIV':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a/b);break;
+				case 'LOAD':this.stack.push(this.memory[val]||0);break;
+				case 'STORE':this.memory[this.registers.ACC]=val;break;
+				case 'JMP':this.pc=val-1;break;
+				case 'JZ':if(!this.stack.pop())this.pc=val-1;break;
+				case 'HALT':this.pc=this.instructions.length+1;break;
+			}
+		}
+	};
+
+	window.%s=%s;
+})();
+`, vmID, compiled, vmID, vmID)
+
+	return vm
+}
+
+func compileToBytecode(code string) string {
+	instructions := []string{}
+
+	re := regexp.MustCompile(`(\d+)|("[^"]*")|('[^']*')|([+\-*/%=<>!&|]+)|(\w+)|(\s+)`)
+	matches := re.FindAllStringSubmatch(code, -1)
+
+	for _, match := range matches {
+		if match[1] != "" {
+			instructions = append(instructions, fmt.Sprintf(`{"op":"PUSH","value":%s}`, match[1]))
+		} else if match[2] != "" || match[3] != "" {
+			instructions = append(instructions, fmt.Sprintf(`{"op":"PUSH","value":%s}`, match[2]))
+		} else if match[4] != "" {
+			instructions = append(instructions, fmt.Sprintf(`{"op":"%s"}`, mapOperator(match[4])))
+		} else if match[5] != "" {
+			instructions = append(instructions, fmt.Sprintf(`{"op":"LOAD","value":"%s"}`, match[5]))
+		}
+	}
+
+	instructions = append(instructions, `{"op":"HALT"}`)
+
+	return "[" + strings.Join(instructions, ",") + "]"
+}
+
+func mapOperator(op string) string {
+	mapping := map[string]string{
+		"+":  "ADD",
+		"-":  "SUB",
+		"*":  "MUL",
+		"/":  "DIV",
+		"%":  "MOD",
+		"==": "EQ",
+		"!=": "NE",
+		"<":  "LT",
+		">":  "GT",
+		"<=": "LE",
+		">=": "GE",
+		"&&": "AND",
+		"||": "OR",
+		"!":  "NOT",
+	}
+
+	if mapped, ok := mapping[op]; ok {
+		return mapped
+	}
+	return op
+}
+
+func GenerateAdvancedVirtualization(code string, config ObfuscatorConfig) string {
+	if !config.EnableCodeVirtualization {
+		return code
+	}
+
+	vmID := fmt.Sprintf("__HVM_%d__", time.Now().UnixNano()%1000000)
+
+	vm := fmt.Sprintf(`
+(function(){
+	var %s={
+		version:'1.0',
+		instructions:[],
+		stack:[],
+		heap:{},
+		pc:0,
+		sp:0,
+		fp:0,
+		enabled:true,
+
+		compile:function(code){
+			var tokens=this.tokenize(code);
+			this.instructions=this.parse(tokens);
+			return this.instructions;
+		},
+
+		tokenize:function(code){
+			var tokens=[];
+			var re=/(\d+(?:\.\d+)?)|("(?:[^"\\\\]|\\\\.)*")|('(?:[^'\\\\]|\\\\.)*')|([+\\-*/%=<>!&|]{1,2})|([a-zA-Z_]\w*)|([\\s,;{}()]+)/g;
+			var m;
+			while((m=re.exec(code))!==null){
+				if(m[1])tokens.push({type:'number',value:m[1]});
+				else if(m[2]||m[3])tokens.push({type:'string',value:m[2]||m[3]});
+				else if(m[4])tokens.push({type:'operator',value:m[4]});
+				else if(m[5])tokens.push({type:'identifier',value:m[5]});
+			}
+			return tokens;
+		},
+
+		parse:function(tokens){
+			var insts=[];
+			for(var i=0;i<tokens.length;i++){
+				var t=tokens[i];
+				if(t.type==='number')insts.push({op:'PUSH',val:parseFloat(t.value)});
+				else if(t.type==='string')insts.push({op:'PUSH',val:t.value});
+				else if(t.type==='operator')insts.push({op:this.mapOp(t.value)});
+				else if(t.type==='identifier')insts.push({op:'LOAD',val:t.value});
+			}
+			insts.push({op:'HALT'});
+			return insts;
+		},
+
+		mapOp:function(op){
+			var m={'+':'ADD','-':'SUB','*':'MUL','/':'DIV','%':'MOD','==':'EQ','!=':'NE','<':'LT','>':'GT','<=':'LE','>=':'GE'};
+			return m[op]||'NOP';
+		},
+
+		run:function(code){
+			if(this.enabled){
+				this.compile(code);
+				this.pc=0;
+				while(this.pc<this.instructions.length){
+					var inst=this.instructions[this.pc];
+					if(inst.op==='HALT')break;
+					this.execute(inst);
+					this.pc++;
+				}
+			}else{
+				eval(code);
+			}
+			return this.stack;
+		},
+
+		execute:function(inst){
+			var op=inst.op;
+			var val=inst.val;
+			switch(op){
+				case 'PUSH':this.stack.push(val);this.sp++;break;
+				case 'POP':this.stack.pop();this.sp--;break;
+				case 'ADD':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a+b);break;
+				case 'SUB':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a-b);break;
+				case 'MUL':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a*b);break;
+				case 'DIV':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a/b);break;
+				case 'MOD':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a%%b);break;
+				case 'EQ':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a===b);break;
+				case 'NE':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a!==b);break;
+				case 'LT':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a<b);break;
+				case 'GT':var b=this.stack.pop(),a=this.stack.pop();this.stack.push(a>b);break;
+				case 'LOAD':this.stack.push(this.heap[val]||0);break;
+				case 'STORE':this.heap[this.registers.ACC]=val;break;
+				case 'HALT':this.pc=this.instructions.length;break;
+			}
+		}
+	};
+	window.%s=%s;
+})();
+`, vmID, vmID, vmID)
+
+	return vm
+}
+
 

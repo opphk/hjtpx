@@ -13,7 +13,7 @@ const (
 	TransformerFFDim          = 256
 	EnhancedTransformerLayers = 6
 	MaxSequenceLen            = 200
-	DropoutRate               = 0.1
+	TransformerDropoutRate    = 0.1
 )
 type TransformerPredictor struct {
 	queryWeights      [][][]float64
@@ -75,7 +75,7 @@ func NewTransformerPredictor() *TransformerPredictor {
 		isInitialized:    false,
 		useMultiHeadAttn:  true,
 		useLayerNorm:      true,
-		attentionDropout: DropoutRate,
+		attentionDropout: TransformerDropoutRate,
 	}
 	predictor.initializeWeights()
 	return predictor
