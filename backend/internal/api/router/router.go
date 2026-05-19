@@ -86,6 +86,13 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/ai/v3/feedback", aiModelV3Handler.RecordFeedback)
 		api.GET("/ai/v3/stats", aiModelV3Handler.GetLearningStats)
 
+		// ============ v17.0 新增高级加密模块路由 ============
+		api.POST("/crypto/v2/generate-key", handler.GenerateAdvancedKey)
+		api.POST("/crypto/v2/encrypt", handler.EncryptAdvanced)
+		api.POST("/crypto/v2/decrypt", handler.DecryptAdvanced)
+		api.POST("/crypto/v2/quantum-hash", handler.GenerateQuantumHash)
+		api.GET("/crypto/v2/keys", handler.GetActiveKeys)
+
 		// 统一验证码验证接口
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
 
