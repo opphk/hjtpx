@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="墨盾验证 - 在线体验声纹验证码">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>声纹验证码 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
+    <script src="/static/js/voiceprint.js" defer></script>
+    
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+            --captcha-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-bs-theme="dark"] {
+            --captcha-light: #2d2d44;
+            --captcha-dark: #f8f9fa;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+        }
+
+        .captcha-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .captcha-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        .instructions {
+            background: linear-gradient(135deg, rgba(201,169,110,0.05) 0%, rgba(201,169,110,0.1) 100%);
+            border: 2px solid rgba(201,169,110,0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .instructions-text {
+            font-size: 1.1rem;
+            color: var(--captcha-dark);
+            margin-bottom: 0;
+        }
+
+        .record-button {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            border: none;
+            color: white;
+            font-size: 2.5rem;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+            box-shadow: 0 8px 24px rgba(201,169,110,0.4);
+            margin: 2rem auto;
+            display: block;
+        }
+
+        .record-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 32px rgba(201,169,110,0.5);
+        }
+
+        .record-button:active {
+            transform: scale(0.95);
+        }
+
+        .record-button.recording {
+            background: linear-gradient(135deg, var(--captcha-danger) 0%, #e57373 100%);
+            animation: pulse-recording 1s infinite;
+        }
+
+        @keyframes pulse-recording {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            50% { box-shadow: 0 0 0 20px rgba(220, 53, 69, 0); }
+        }
+
+        .record-status {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            color: #666;
+        }
+
+        .pattern-display {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            flex-wrap: wrap;
+        }
+
+        .pattern-item {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: var(--captcha-light);
+            border: 2px solid var(--captcha-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--captcha-dark);
+        }
+
+        .verify-button {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            width: 100%;
+            transition: var(--captcha-transition);
+            margin-top: 1.5rem;
+        }
+
+        .verify-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(201,169,110,0.4);
+        }
+
+        .verify-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .difficulty-selector {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .difficulty-btn {
+            padding: 0.5rem 1.5rem;
+            border: 2px solid rgba(201,169,110,0.3);
+            background: transparent;
+            color: #666;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+        }
+
+        .difficulty-btn.active {
+            background: var(--captcha-primary);
+            border-color: var(--captcha-primary);
+            color: white;
+        }
+
+        .difficulty-btn:hover {
+            border-color: var(--captcha-primary);
+        }
+
+        .result-banner {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+
+        .result-banner.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-banner.success {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: var(--captcha-success);
+        }
+
+        .result-banner.error {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: var(--captcha-danger);
+        }
+
+        .similarity-display {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(201,169,110,0.1);
+            border-radius: 8px;
+        }
+
+        .similarity-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .similarity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--captcha-danger) 0%, var(--captcha-primary) 50%, var(--captcha-success) 100%);
+            transition: width 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .refresh-button {
+            background: none;
+            border: 2px solid rgba(201,169,110,0.3);
+            color: var(--captcha-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+            display: block;
+            margin: 1rem auto 0;
+        }
+
+        .refresh-button:hover {
+            background: rgba(201,169,110,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="captcha-container">
+            <div class="captcha-card">
+                <div class="card-header">
+                    <h3 class="mb-0">
+                        <i class="fas fa-microphone-alt me-2"></i>
+                        声纹验证码
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="difficulty-selector">
+                        <button class="difficulty-btn active" data-complexity="2">简单</button>
+                        <button class="difficulty-btn" data-complexity="3">中等</button>
+                        <button class="difficulty-btn" data-complexity="4">困难</button>
+                        <button class="difficulty-btn" data-complexity="5">极难</button>
+                    </div>
+
+                    <div class="instructions" id="instructionsArea">
+                        <p class="instructions-text" id="instructionsText">
+                            <i class="fas fa-info-circle me-2"></i>
+                            点击下方按钮开始录制
+                        </p>
+                    </div>
+
+                    <button class="record-button" id="recordButton">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+
+                    <div class="record-status" id="recordStatus">
+                        点击按钮开始录制您的声纹
+                    </div>
+
+                    <div class="pattern-display" id="patternDisplay" style="display: none;">
+                    </div>
+
+                    <button class="verify-button" id="verifyButton" disabled>
+                        <i class="fas fa-check-circle me-2"></i>
+                        验证声纹
+                    </button>
+
+                    <div class="result-banner" id="resultBanner"></div>
+
+                    <button class="refresh-button" id="refreshButton">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        重新生成
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let voiceprintCaptcha = null;
+        let currentComplexity = 2;
+        let isRecording = false;
+        let recordedBlob = null;
+
+        const recordButton = document.getElementById('recordButton');
+        const verifyButton = document.getElementById('verifyButton');
+        const refreshButton = document.getElementById('refreshButton');
+        const recordStatus = document.getElementById('recordStatus');
+        const instructionsText = document.getElementById('instructionsText');
+        const patternDisplay = document.getElementById('patternDisplay');
+        const resultBanner = document.getElementById('resultBanner');
+        const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+
+        difficultyButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                difficultyButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentComplexity = parseInt(btn.dataset.complexity);
+                generateCaptcha();
+            });
+        });
+
+        recordButton.addEventListener('click', toggleRecording);
+        verifyButton.addEventListener('click', verifyCaptcha);
+        refreshButton.addEventListener('click', generateCaptcha);
+
+        async function generateCaptcha() {
+            try {
+                resetState();
+                
+                const response = await fetch('/api/v1/captcha/voiceprint/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        complexity: currentComplexity
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.code === 0 && data.data) {
+                    voiceprintCaptcha = data.data;
+                    displayPattern(voiceprintCaptcha.pattern);
+                    instructionsText.innerHTML = `<i class="fas fa-check-circle me-2"></i>${voiceprintCaptcha.instructions}`;
+                    recordButton.disabled = false;
+                } else {
+                    showError('生成验证码失败');
+                }
+            } catch (error) {
+                showError('网络错误，请重试');
+            }
+        }
+
+        function displayPattern(pattern) {
+            if (!pattern || !pattern.target_phrase) {
+                return;
+            }
+            
+            patternDisplay.innerHTML = '';
+            patternDisplay.style.display = 'flex';
+            
+            const phrase = pattern.target_phrase;
+            const phraseDiv = document.createElement('div');
+            phraseDiv.className = 'pattern-item';
+            phraseDiv.style.width = 'auto';
+            phraseDiv.style.padding = '0 1.5rem';
+            phraseDiv.textContent = phrase;
+            phraseDiv.style.fontSize = '1rem';
+            patternDisplay.appendChild(phraseDiv);
+        }
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                await stopRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                let chunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    chunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    recordedBlob = new Blob(chunks, { type: 'audio/wav' });
+                    stream.getTracks().forEach(track => track.stop());
+                    verifyButton.disabled = false;
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recordButton.classList.add('recording');
+                recordButton.innerHTML = '<i class="fas fa-stop"></i>';
+                recordStatus.textContent = '正在录制...';
+                instructionsText.innerHTML = '<i class="fas fa-volume-up me-2"></i>请朗读屏幕上的文字';
+
+                voiceprintCaptcha.mediaRecorder = mediaRecorder;
+                voiceprintCaptcha.chunks = chunks;
+                
+                setTimeout(() => {
+                    if (isRecording) {
+                        stopRecording();
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                showError('无法访问麦克风，请检查权限设置');
+            }
+        }
+
+        async function stopRecording() {
+            if (voiceprintCaptcha && voiceprintCaptcha.mediaRecorder) {
+                voiceprintCaptcha.mediaRecorder.stop();
+            }
+            
+            isRecording = false;
+            recordButton.classList.remove('recording');
+            recordButton.innerHTML = '<i class="fas fa-microphone"></i>';
+            recordStatus.textContent = '录制完成，请点击验证';
+            instructionsText.innerHTML = '<i class="fas fa-check-circle me-2"></i>录制完成，点击验证按钮进行声纹验证';
+        }
+
+        async function verifyCaptcha() {
+            if (!voiceprintCaptcha || !recordedBlob) {
+                showError('请先录制声纹');
+                return;
+            }
+
+            try {
+                verifyButton.disabled = true;
+                recordButton.disabled = true;
+
+                const reader = new FileReader();
+                const audioBase64 = await new Promise((resolve, reject) => {
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(recordedBlob);
+                });
+
+                const response = await fetch('/api/v1/captcha/voiceprint/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: voiceprintCaptcha.session_id,
+                        voice_data: audioBase64
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.code === 0 && data.data) {
+                    const result = data.data;
+                    if (result.success) {
+                        showSuccess(result.message, result.similarity_score);
+                    } else {
+                        showError(result.message);
+                    }
+                } else {
+                    showError('验证失败');
+                }
+            } catch (error) {
+                showError('验证出错，请重试');
+            } finally {
+                verifyButton.disabled = false;
+                recordButton.disabled = false;
+            }
+        }
+
+        function showSuccess(message, score) {
+            resultBanner.className = 'result-banner show success';
+            resultBanner.innerHTML = `
+                <div><i class="fas fa-check-circle me-2"></i>${message}</div>
+                <div class="similarity-display">
+                    <small>相似度: ${(score * 100).toFixed(1)}%</small>
+                    <div class="similarity-bar">
+                        <div class="similarity-fill" style="width: ${score * 100}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            resultBanner.className = 'result-banner show error';
+            resultBanner.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>${message}`;
+        }
+
+        function resetState() {
+            isRecording = false;
+            recordedBlob = null;
+            recordButton.classList.remove('recording');
+            recordButton.innerHTML = '<i class="fas fa-microphone"></i>';
+            recordStatus.textContent = '点击按钮开始录制您的声纹';
+            verifyButton.disabled = true;
+            resultBanner.classList.remove('show');
+            patternDisplay.style.display = 'none';
+        }
+
+        generateCaptcha();
+    </script>
+</body>
+</html>

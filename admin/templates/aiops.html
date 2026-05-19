@@ -1,0 +1,631 @@
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 智能运维中心{% endblock %}
+{% block page_title %}智能运维中心{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-default" id="refreshBtn">
+        <i class="fas fa-sync"></i> 刷新
+    </button>
+    <button type="button" class="btn btn-default dropdown-toggle dropdown-icon" data-toggle="dropdown">
+        <span class="sr-only">导出</span>
+    </button>
+    <div class="dropdown-menu" role="menu">
+        <a class="dropdown-item" href="#" onclick="exportReport('pdf'); return false;"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a class="dropdown-item" href="#" onclick="exportReport('excel'); return false;"><i class="fas fa-file-excel"></i> Excel</a>
+        <a class="dropdown-item" href="#" onclick="exportReport('json'); return false;"><i class="fas fa-file-code"></i> JSON</a>
+    </div>
+</div>
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+        <i class="fas fa-robot"></i> 自动修复
+    </button>
+    <div class="dropdown-menu" role="menu" id="autoRemediationDropdown">
+        <a class="dropdown-item" href="#" onclick="toggleAutoRemediation(); return false;">
+            <i class="fas fa-toggle-on"></i> 启用自动修复
+        </a>
+        <a class="dropdown-item" href="#" onclick="viewPlaybooks(); return false;">
+            <i class="fas fa-book"></i> 查看修复剧本
+        </a>
+    </div>
+</div>
+<button type="button" class="btn btn-default" id="fullscreenBtn" title="全屏">
+    <i class="fas fa-expand"></i>
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-primary">
+            <div class="inner">
+                <h3 class="counter-value" id="healthScore">0</h3>
+                <p>健康评分</p>
+                <div class="progress mt-2">
+                    <div class="progress-bar bg-white" id="healthProgress" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <a href="#healthDetails" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3 class="counter-value" id="activeAlerts">0</h3>
+                <p>活跃告警</p>
+                <div class="mt-2">
+                    <span class="badge badge-light" id="criticalAlerts">0 严重</span>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <a href="#alertsSection" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3 class="counter-value" id="predictionsCount">0</h3>
+                <p>预测数</p>
+                <div class="mt-2">
+                    <span class="badge badge-warning" id="warningPredictions">0 警告</span>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <a href="#predictionsSection" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3 class="counter-value" id="monthlyCost">$0</h3>
+                <p>本月成本</p>
+                <div class="mt-2">
+                    <span class="badge badge-light" id="costTrend">稳定</span>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <a href="#costSection" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h3 class="counter-value" id="autoRemediationStatus">启用</h3>
+                <p>自动修复</p>
+                <div class="mt-2">
+                    <span class="badge badge-success" id="remediationEnabled">已启用</span>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-magic"></i>
+            </div>
+            <a href="#remediationSection" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="small-box bg-secondary">
+            <div class="inner">
+                <h3 class="counter-value" id="recommendationsCount">0</h3>
+                <p>优化建议</p>
+                <div class="mt-2">
+                    <span class="badge badge-info" id="highPriorityRec">0 高优先级</span>
+                </div>
+            </div>
+            <div class="icon">
+                <i class="fas fa-lightbulb"></i>
+            </div>
+            <a href="#recommendationsSection" class="small-box-footer">详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>系统健康趋势</h3>
+                <div class="card-tools">
+                    <select class="form-control form-control-sm" id="healthPeriodSelect">
+                        <option value="1h">最近1小时</option>
+                        <option value="6h">最近6小时</option>
+                        <option value="24h" selected>最近24小时</option>
+                        <option value="7d">最近7天</option>
+                    </select>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="healthTrendChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-tachometer-alt mr-2"></i>系统指标</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="progress-group">
+                    CPU 使用率
+                    <span class="float-right" id="cpuUsage"><b>0</b>%</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-primary" id="cpuProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-group">
+                    内存使用率
+                    <span class="float-right" id="memoryUsage"><b>0</b>%</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-success" id="memoryProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-group">
+                    磁盘使用率
+                    <span class="float-right" id="diskUsage"><b>0</b>%</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-warning" id="diskProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-group">
+                    错误率
+                    <span class="float-right" id="errorRate"><b>0</b>%</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-danger" id="errorRateProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-group">
+                    缓存命中率
+                    <span class="float-right" id="cacheHitRate"><b>0</b>%</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-info" id="cacheHitProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-group">
+                    平均响应时间
+                    <span class="float-right" id="avgResponseTime"><b>0</b>ms</span>
+                    <div class="progress progress-sm">
+                        <div class="progress-bar bg-secondary" id="responseTimeProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="healthDetails">
+    <div class="col-md-12">
+        <div class="card card-dark">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-clipboard-list mr-2"></i>运维健康检查</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="runHealthCheck()">
+                        <i class="fas fa-play"></i> 立即检查
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>检查项</th>
+                            <th>状态</th>
+                            <th>详情</th>
+                            <th>建议</th>
+                        </tr>
+                    </thead>
+                    <tbody id="healthCheckTable">
+                        <tr>
+                            <td colspan="4" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="alertsSection">
+    <div class="col-md-6">
+        <div class="card card-danger">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-bell mr-2"></i>活跃告警</h3>
+                <div class="card-tools">
+                    <select class="form-control form-control-sm" id="alertSeverityFilter">
+                        <option value="">全部</option>
+                        <option value="critical">严重</option>
+                        <option value="warning">警告</option>
+                        <option value="info">信息</option>
+                    </select>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>级别</th>
+                            <th>标题</th>
+                            <th>时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTable">
+                        <tr>
+                            <td colspan="4" class="text-center">暂无告警</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-warning">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>告警趋势</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="alertTrendChart" style="min-height: 250px; height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="predictionsSection">
+    <div class="col-md-12">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-crystal-ball mr-2"></i>性能预测</h3>
+                <div class="card-tools">
+                    <select class="form-control form-control-sm" id="predictionMetricSelect">
+                        <option value="cpu_usage">CPU使用率</option>
+                        <option value="memory_usage">内存使用率</option>
+                        <option value="error_rate">错误率</option>
+                        <option value="response_time">响应时间</option>
+                    </select>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="predictionChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+            <div class="card-footer">
+                <div class="row" id="predictionDetails">
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-chart-line"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">当前值</span>
+                                <span class="info-box-number" id="predCurrentValue">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">预测值 (24h)</span>
+                                <span class="info-box-number" id="predPredictedValue">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-check-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">置信度</span>
+                                <span class="info-box-number" id="predConfidence">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-danger"><i class="fas fa-exclamation-circle"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">告警级别</span>
+                                <span class="info-box-number" id="predAlertLevel">正常</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="costSection">
+    <div class="col-md-8">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-dollar-sign mr-2"></i>成本分析</h3>
+                <div class="card-tools">
+                    <select class="form-control form-control-sm" id="costPeriodSelect">
+                        <option value="monthly" selected>本月</option>
+                        <option value="weekly">本周</option>
+                        <option value="quarterly">本季度</option>
+                    </select>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="costTrendChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-warning">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>成本分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="costDistributionChart" style="min-height: 250px; height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="remediationSection">
+    <div class="col-md-12">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-magic mr-2"></i>自动修复</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-default" onclick="executeRecommendedAction()">
+                        <i class="fas fa-play"></i> 执行推荐操作
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>修复剧本</th>
+                            <th>触发条件</th>
+                            <th>状态</th>
+                            <th>最近执行</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="playbooksTable">
+                        <tr>
+                            <td colspan="5" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="recommendationsSection">
+    <div class="col-md-12">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-lightbulb mr-2"></i>优化建议</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="loadRecommendations()">
+                        <i class="fas fa-sync"></i> 刷新
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row" id="recommendationsList">
+                    <div class="col-md-12 text-center text-muted">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-dark">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-project-diagram mr-2"></i>服务依赖关系</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="dependencyGraph" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-sitemap mr-2"></i>根因分析</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="runRootCauseAnalysis()">
+                        <i class="fas fa-search"></i> 重新分析
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="rootCauseAnalysis">
+                    <div class="timeline">
+                        <div class="time-label">
+                            <span class="bg-danger">最近根因分析</span>
+                        </div>
+                        <div id="rootCauseTimeline">
+                            <div class="text-center text-muted p-4">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-clipboard mr-2"></i>执行历史</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>类型</th>
+                            <th>操作</th>
+                            <th>状态</th>
+                            <th>详情</th>
+                        </tr>
+                    </thead>
+                    <tbody id="executionHistoryTable">
+                        <tr>
+                            <td colspan="5" class="text-center">暂无执行记录</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="alertDetailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exclamation-circle"></i> 告警详情</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>告警级别</label>
+                            <input type="text" class="form-control" id="alertDetailLevel" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>触发时间</label>
+                            <input type="text" class="form-control" id="alertDetailTime" readonly>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>告警标题</label>
+                    <input type="text" class="form-control" id="alertDetailTitle" readonly>
+                </div>
+                <div class="form-group">
+                    <label>告警描述</label>
+                    <textarea class="form-control" id="alertDetailDescription" rows="3" readonly></textarea>
+                </div>
+                <div class="form-group">
+                    <label>建议操作</label>
+                    <div id="alertDetailActions"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="acknowledgeAlert()">
+                    <i class="fas fa-check"></i> 确认告警
+                </button>
+                <button type="button" class="btn btn-success" onclick="resolveAlert()">
+                    <i class="fas fa-check-circle"></i> 标记已解决
+                </button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="playbookModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-book"></i> 修复剧本详情</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="playbookDetails"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="executionResultModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-spinner fa-spin"></i> 执行结果</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="executionResultContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="/admin/static/js/aiops.js"></script>
+{% endblock %}

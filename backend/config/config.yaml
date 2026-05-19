@@ -87,3 +87,197 @@ database:
     enable_query_metrics: true
     enable_connection_metrics: true
     metrics_interval_secs: 60
+
+edge:
+  enabled: true
+  node_id: ""
+  region: cn-north-1
+  node_manager:
+    heartbeat_ttl_secs: 30
+    check_interval_secs: 10
+    metrics_window_secs: 300
+    max_nodes_per_region: 100
+  dns:
+    resolver_timeout_secs: 5
+    max_retries: 3
+    cache_size: 10000
+    cache_ttl_secs: 300
+  router:
+    default_strategy: adaptive
+    update_interval_secs: 60
+    max_rules: 1000
+  health_check:
+    enabled: true
+    default_interval_secs: 30
+    default_timeout_secs: 5
+    default_threshold: 3
+    failure_threshold: 3
+    success_threshold: 2
+  ai_engine:
+    enabled: true
+    model_cache_size: 100
+    inference_cache_size: 1000
+    inference_cache_ttl_secs: 300
+    max_batch_size: 32
+    async_enabled: true
+  model_compressor:
+    enabled: true
+    max_cache_size: 100
+    default_method: quantization
+    quantization_type: int8
+    pruning_ratio: 0.3
+    preserve_accuracy: true
+  cache_sync:
+    enabled: true
+    strategy: eventual
+    batch_size: 100
+    sync_interval_secs: 5
+    max_queue_size: 10000
+    compression_enabled: true
+    retry_attempts: 3
+    retry_delay_secs: 1
+  loadbalancer:
+    enabled: true
+    max_connections: 10000
+    connection_timeout_secs: 10
+    idle_timeout_secs: 300
+    health_check_interval_secs: 10
+    sticky_sessions: true
+    session_affinity_minutes: 30
+    default_algorithm: adaptive
+    failover_enabled: true
+    retry_attempts: 3
+  nodes:
+    - id: edge-ap-1
+      name: AP East Edge Node 1
+      region: ap-east-1
+      zone: zone-a
+      ip_address: 10.0.1.10
+      public_ip: 203.0.113.10
+      port: 8080
+      type: mixed
+      weight: 100
+      capacity: 1000
+      latitude: 22.3193
+      longitude: 114.1694
+      country: HK
+      city: Hong Kong
+      is_csp: true
+      csp_provider: aws
+    - id: edge-eu-1
+      name: EU West Edge Node 1
+      region: eu-west-1
+      zone: zone-a
+      ip_address: 10.0.2.10
+      public_ip: 203.0.113.20
+      port: 8080
+      type: mixed
+      weight: 100
+      capacity: 1000
+      latitude: 53.3498
+      longitude: -6.2603
+      country: IE
+      city: Dublin
+      is_csp: true
+      csp_provider: azure
+    - id: edge-us-1
+      name: US East Edge Node 1
+      region: us-east-1
+      zone: zone-a
+      ip_address: 10.0.3.10
+      public_ip: 203.0.113.30
+      port: 8080
+      type: mixed
+      weight: 100
+      capacity: 1000
+      latitude: 37.4316
+      longitude: -78.6569
+      country: US
+      city: Virginia
+      is_csp: true
+      csp_provider: gcp
+    - id: edge-cn-1
+      name: China North Edge Node 1
+      region: cn-north-1
+      zone: zone-a
+      ip_address: 10.0.4.10
+      public_ip: 203.0.113.40
+      port: 8080
+      type: mixed
+      weight: 100
+      capacity: 1000
+      latitude: 39.9042
+      longitude: 116.4074
+      country: CN
+      city: Beijing
+      is_csp: true
+      csp_provider: aliyun
+  routing_rules:
+    - id: rule-apac
+      name: APAC Traffic
+      priority: 50
+      strategy: geographic
+      source_regions: [ap-east-1, ap-northeast-1, ap-south-1, ap-southeast-1]
+      target_regions: [ap-east-1, ap-northeast-1]
+      enabled: true
+    - id: rule-europe
+      name: Europe Traffic
+      priority: 50
+      strategy: geographic
+      source_regions: [eu-west-1, me-central-1]
+      target_regions: [eu-west-1]
+      enabled: true
+    - id: rule-americas
+      name: Americas Traffic
+      priority: 50
+      strategy: performance
+      source_regions: [us-east-1, sa-east-1]
+      target_regions: [us-east-1]
+      enabled: true
+    - id: rule-china
+      name: China Traffic
+      priority: 30
+      strategy: geographic
+      source_regions: [cn-north-1]
+      target_regions: [cn-north-1]
+      enabled: true
+    - id: rule-default
+      name: Default Low Latency
+      priority: 100
+      strategy: latency
+      enabled: true
+  dns_zones:
+    - id: zone-primary
+      name: Primary Zone
+      domain: edge.example.com
+      ttl: 300
+      dnssec: true
+      records:
+        - name: api
+          type: A
+          value: 203.0.113.10
+          ttl: 300
+          weight: 100
+          region: ap-east-1
+          healthy: true
+        - name: api
+          type: A
+          value: 203.0.113.20
+          ttl: 300
+          weight: 100
+          region: eu-west-1
+          healthy: true
+        - name: api
+          type: A
+          value: 203.0.113.30
+          ttl: 300
+          weight: 100
+          region: us-east-1
+          healthy: true
+        - name: api
+          type: A
+          value: 203.0.113.40
+          ttl: 300
+          weight: 100
+          region: cn-north-1
+          healthy: true

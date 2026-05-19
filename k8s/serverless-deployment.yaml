@@ -1,0 +1,179 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serverless-runtime
+  namespace: serverless
+  labels:
+    app: serverless-runtime
+    component: runtime
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: serverless-runtime
+  template:
+    metadata:
+      labels:
+        app: serverless-runtime
+        component: runtime
+    spec:
+      serviceAccountName: serverless-controller
+      containers:
+      - name: runtime
+        image: serverless/runtime:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: RUNTIME_MODE
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: MAX_CONCURRENT_FUNCTIONS
+          value: "100"
+        - name: FUNCTION_TIMEOUT_DEFAULT
+          value: "30"
+        - name: MEMORY_LIMIT_DEFAULT
+          value: "256"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        volumeMounts:
+        - name: functions-config
+          mountPath: /etc/serverless
+          readOnly: true
+      volumes:
+      - name: functions-config
+        configMap:
+          name: serverless-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - serverless-runtime
+              topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        workload-type: serverless
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: serverless-runtime
+  namespace: serverless
+  labels:
+    app: serverless-runtime
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: serverless-runtime
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: serverless-runtime-hpa
+  namespace: serverless
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: serverless-runtime
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: serverless-config
+  namespace: serverless
+data:
+  config.yaml: |
+    runtime:
+      mode: production
+      max_concurrent_functions: 100
+      function_timeout_default: 30
+      memory_limit_default: 256
+      arm64_enabled: true
+    
+    scaling:
+      min_replicas: 2
+      max_replicas: 20
+      target_cpu_utilization: 70
+      target_memory_utilization: 80
+      cooldown_period: 300
+    
+    cold_start:
+      pre_warming_enabled: true
+      pre_warming_interval: 60
+      lazy_loading_enabled: true
+      connection_pooling_enabled: true
+    
+    cost:
+      budget_limit: 100.0
+      alert_threshold: 80.0
+      pricing_model: on_demand
