@@ -397,8 +397,9 @@ func (m *AdvancedConnectionPoolManager) collectMetrics() {
 	stats := sqlDB.Stats()
 
 	m.performanceTracker.mu.RLock()
-	queries := atomic.LoadInt64(&m.performanceTracker.queriesExecuted)
+	queriesExecuted := atomic.LoadInt64(&m.performanceTracker.queriesExecuted)
 	m.performanceTracker.mu.RUnlock()
+	_ = queriesExecuted
 
 	snapshot := PoolMetricSnapshot{
 		Timestamp:         time.Now(),
