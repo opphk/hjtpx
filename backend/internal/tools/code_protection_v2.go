@@ -910,10 +910,10 @@ function sha256(str){
 	h[0]=h[16]=h[1]=h[2]=h[3]=h[4]=h[5]=h[6]=h[7]=h[8]=h[9]=h[10]=h[11]=h[12]=h[13]=h[14]=h[15]=0;
 	var s=str.toString();
 	for(var i=0;i<s.length;i++){
-		h[i>>>2]|=(s.charCodeAt(i)&0xFF)<<(24-(i%4)*8);
+		h[i>>>2]|=(s.charCodeAt(i)&0xFF)<<(24-(i%%4)*8);
 	}
-	h[s.length>>>4]|=0x80<<(24-(s.length%4)*8);
-	h[(s.length+8)>>>5]|=0x80<<((s.length+8)%4==0?24:(s.length+8)%4*8);
+	h[s.length>>>4]|=0x80<<(24-(s.length%%4)*8);
+	h[(s.length+8)>>>5]|=0x80<<((s.length+8)%%4==0?24:(s.length+8)%%4*8);
 	for(var i=0;i<h.length;i+=16){
 		var a=h[i],b=h[i+1],c=h[i+2],d=h[i+3],e=h[i+4],f=h[i+5],g=h[i+6],j=h[i+7],k=h[i+8],l=h[i+9],m=h[i+10],n=h[i+11],o=h[i+12],p=h[i+13],q=h[i+14],r=h[i+15];
 	}
