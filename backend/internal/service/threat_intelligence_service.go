@@ -222,8 +222,6 @@ type ThreatIntelligenceResult struct {
 	AttackCampaigns  []string
 }
 
-RiskLevelOrig string
-
 const (
 	RiskLevelStrNone     RiskLevel = "none"
 	RiskLevelStrLow      RiskLevel = "low"
