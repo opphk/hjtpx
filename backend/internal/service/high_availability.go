@@ -160,10 +160,7 @@ func NewHighAvailabilityService() *HighAvailabilityService {
 			ScaleUpCooldown:    300,
 			ScaleDownCooldown: 600,
 		},
-		capacityMetrics: CapacityMetrics{
-			CurrentReplicas: 3,
-			TargetReplicas:  3,
-		},
+		capacityMetrics: CapacityMetrics{},
 		autoRecoveryConfig: AutoRecoveryConfig{
 			Enabled:             true,
 			MaxRetries:          3,
@@ -175,6 +172,8 @@ func NewHighAvailabilityService() *HighAvailabilityService {
 		scaleEvents:     make([]ScaleEvent, 0),
 		startedAt:       time.Now(),
 	}
+	has.capacityMetrics.CurrentReplicas.Store(3)
+	has.capacityMetrics.TargetReplicas.Store(3)
 
 	has.components["api_gateway"] = &ServiceComponent{
 		Name:           "API Gateway",
@@ -214,7 +213,7 @@ func (has *HighAvailabilityService) GetSLAStatus() map[string]interface{} {
 	daysSinceStart := time.Since(has.startedAt).Hours() / 24
 	var projectedDowntime float64
 	if daysSinceStart > 0 {
-		projectedDowntime = (downtimeSeconds / 3600) / daysSinceStart * 30
+		projectedDowntime = (float64(downtimeSeconds) / 3600) / daysSinceStart * 30
 	}
 
 	return map[string]interface{}{
@@ -393,8 +392,8 @@ func (has *HighAvailabilityService) GetCapacityStatus() map[string]interface{} {
 	return map[string]interface{}{
 		"current_replicas":       has.capacityMetrics.CurrentReplicas.Load(),
 		"target_replicas":         has.capacityMetrics.TargetReplicas.Load(),
-		"cpu_utilization_percent": has.capacityMetrics.CPUUtilization.Load(),
-		"memory_utilization_percent": has.capacityMetrics.MemoryUtilization.Load(),
+		"cpu_utilization_percent": has.capacityMetrics.CPUUtilization,
+		"memory_utilization_percent": has.capacityMetrics.MemoryUtilization,
 		"request_rate_per_sec":   has.capacityMetrics.RequestRate.Load(),
 		"queue_depth":            has.capacityMetrics.QueueDepth.Load(),
 		"last_scale_time":        has.capacityMetrics.LastScaleTime.Load(),
@@ -418,8 +417,8 @@ func (has *HighAvailabilityService) evaluateScaling() {
 	scaleUpThreshold := has.capacityConfig.ScaleUpThreshold
 	scaleDownThreshold := has.capacityConfig.ScaleDownThreshold
 
-	cpuUtil := has.capacityMetrics.CPUUtilization.Load()
-	memUtil := has.capacityMetrics.MemoryUtilization.Load()
+	cpuUtil := has.capacityMetrics.CPUUtilization
+	memUtil := has.capacityMetrics.MemoryUtilization
 	avgUtil := (cpuUtil + memUtil) / 2
 
 	var newTargetReplicas int32
@@ -549,15 +548,4 @@ func (has *HighAvailabilityService) HealthCheck(ctx context.Context) map[string]
 	return result
 }
 
-func generateID() string {
-	return time.Now().Format("20060102150405") + "-" + randomString(8)
-}
 
-func randomString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
-	}
-	return string(b)
-}

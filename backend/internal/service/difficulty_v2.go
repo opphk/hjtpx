@@ -27,36 +27,44 @@ type RiskScoreComponent struct {
 	TimePatternRisk    float64
 }
 
-type MultiDimensionalRiskScore struct {
+type DifficultyRiskScore struct {
 	TotalScore        float64
-	Components         *RiskScoreComponent
+	Components        *RiskScoreComponent
 	Confidence        float64
 	DataSufficiency   float64
 	AnomalyIndicators []string
 	LastCalculated    time.Time
 }
 
+type DifficultyBehaviorPattern struct {
+	ClickIntervalStats  *IntervalStats
+	MouseSpeedStats     *SpeedStats
+	TrajectoryComplexity float64
+	PreferredTimes       map[int]int
+	SuccessRateByHour    map[int]float64
+	ResponseTimeTrend    []float64
+}
+
+type DifficultyVerificationResult struct {
+	Timestamp      time.Time
+	Difficulty     DifficultyLevelV2
+	Success        bool
+	FailureReason  string
+	ResponseTime   time.Duration
+}
+
+
 type UserRiskProfileV2 struct {
 	UserID           string
-	CompositeRisk    *MultiDimensionalRiskScore
-	SuccessHistory   []*VerificationResult
-	FailureHistory   []*VerificationResult
+	CompositeRisk    *DifficultyRiskScore
+	SuccessHistory   []*DifficultyVerificationResult
+	FailureHistory   []*DifficultyVerificationResult
 	SessionMetrics   *SessionMetrics
-	BehaviorPattern  *BehaviorPattern
+	BehaviorPattern  *DifficultyBehaviorPattern
 	DeviceTrust      *DeviceTrust
 	LastUpdated      time.Time
 	RetryState       *RetryState
 	TimeoutState     *TimeoutState
-}
-
-type VerificationResult struct {
-	Timestamp      time.Time
-	Difficulty     DifficultyLevelV2
-	Success        bool
-	ResponseTime   time.Duration
-	MethodUsed     string
-	RiskScore      float64
-	FailureReason  string
 }
 
 type SessionMetrics struct {
@@ -72,16 +80,6 @@ type SessionMetrics struct {
 	BestStreak         int
 	SessionStartTime   time.Time
 	LastAttemptTime    time.Time
-}
-
-type BehaviorPattern struct {
-	ClickIntervalStats   *IntervalStats
-	MouseSpeedStats      *SpeedStats
-	TrajectoryComplexity float64
-	TypingRhythm         *TypingRhythm
-	PreferredTimes       map[int]int
-	SuccessRateByHour    map[int]float64
-	ResponseTimeTrend    []float64
 }
 
 type IntervalStats struct {
@@ -305,7 +303,7 @@ func NewDifficultyAdjustmentEngine() *DifficultyAdjustmentEngine {
 	}
 }
 
-func (s *AdaptiveDifficultyServiceV2) CalculateMultiDimensionalRiskScore(userID string, context *RiskContextV2) *MultiDimensionalRiskScore {
+func (s *AdaptiveDifficultyServiceV2) CalculateMultiDimensionalRiskScore(userID string, context *RiskContextV2) *DifficultyRiskScore {
 	profile := s.GetOrCreateProfileV2(userID)
 
 	components := &RiskScoreComponent{}
@@ -330,7 +328,7 @@ func (s *AdaptiveDifficultyServiceV2) CalculateMultiDimensionalRiskScore(userID 
 
 	confidence := s.calculateRiskConfidence(profile, context)
 
-	return &MultiDimensionalRiskScore{
+	return &DifficultyRiskScore{
 		TotalScore:        math.Min(100, math.Max(0, totalScore)),
 		Components:        components,
 		Confidence:        confidence,
@@ -667,13 +665,13 @@ func (s *AdaptiveDifficultyServiceV2) GetOrCreateProfileV2(userID string) *UserR
 
 	profile := &UserRiskProfileV2{
 		UserID:          userID,
-		CompositeRisk:   &MultiDimensionalRiskScore{TotalScore: 50.0},
-		SuccessHistory:  make([]*VerificationResult, 0),
-		FailureHistory:  make([]*VerificationResult, 0),
+		CompositeRisk:   &DifficultyRiskScore{TotalScore: 50.0},
+		SuccessHistory:  make([]*DifficultyVerificationResult, 0),
+		FailureHistory:  make([]*DifficultyVerificationResult, 0),
 		SessionMetrics: &SessionMetrics{
 			SessionStartTime: time.Now(),
 		},
-		BehaviorPattern: &BehaviorPattern{
+		BehaviorPattern: &DifficultyBehaviorPattern{
 			PreferredTimes:    make(map[int]int),
 			SuccessRateByHour: make(map[int]float64),
 			ResponseTimeTrend: make([]float64, 0),
@@ -703,7 +701,7 @@ func (s *AdaptiveDifficultyServiceV2) GetOrCreateProfileV2(userID string) *UserR
 	return profile
 }
 
-func (s *AdaptiveDifficultyServiceV2) AdjustDifficultyDynamically(userID string, riskScore *MultiDimensionalRiskScore) (DifficultyLevelV2, *DifficultyAdjustment) {
+func (s *AdaptiveDifficultyServiceV2) AdjustDifficultyDynamically(userID string, riskScore *DifficultyRiskScore) (DifficultyLevelV2, *DifficultyAdjustment) {
 	profile := s.GetOrCreateProfileV2(userID)
 	currentDifficulty := s.getCurrentDifficultyFromProfile(profile)
 
@@ -750,7 +748,7 @@ func (s *AdaptiveDifficultyServiceV2) getCurrentDifficultyFromProfile(profile *U
 	if len(profile.FailureHistory) > 0 {
 		lastFailure := profile.FailureHistory[len(profile.FailureHistory)-1]
 		if lastFailure.Timestamp.After(lastResult.Timestamp) {
-			lastResult = &VerificationResult{
+			lastResult = &DifficultyVerificationResult{
 				Difficulty: DifficultyLevelV2(lastFailure.Difficulty),
 			}
 		}
@@ -802,7 +800,7 @@ func (s *AdaptiveDifficultyServiceV2) applySessionBasedAdjustment(metrics *Sessi
 	return base
 }
 
-func (s *AdaptiveDifficultyServiceV2) applyAnomalyAdjustment(riskScore *MultiDimensionalRiskScore, base DifficultyLevelV2) DifficultyLevelV2 {
+func (s *AdaptiveDifficultyServiceV2) applyAnomalyAdjustment(riskScore *DifficultyRiskScore, base DifficultyLevelV2) DifficultyLevelV2 {
 	if riskScore.Components.BehavioralRisk > 70 {
 		base = s.increaseDifficulty(base)
 	}
@@ -885,7 +883,7 @@ func (s *AdaptiveDifficultyServiceV2) increaseDifficulty(level DifficultyLevelV2
 	}
 }
 
-func (s *AdaptiveDifficultyServiceV2) generateAdjustmentReason(riskScore *MultiDimensionalRiskScore) string {
+func (s *AdaptiveDifficultyServiceV2) generateAdjustmentReason(riskScore *DifficultyRiskScore) string {
 	if riskScore == nil {
 		return "基于默认配置调整"
 	}
@@ -991,7 +989,7 @@ func (s *AdaptiveDifficultyServiceV2) recordTimeoutAttempt(userID string) {
 		profile.SessionMetrics.TimeoutAttempts++
 	}
 
-	failure := &VerificationResult{
+	failure := &DifficultyVerificationResult{
 		Timestamp:     time.Now(),
 		Success:       false,
 		FailureReason: "timeout",
@@ -1151,7 +1149,7 @@ func (s *AdaptiveDifficultyServiceV2) ResetRetryState(userID string) {
 	}
 }
 
-func (s *AdaptiveDifficultyServiceV2) RecordVerificationResult(userID string, result *VerificationResult) {
+func (s *AdaptiveDifficultyServiceV2) RecordVerificationResult(userID string, result *DifficultyVerificationResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1226,9 +1224,9 @@ func (s *AdaptiveDifficultyServiceV2) updateSessionMetrics(profile *UserRiskProf
 	}
 }
 
-func (s *AdaptiveDifficultyServiceV2) updateBehaviorPattern(profile *UserRiskProfileV2, result *VerificationResult) {
+func (s *AdaptiveDifficultyServiceV2) updateBehaviorPattern(profile *UserRiskProfileV2, result *DifficultyVerificationResult) {
 	if profile.BehaviorPattern == nil {
-		profile.BehaviorPattern = &BehaviorPattern{
+		profile.BehaviorPattern = &DifficultyBehaviorPattern{
 			PreferredTimes:    make(map[int]int),
 			SuccessRateByHour: make(map[int]float64),
 			ResponseTimeTrend: make([]float64, 0),
@@ -1264,7 +1262,7 @@ func (s *AdaptiveDifficultyServiceV2) updateBehaviorPattern(profile *UserRiskPro
 
 func (s *AdaptiveDifficultyServiceV2) updateRiskProfile(profile *UserRiskProfileV2) {
 	if profile.CompositeRisk == nil {
-		profile.CompositeRisk = &MultiDimensionalRiskScore{}
+		profile.CompositeRisk = &DifficultyRiskScore{}
 	}
 
 	if len(profile.SuccessHistory) > 0 && len(profile.FailureHistory) > 0 {

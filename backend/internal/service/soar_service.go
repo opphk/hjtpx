@@ -34,7 +34,7 @@ type SOARService interface {
 	ListPlaybooks(ctx context.Context) ([]*IncidentPlaybook, error)
 	ExecuteThreatHunt(ctx context.Context, hunt *ThreatHuntRequest) (*ThreatHuntResult, error)
 	GetSecurityPosture(ctx context.Context) (*SecurityPosture, error)
-	AutoRespond(ctx context.Context, incident *SecurityIncident) (*AutomatedResponse, error)
+	AutoRespond(ctx context.Context, incident *SecurityIncident) (*SOARAutomatedResponse, error)
 }
 
 type PlaybookTrigger struct {
@@ -148,7 +148,7 @@ type PostureTrend struct {
 	Incidents int       `json:"incidents"`
 }
 
-type AutomatedResponse struct {
+type SOARAutomatedResponse struct {
 	ResponseID   string                 `json:"response_id"`
 	IncidentID   string                 `json:"incident_id"`
 	ActionsTaken []string               `json:"actions_taken"`
@@ -534,8 +534,8 @@ func (s *soarService) GetSecurityPosture(ctx context.Context) (*SecurityPosture,
 	}, nil
 }
 
-func (s *soarService) AutoRespond(ctx context.Context, incident *SecurityIncident) (*AutomatedResponse, error) {
-	response := &AutomatedResponse{
+func (s *soarService) AutoRespond(ctx context.Context, incident *SecurityIncident) (*SOARAutomatedResponse, error) {
+	response := &SOARAutomatedResponse{
 		ResponseID:   fmt.Sprintf("resp-%d", time.Now().UnixNano()),
 		IncidentID:   fmt.Sprintf("%d", incident.ID),
 		ActionsTaken: []string{},

@@ -99,13 +99,6 @@ type BotBehaviorV3 struct {
 	TouchEvents     []TouchEvent
 }
 
-type MouseMovement struct {
-	X, Y         float64
-	Timestamp     time.Time
-	Velocity     float64
-	Acceleration float64
-}
-
 type TouchEvent struct {
 	X, Y        float64
 	Timestamp   time.Time

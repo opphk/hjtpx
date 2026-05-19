@@ -540,9 +540,7 @@ func (e *LocalInferenceEngine) inferGeneric(input []float64, weights []float64) 
 	return output
 }
 
-func sigmoid(x float64) float64 {
-	return 1.0 / (1.0 + math.Exp(-x))
-}
+
 
 func (e *LocalInferenceEngine) calculateConfidence(output []float64) float64 {
 	if len(output) == 0 {
@@ -894,7 +892,7 @@ func (s *EdgeAIInferenceEngine) PerformInference(ctx context.Context, request *I
 
 func (s *EdgeAIInferenceEngine) quantizeWeights(weights []float64, bits int) []float64 {
 	quantized := make([]float64, len(weights))
-	scale := float64((1 << bits) - 1)
+	scale := float64((int(1) << uint(bits)) - 1)
 
 	maxVal := weights[0]
 	minVal := weights[0]

@@ -1,9 +1,15 @@
 package router
 
 import (
+	"html/template"
+	"path/filepath"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/internal/service/captcha"
 )
 
 var aiModelV3Handler *handler.AIModelV3Handler
@@ -11,9 +17,42 @@ var aiModelV3Handler *handler.AIModelV3Handler
 func SetupRoutes(r *gin.Engine) {
 	aiModelV3Handler = handler.NewAIModelV3Handler()
 
+	// 初始化VR验证码handler
+	vrGen := captcha.NewVRGeneratorServiceSimple()
+	handler.InitVRCaptchaHandler(vrGen)
+
+	// 初始化神经验证码handler
+	neuralSvc := service.NewNeuralCaptchaService()
+	handler.InitNeuralCaptchaHandler(neuralSvc)
+
+	// 初始化时空验证码handler
+	stSvc := service.NewSpatioTemporalCaptchaService()
+	handler.InitSpatioTemporalCaptchaHandler(stSvc)
+
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
+
+	// 设置模板函数
+	r.SetFuncMap(template.FuncMap{
+		"formatDate": func(t time.Time) string {
+			return t.Format("2006-01-02 15:04:05")
+		},
+		"formatUnixTime": func(t int64) string {
+			return time.Unix(t, 0).Format("2006-01-02 15:04:05")
+		},
+		"safeHTML": func(str string) template.HTML {
+			return template.HTML(str)
+		},
+	})
+
+	// 加载模板
+	r.LoadHTMLGlob(filepath.Join(".", "templates", "*"))
+
+	// VR验证码页面
+	r.GET("/vr-captcha", func(c *gin.Context) {
+		c.HTML(200, "vrcaptcha.html", gin.H{"title": "VR 沉浸式验证码"})
+	})
 
 	api := r.Group("/api/v1")
 	{
@@ -75,9 +114,24 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/ar/verify", handler.ARCaptchaVerify)
 		api.GET("/captcha/ar/options", handler.ARCaptchaOptions)
 
+		// VR验证码
+		api.POST("/captcha/vr/create", handler.CreateVRCaptcha)
+		api.POST("/captcha/vr/verify", handler.VerifyVRCaptcha)
+		api.GET("/captcha/vr/status/:session_id", handler.GetVRCaptchaStatus)
+
+		// ============ v19.0 新增验证码路由 ============
+		// 神经验证码
+		api.POST("/captcha/neural/create", handler.CreateNeuralCaptcha)
+		api.POST("/captcha/neural/verify", handler.VerifyNeuralCaptcha)
+		api.GET("/captcha/neural/status/:session_id", handler.GetNeuralCaptchaStatus)
+
+		// 时空验证码
+		api.POST("/captcha/spatio-temporal/create", handler.CreateSpatioTemporalCaptcha)
+		api.POST("/captcha/spatio-temporal/verify", handler.VerifySpatioTemporalCaptcha)
+		api.GET("/captcha/spatio-temporal/status/:session_id", handler.GetSpatioTemporalCaptchaStatus)
+
 		// 增强的组合验证码系统
 		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)
-		api.POST("/captcha/combo/verify", handler.ComboCaptchaVerify)
 		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
 
 		// ============ v17.0 新增 AI 模型 v3 路由 ============

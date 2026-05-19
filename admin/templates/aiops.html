@@ -1,0 +1,669 @@
+{% extends "base.html" %}
+
+{% block title %}墨盾验证 · 智能运维平台{% endblock %}
+{% block page_title %}智能运维平台 (AIOps){% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-primary" onclick="refreshAll()">
+        <i class="fas fa-sync-alt"></i> 刷新全部
+    </button>
+    <button type="button" class="btn btn-default" onclick="openSettings()">
+        <i class="fas fa-cog"></i> 设置
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .aiops-card {
+        background: linear-gradient(145deg, rgba(20,25,45,0.95), rgba(15,20,35,0.98));
+        border: 1px solid rgba(0,212,255,0.15);
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,255,136,0.05));
+        border: 1px solid rgba(0,212,255,0.2);
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,212,255,0.2);
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #00d4ff, #00ff88);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .alert-critical {
+        border-left: 4px solid #dc3545;
+        background: rgba(220,53,69,0.1);
+    }
+    .alert-warning {
+        border-left: 4px solid #ffc107;
+        background: rgba(255,193,7,0.1);
+    }
+    .alert-info {
+        border-left: 4px solid #00d4ff;
+        background: rgba(0,212,255,0.1);
+    }
+    .alert-success {
+        border-left: 4px solid #28a745;
+        background: rgba(40,167,69,0.1);
+    }
+    .health-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    .health-good { background: #28a745; box-shadow: 0 0 10px #28a745; }
+    .health-warning { background: #ffc107; box-shadow: 0 0 10px #ffc107; }
+    .health-critical { background: #dc3545; box-shadow: 0 0 10px #dc3545; }
+    @keyframes pulse {
+        0%,100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .suggestion-card {
+        background: linear-gradient(135deg, rgba(0,255,136,0.08), rgba(0,212,255,0.08));
+        border: 1px solid rgba(0,255,136,0.2);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .status-online { background: #28a745; }
+    .status-offline { background: #dc3545; }
+    .status-warning { background: #ffc107; }
+    .progress-bar-anomaly {
+        height: 6px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .progress-fill-anomaly {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745, #00d4ff);
+        border-radius: 3px;
+        transition: width 0.5s ease;
+    }
+</style>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="metric-card">
+            <div class="mb-2"><i class="fas fa-check-circle text-success" style="font-size: 1.5rem;"></i></div>
+            <div class="metric-value" id="systemHealth">98.5%</div>
+            <div class="text-muted small">系统健康度</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="metric-card">
+            <div class="mb-2"><i class="fas fa-exclamation-triangle text-warning" style="font-size: 1.5rem;"></i></div>
+            <div class="metric-value" id="activeAlerts">12</div>
+            <div class="text-muted small">活跃告警</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="metric-card">
+            <div class="mb-2"><i class="fas fa-robot text-primary" style="font-size: 1.5rem;"></i></div>
+            <div class="metric-value" id="anomaliesDetected">5</div>
+            <div class="text-muted small">检测到的异常</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="metric-card">
+            <div class="mb-2"><i class="fas fa-lightbulb text-info" style="font-size: 1.5rem;"></i></div>
+            <div class="metric-value" id="suggestions">8</div>
+            <div class="text-muted small">优化建议</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="aiops-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>实时性能监控</h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary active" onclick="switchChart('1h')">1小时</button>
+                    <button class="btn btn-outline-primary" onclick="switchChart('6h')">6小时</button>
+                    <button class="btn btn-outline-primary" onclick="switchChart('24h')">24小时</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="performanceChart" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 mb-4">
+        <div class="aiops-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-server me-2"></i>节点健康状态</h5>
+            </div>
+            <div class="card-body" id="nodeHealthList">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="aiops-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-bell me-2"></i>实时告警</h5>
+                <span class="badge bg-danger" id="alertCount">0</span>
+            </div>
+            <div class="card-body" id="alertsContainer" style="max-height: 400px; overflow-y: auto;">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="aiops-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>AI 修复建议</h5>
+            </div>
+            <div class="card-body" id="suggestionsContainer" style="max-height: 400px; overflow-y: auto;">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-5 mb-4">
+        <div class="aiops-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-search me-2"></i>异常检测</h5>
+            </div>
+            <div class="card-body" id="anomalyDetection">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7 mb-4">
+        <div class="aiops-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list-alt me-2"></i>运维活动日志</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                    <table class="table table-hover text-nowrap" id="opsLogTable">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>类型</th>
+                                <th>描述</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script>
+let performanceChart = null;
+let refreshInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    loadAllData();
+    startAutoRefresh();
+});
+
+function initCharts() {
+    const chartDom = document.getElementById('performanceChart');
+    if (chartDom) {
+        performanceChart = echarts.init(chartDom);
+        window.addEventListener('resize', () => performanceChart.resize());
+        updatePerformanceChart();
+    }
+}
+
+function loadAllData() {
+    loadNodeHealth();
+    loadAlerts();
+    loadSuggestions();
+    loadAnomalyDetection();
+    loadOpsLogs();
+    updateMetrics();
+}
+
+function updateMetrics() {
+    document.getElementById('systemHealth').textContent = (95 + Math.random() * 5).toFixed(1) + '%';
+    document.getElementById('activeAlerts').textContent = Math.floor(Math.random() * 15);
+    document.getElementById('anomaliesDetected').textContent = Math.floor(Math.random() * 8);
+    document.getElementById('suggestions').textContent = Math.floor(Math.random() * 10 + 5);
+}
+
+function updatePerformanceChart() {
+    const now = new Date();
+    const data = [];
+    const cpuData = [];
+    const memoryData = [];
+    const latencyData = [];
+    
+    for (let i = 60; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 60000);
+        data.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+        cpuData.push(30 + Math.random() * 40);
+        memoryData.push(40 + Math.random() * 30);
+        latencyData.push(50 + Math.random() * 100);
+    }
+    
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            borderColor: 'rgba(0,212,255,0.3)',
+            textStyle: { color: '#fff' }
+        },
+        legend: {
+            data: ['CPU', '内存', '延迟'],
+            textStyle: { color: 'rgba(224,230,237,0.7)' },
+            top: 0
+        },
+        grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+        xAxis: {
+            type: 'category',
+            data: data,
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+            axisLabel: { color: 'rgba(224,230,237,0.5)', fontSize: 10 },
+            splitLine: { show: false }
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '使用率 (%)',
+                max: 100,
+                axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+                axisLabel: { color: 'rgba(224,230,237,0.5)' },
+                splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+            },
+            {
+                type: 'value',
+                name: '延迟 (ms)',
+                max: 200,
+                axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+                axisLabel: { color: 'rgba(224,230,237,0.5)' },
+                splitLine: { show: false }
+            }
+        ],
+        series: [
+            {
+                name: 'CPU',
+                type: 'line',
+                smooth: true,
+                data: cpuData,
+                lineStyle: { color: '#00d4ff', width: 2 },
+                itemStyle: { color: '#00d4ff' },
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(0,212,255,0.3)' },
+                            { offset: 1, color: 'rgba(0,212,255,0.05)' }
+                        ]
+                    }
+                }
+            },
+            {
+                name: '内存',
+                type: 'line',
+                smooth: true,
+                data: memoryData,
+                lineStyle: { color: '#28a745', width: 2 },
+                itemStyle: { color: '#28a745' },
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(40,167,69,0.3)' },
+                            { offset: 1, color: 'rgba(40,167,69,0.05)' }
+                        ]
+                    }
+                }
+            },
+            {
+                name: '延迟',
+                type: 'line',
+                smooth: true,
+                yAxisIndex: 1,
+                data: latencyData,
+                lineStyle: { color: '#ffc107', width: 2 },
+                itemStyle: { color: '#ffc107' },
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(255,193,7,0.2)' },
+                            { offset: 1, color: 'rgba(255,193,7,0.03)' }
+                        ]
+                    }
+                }
+            }
+        ]
+    };
+    
+    performanceChart.setOption(option);
+}
+
+function loadNodeHealth() {
+    const nodes = [
+        { name: 'API 网关', status: 'online', cpu: 45, memory: 62, role: 'api' },
+        { name: '验证服务-1', status: 'online', cpu: 38, memory: 55, role: 'verification' },
+        { name: '验证服务-2', status: 'online', cpu: 42, memory: 58, role: 'verification' },
+        { name: '数据库主', status: 'online', cpu: 52, memory: 78, role: 'database' },
+        { name: 'Redis 集群', status: 'warning', cpu: 35, memory: 85, role: 'cache' },
+        { name: '分析引擎', status: 'online', cpu: 28, memory: 45, role: 'analytics' }
+    ];
+    
+    const html = nodes.map(node => {
+        const statusClass = node.status === 'online' ? 'status-online' : node.status === 'warning' ? 'status-warning' : 'status-offline';
+        const statusText = node.status === 'online' ? '健康' : node.status === 'warning' ? '警告' : '异常';
+        const cpuPercent = Math.min(node.cpu, 100);
+        const memoryPercent = Math.min(node.memory, 100);
+        
+        return `
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+                <div class="d-flex align-items-center">
+                    <span class="status-dot ${statusClass}"></span>
+                    <div>
+                        <h6 class="mb-0">${node.name}</h6>
+                        <small class="text-muted">${getRoleName(node.role)}</small>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <div class="small mb-1">
+                        <span class="text-primary">CPU: ${cpuPercent}%</span>
+                        <span class="mx-2">|</span>
+                        <span class="text-success">内存: ${memoryPercent}%</span>
+                    </div>
+                    <span class="badge bg-${node.status === 'online' ? 'success' : node.status === 'warning' ? 'warning' : 'danger'}">${statusText}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('nodeHealthList').innerHTML = html;
+}
+
+function getRoleName(role) {
+    const names = {
+        'api': 'API 网关',
+        'verification': '验证服务',
+        'database': '数据库',
+        'cache': '缓存',
+        'analytics': '分析引擎'
+    };
+    return names[role] || role;
+}
+
+function loadAlerts() {
+    const alerts = [
+        { id: 1, severity: 'warning', message: 'Redis 内存使用率达到 85%', time: new Date(Date.now() - 300000), icon: 'memory' },
+        { id: 2, severity: 'info', message: '自动扩容任务完成', time: new Date(Date.now() - 600000), icon: 'check-circle' },
+        { id: 3, severity: 'critical', message: '检测到异常流量峰值', time: new Date(Date.now() - 900000), icon: 'exclamation-triangle' },
+        { id: 4, severity: 'info', message: '每日备份任务执行完成', time: new Date(Date.now() - 3600000), icon: 'database' },
+        { id: 5, severity: 'warning', message: 'API 延迟有上升趋势', time: new Date(Date.now() - 7200000), icon: 'clock' },
+        { id: 6, severity: 'success', message: '系统健康检查通过', time: new Date(Date.now() - 10800000), icon: 'heart' }
+    ];
+    
+    document.getElementById('alertCount').textContent = alerts.length;
+    
+    const html = alerts.map(alert => {
+        const timeStr = formatRelativeTime(alert.time);
+        return `
+            <div class="alert-${alert.severity} p-3 mb-2 rounded">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <i class="fas fa-${alert.icon} me-2 text-${getSeverityColor(alert.severity)}"></i>
+                        <span>${alert.message}</span>
+                    </div>
+                    <small class="text-muted">${timeStr}</small>
+                </div>
+                <div class="mt-2 d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-${getSeverityColor(alert.severity)}" onclick="acknowledgeAlert(${alert.id})">
+                        <i class="fas fa-check"></i> 确认
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewAlertDetail(${alert.id})">
+                        <i class="fas fa-eye"></i> 详情
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('alertsContainer').innerHTML = html;
+}
+
+function getSeverityColor(severity) {
+    const colors = {
+        'critical': 'danger',
+        'warning': 'warning',
+        'info': 'primary',
+        'success': 'success'
+    };
+    return colors[severity] || 'secondary';
+}
+
+function loadSuggestions() {
+    const suggestions = [
+        {
+            priority: 'high',
+            title: '优化 Redis 配置',
+            description: '建议增加 Redis 最大内存限制或启用淘汰策略，当前内存使用率已超过阈值。',
+            impact: '可以防止内存溢出导致的服务中断',
+            action: '配置优化'
+        },
+        {
+            priority: 'medium',
+            title: '扩容 API 节点',
+            description: '预测未来 2 小时流量将增长 30%，建议提前增加 API 节点。',
+            impact: '可以保持服务响应时间在正常范围内',
+            action: '自动扩容'
+        },
+        {
+            priority: 'medium',
+            title: '优化数据库索引',
+            description: '检测到部分查询响应时间过长，建议优化相关表的索引。',
+            impact: '可以提升数据库查询性能约 40%',
+            action: '查看详情'
+        },
+        {
+            priority: 'low',
+            title: '清理旧日志文件',
+            description: '发现大量过期日志文件占用磁盘空间，建议定期清理。',
+            impact: '可以释放约 15GB 磁盘空间',
+            action: '自动清理'
+        }
+    ];
+    
+    const priorityIcons = { 'high': 'exclamation-triangle text-danger', 'medium': 'info-circle text-warning', 'low': 'lightbulb text-info' };
+    const priorityBadges = { 'high': 'danger', 'medium': 'warning', 'low': 'info' };
+    
+    const html = suggestions.map(suggestion => `
+        <div class="suggestion-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${priorityIcons[suggestion.priority]} me-2"></i>
+                    <h6 class="mb-0">${suggestion.title}</h6>
+                </div>
+                <span class="badge bg-${priorityBadges[suggestion.priority]}">${suggestion.priority === 'high' ? '高' : suggestion.priority === 'medium' ? '中' : '低'}</span>
+            </div>
+            <p class="small text-muted mb-2">${suggestion.description}</p>
+            <div class="alert alert-info py-2 px-3 mb-2 small">
+                <i class="fas fa-arrow-up me-1"></i> ${suggestion.impact}
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="applySuggestion('${suggestion.title}')">
+                <i class="fas fa-wand-magic-sparkles"></i> ${suggestion.action}
+            </button>
+        </div>
+    `).join('');
+    
+    document.getElementById('suggestionsContainer').innerHTML = html;
+}
+
+function loadAnomalyDetection() {
+    const anomalies = [
+        { type: '流量异常', severity: 'high', score: 92, detected: new Date(Date.now() - 1800000), status: 'analyzing' },
+        { type: '响应延迟', severity: 'medium', score: 75, detected: new Date(Date.now() - 3600000), status: 'resolved' },
+        { type: '错误率', severity: 'low', score: 45, detected: new Date(Date.now() - 7200000), status: 'resolved' },
+        { type: '资源使用', severity: 'medium', score: 68, detected: new Date(Date.now() - 10800000), status: 'monitoring' }
+    ];
+    
+    const statusColors = { 'analyzing': 'warning', 'resolved': 'success', 'monitoring': 'info' };
+    const statusTexts = { 'analyzing': '分析中', 'resolved': '已解决', 'monitoring': '监控中' };
+    
+    const html = anomalies.map(anomaly => `
+        <div class="mb-3 pb-2 border-bottom border-secondary border-opacity-10">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">${anomaly.type}</h6>
+                <span class="badge bg-${statusColors[anomaly.status]}">${statusTexts[anomaly.status]}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="small text-muted">异常分数</span>
+                <span class="fw-bold ${anomaly.score >= 80 ? 'text-danger' : anomaly.score >= 60 ? 'text-warning' : 'text-info'}">${anomaly.score}</span>
+            </div>
+            <div class="progress-bar-anomaly mb-2">
+                <div class="progress-fill-anomaly" style="width: ${anomaly.score}%; background: ${anomaly.score >= 80 ? 'linear-gradient(90deg, #dc3545, #ff6b6b)' : anomaly.score >= 60 ? 'linear-gradient(90deg, #ffc107, #fd7e14)' : 'linear-gradient(90deg, #00d4ff, #00ff88)'};"></div>
+            </div>
+            <small class="text-muted">检测时间: ${formatRelativeTime(anomaly.detected)}</small>
+        </div>
+    `).join('');
+    
+    document.getElementById('anomalyDetection').innerHTML = html;
+}
+
+function loadOpsLogs() {
+    const logs = [
+        { time: new Date(Date.now() - 60000), type: 'auto-heal', description: '自动重启异常服务实例', status: 'success' },
+        { time: new Date(Date.now() - 300000), type: 'scaling', description: '扩容 API 节点 (2 -> 4)', status: 'success' },
+        { time: new Date(Date.now() - 600000), type: 'backup', description: '执行数据库快照备份', status: 'success' },
+        { time: new Date(Date.now() - 900000), type: 'alert', description: '触发高 CPU 告警', status: 'warning' },
+        { time: new Date(Date.now() - 1800000), type: 'maintenance', description: '清理临时文件', status: 'success' },
+        { time: new Date(Date.now() - 3600000), type: 'deployment', description: '部署版本 v1.9.3', status: 'success' }
+    ];
+    
+    const typeIcons = {
+        'auto-heal': 'robot text-primary',
+        'scaling': 'expand-arrows-alt text-success',
+        'backup': 'database text-info',
+        'alert': 'bell text-warning',
+        'maintenance': 'wrench text-secondary',
+        'deployment': 'rocket text-purple'
+    };
+    
+    const html = logs.map(log => `
+        <tr>
+            <td><small>${formatTime(log.time)}</small></td>
+            <td><i class="fas fa-${typeIcons[log.type]} me-1"></i> ${log.type}</td>
+            <td><small>${log.description}</small></td>
+            <td><span class="badge bg-${log.status}">${log.status === 'success' ? '成功' : '警告'}</span></td>
+        </tr>
+    `).join('');
+    
+    document.getElementById('opsLogTable').querySelector('tbody').innerHTML = html;
+}
+
+function acknowledgeAlert(id) {
+    alert('告警 ' + id + ' 已确认');
+}
+
+function viewAlertDetail(id) {
+    alert('查看告警详情: ' + id);
+}
+
+function applySuggestion(title) {
+    if (confirm('确定要应用建议: ' + title + ' 吗？')) {
+        alert('正在应用建议...');
+        setTimeout(() => {
+            alert('建议已成功应用！');
+            loadSuggestions();
+        }, 1500);
+    }
+}
+
+function refreshAll() {
+    loadAllData();
+    updatePerformanceChart();
+}
+
+function switchChart(range) {
+    updatePerformanceChart();
+}
+
+function openSettings() {
+    alert('设置功能开发中...');
+}
+
+function startAutoRefresh() {
+    refreshInterval = setInterval(() => {
+        updateMetrics();
+        updatePerformanceChart();
+    }, 5000);
+}
+
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return diff + '秒前';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    return Math.floor(diff / 86400) + '天前';
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+</script>
+{% endblock %}

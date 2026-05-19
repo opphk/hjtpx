@@ -65,7 +65,7 @@ type zeroTrustAuthService struct {
 	mu              sync.RWMutex
 	sessions        map[string]*SessionState
 	microsegments   map[string]*Microsegment
-	threatIntelDB   map[string]*ThreatIntelEntry
+	threatIntelDB   map[string]*ZeroTrustThreatIntelEntry
 	accessPolicies  map[string]*AccessPolicy
 	maxRiskScore    float64
 	criticalRiskScore float64
@@ -83,7 +83,7 @@ type SessionState struct {
 	DeviceID    string
 }
 
-type ThreatIntelEntry struct {
+type ZeroTrustThreatIntelEntry struct {
 	Indicator     string
 	IndicatorType string
 	Reputation    string
@@ -105,7 +105,7 @@ func NewContinuousAuthService() ContinuousAuthService {
 	svc := &zeroTrustAuthService{
 		sessions:       make(map[string]*SessionState),
 		microsegments:  make(map[string]*Microsegment),
-		threatIntelDB:   make(map[string]*ThreatIntelEntry),
+		threatIntelDB:   make(map[string]*ZeroTrustThreatIntelEntry),
 		accessPolicies:  make(map[string]*AccessPolicy),
 		maxRiskScore:    100.0,
 		criticalRiskScore: 80.0,
@@ -115,7 +115,7 @@ func NewContinuousAuthService() ContinuousAuthService {
 }
 
 func (s *zeroTrustAuthService) initThreatIntelDB() {
-	s.threatIntelDB["192.0.2.0/24"] = &ThreatIntelEntry{
+	s.threatIntelDB["192.0.2.0/24"] = &ZeroTrustThreatIntelEntry{
 		Indicator:     "192.0.2.0/24",
 		IndicatorType: "ip_range",
 		Reputation:    "suspicious",
@@ -125,7 +125,7 @@ func (s *zeroTrustAuthService) initThreatIntelDB() {
 		LastSeen:      time.Now(),
 		FirstSeen:     time.Now().Add(-720 * time.Hour),
 	}
-	s.threatIntelDB["203.0.113.0/24"] = &ThreatIntelEntry{
+	s.threatIntelDB["203.0.113.0/24"] = &ZeroTrustThreatIntelEntry{
 		Indicator:     "203.0.113.0/24",
 		IndicatorType: "ip_range",
 		Reputation:    "malicious",

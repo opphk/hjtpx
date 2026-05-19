@@ -16,7 +16,7 @@ type LowCodePlatformService interface {
 	UpdateIntegration(ctx context.Context, integration *Integration) error
 	DeleteIntegration(ctx context.Context, id string) error
 	ListIntegrations(ctx context.Context, appID string, limit, offset int) ([]*Integration, error)
-	ExecuteIntegration(ctx context.Context, id string, params map[string]interface{}) (*ExecutionResult, error)
+	ExecuteIntegration(ctx context.Context, id string, params map[string]interface{}) (*LowCodeExecutionResult, error)
 	GetIntegrationTemplates(ctx context.Context) ([]*IntegrationTemplate, error)
 	ValidateIntegration(ctx context.Context, integration *Integration) (*ValidationResult, error)
 	GetExecutionHistory(ctx context.Context, integrationID string, limit, offset int) ([]*ExecutionRecord, error)
@@ -47,7 +47,7 @@ type IntegrationStep struct {
 	Type         string                 `json:"type"`
 	Order        int                    `json:"order"`
 	Config       map[string]interface{} `json:"config"`
-	RetryPolicy  *RetryPolicy           `json:"retry_policy,omitempty"`
+	RetryPolicy  *LowCodeRetryPolicy    `json:"retry_policy,omitempty"`
 	Timeout      int                    `json:"timeout"`
 	Conditions   []Condition             `json:"conditions,omitempty"`
 	OnError      string                 `json:"on_error"`
@@ -63,7 +63,7 @@ type Trigger struct {
 	Schedule  string                 `json:"schedule,omitempty"`
 }
 
-type RetryPolicy struct {
+type LowCodeRetryPolicy struct {
 	MaxAttempts int           `json:"max_attempts"`
 	Delay       time.Duration `json:"delay"`
 	Backoff     string        `json:"backoff"`
@@ -98,7 +98,7 @@ type TemplateVariable struct {
 	Options     []string    `json:"options,omitempty"`
 }
 
-type ExecutionResult struct {
+type LowCodeExecutionResult struct {
 	ExecutionID   string                 `json:"execution_id"`
 	IntegrationID string                 `json:"integration_id"`
 	Status        string                 `json:"status"`
@@ -171,7 +171,7 @@ type lowCodePlatformService struct {
 	integrations map[string]*Integration
 	templates   map[string]*IntegrationTemplate
 	executions  map[string][]*ExecutionRecord
-	history     map[string]*ExecutionResult
+	history     map[string]*LowCodeExecutionResult
 }
 
 var (
@@ -185,7 +185,7 @@ func NewLowCodePlatformService() LowCodePlatformService {
 		integrations: make(map[string]*Integration),
 		templates:    make(map[string]*IntegrationTemplate),
 		executions:   make(map[string][]*ExecutionRecord),
-		history:      make(map[string]*ExecutionResult),
+		history:      make(map[string]*LowCodeExecutionResult),
 	}
 }
 
@@ -266,17 +266,19 @@ func (s *lowCodePlatformService) ListIntegrations(ctx context.Context, appID str
 	return result[offset:end], nil
 }
 
-func (s *lowCodePlatformService) ExecuteIntegration(ctx context.Context, id string, params map[string]interface{}) (*ExecutionResult, error) {
+func (s *lowCodePlatformService) ExecuteIntegration(ctx context.Context, id string, params map[string]interface{}) (*LowCodeExecutionResult, error) {
 	integration, exists := s.integrations[id]
 	if !exists {
 		return nil, ErrIntegrationNotFound
 	}
 
-	result := &ExecutionResult{
+	result := &LowCodeExecutionResult{
 		ExecutionID:   uuid.New().String(),
 		IntegrationID: id,
 		Status:        "running",
 		StartTime:     time.Now(),
+		EndTime:       time.Now(),
+		Duration:      0,
 		StepsResults:  []StepResult{},
 		Output:        make(map[string]interface{}),
 		Metrics: &ExecutionMetrics{

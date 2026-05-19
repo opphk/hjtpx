@@ -83,7 +83,7 @@ type WorkflowStep struct {
 	Config      map[string]interface{} `json:"config"`
 	Conditions  []StepCondition        `json:"conditions"`
 	OnError     string                 `json:"on_error"`
-	RetryPolicy *RetryPolicy          `json:"retry_policy"`
+	RetryPolicy *RiskRuleEngineRetryPolicy          `json:"retry_policy"`
 }
 
 type StepCondition struct {
@@ -92,7 +92,7 @@ type StepCondition struct {
 	Value    interface{} `json:"value"`
 }
 
-type RetryPolicy struct {
+type RiskRuleEngineRetryPolicy struct {
 	MaxAttempts int           `json:"max_attempts"`
 	Delay       time.Duration `json:"delay"`
 	Backoff     string        `json:"backoff"`
@@ -278,13 +278,13 @@ func (e *WorkflowEngine) evaluateCondition(cond StepCondition, event *WorkflowEv
 	case "ne":
 		return fmt.Sprintf("%v", value) != fmt.Sprintf("%v", cond.Value)
 	case "gt":
-		return toFloat64(value) > toFloat64(cond.Value)
+		return riskRuleEngineToFloat64(value) > riskRuleEngineToFloat64(cond.Value)
 	case "gte":
-		return toFloat64(value) >= toFloat64(cond.Value)
+		return riskRuleEngineToFloat64(value) >= riskRuleEngineToFloat64(cond.Value)
 	case "lt":
-		return toFloat64(value) < toFloat64(cond.Value)
+		return riskRuleEngineToFloat64(value) < riskRuleEngineToFloat64(cond.Value)
 	case "lte":
-		return toFloat64(value) <= toFloat64(cond.Value)
+		return riskRuleEngineToFloat64(value) <= riskRuleEngineToFloat64(cond.Value)
 	case "contains":
 		return strings.Contains(fmt.Sprintf("%v", value), fmt.Sprintf("%v", cond.Value))
 	case "matches":
@@ -702,7 +702,7 @@ func (e *RiskRuleEngineV2) evalTimeWindow(ctx *model.RiskContext, params map[str
 
 func (e *RiskRuleEngineV2) evalThreshold(ctx *model.RiskContext, params map[string]interface{}) bool {
 	metric := params["metric"].(string)
-	threshold := toFloat64(params["threshold"])
+	threshold := riskRuleEngineToFloat64(params["threshold"])
 	operator := params["operator"].(string)
 	
 	var value float64
@@ -823,8 +823,8 @@ func (e *RiskRuleEngineV2) calculatePathEfficiency(traceData []model.TracePoint)
 	return directDist / totalDist
 }
 
-func (e *RiskRuleEngineV2) ExecuteAutomatedResponse(ctx *model.RiskContext, actions []ActionConfig) (*AutomatedResponse, error) {
-	response := &AutomatedResponse{
+func (e *RiskRuleEngineV2) ExecuteAutomatedResponse(ctx *model.RiskContext, actions []ActionConfig) (*RiskRuleAutomatedResponse, error) {
+	response := &RiskRuleAutomatedResponse{
 		ID:        fmt.Sprintf("resp_%d", time.Now().UnixNano()),
 		Timestamp: time.Now(),
 		RiskScore: ctx.RiskScore,
@@ -870,7 +870,7 @@ func (e *RiskRuleEngineV2) ExecuteAutomatedResponse(ctx *model.RiskContext, acti
 	return response, nil
 }
 
-type AutomatedResponse struct {
+type RiskRuleAutomatedResponse struct {
 	ID        string          `json:"id"`
 	Timestamp time.Time       `json:"timestamp"`
 	RiskScore float64         `json:"risk_score"`
@@ -1022,7 +1022,7 @@ func (e *RiskRuleEngineV2) addToBlacklist(ctx *model.RiskContext, params map[str
 	e.db.Create(bl)
 }
 
-func (e *RiskRuleEngineV2) recordResponse(response *AutomatedResponse, ctx *model.RiskContext) {
+func (e *RiskRuleEngineV2) recordResponse(response *RiskRuleAutomatedResponse, ctx *model.RiskContext) {
 	e.db.Create(&models.RiskRuleTriggerHistory{
 		RuleID:        0,
 		RuleName:      "Automated Response",
@@ -1081,7 +1081,7 @@ func (e *RiskRuleEngineV2) GetWorkflowExecutions(workflowID string, page, pageSi
 	return executions, total, nil
 }
 
-func toFloat64(v interface{}) float64 {
+func riskRuleEngineToFloat64(v interface{}) float64 {
 	switch val := v.(type) {
 	case float64:
 		return val

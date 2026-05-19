@@ -16,7 +16,7 @@ type StatsReport struct {
     BlockedRate        float64
     AverageLatency     float64
     PeakQPS            int64
-    TimeRange          TimeRange
+    TimeRange          StatsTimeRange
     Breakdown          map[string]int64
     Trends             []TrendPoint
 }
@@ -55,7 +55,7 @@ func NewAdvancedStatsService() *AdvancedStatsService {
 
 func (s *AdvancedStatsService) GetDetailedStats(ctx context.Context, filter StatsFilter) (*StatsReport, error) {
     report := &StatsReport{
-        TimeRange: TimeRange{
+        TimeRange: StatsTimeRange{
             Start: filter.StartTime,
             End:   filter.EndTime,
         },

@@ -790,10 +790,9 @@ func (s *FeedbackService) GetRecommendedHelpDocuments(ctx context.Context, error
 }
 
 func (s *FeedbackService) GenerateUserGuide(ctx context.Context, userID uint, language string) (string, error) {
-	var prefs *model.UserFeedbackPreferences
-	prefs, err := s.GetUserPreferences(ctx, userID)
+	_, err := s.GetUserPreferences(ctx, userID)
 	if err != nil {
-		prefs = &model.UserFeedbackPreferences{}
+		// 忽略错误，使用默认值
 	}
 
 	var docs []model.HelpDocument

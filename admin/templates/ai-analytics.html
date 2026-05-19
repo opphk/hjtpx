@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}墨盾验证 - AI 分析报表系统{% endblock %}
+{% block page_title %}AI 分析报表系统{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-primary" onclick="generateReport()">
+        <i class="fas fa-magic"></i> 智能生成报表
+    </button>
+    <button type="button" class="btn btn-secondary" onclick="exportReport()">
+        <i class="fas fa-download"></i> 导出报表
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .ai-panel {
+        background: linear-gradient(145deg, rgba(20,25,45,0.98) 0%, rgba(15,20,35,0.95) 100%);
+        border: 1px solid rgba(0,212,255,0.15);
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+    }
+    .stat-card-ai {
+        background: linear-gradient(145deg, rgba(25,30,50,0.9) 0%, rgba(15,20,35,0.95) 100%);
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        transition: all 0.3s ease;
+    }
+    .stat-card-ai:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,212,255,0.15);
+        border-color: rgba(0,212,255,0.3);
+    }
+    .ai-insight-card {
+        background: linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(0,212,255,0.08) 100%);
+        border: 1px solid rgba(0,255,136,0.2);
+        border-radius: 10px;
+    }
+    .prediction-card {
+        background: linear-gradient(145deg, rgba(25,30,50,0.95) 0%, rgba(15,20,35,0.98) 100%);
+        border: 1px solid rgba(139,92,246,0.2);
+        border-radius: 10px;
+    }
+    .trend-up { color: #28a745; }
+    .trend-down { color: #dc3545; }
+    .progress-bar-ai {
+        height: 6px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+    }
+    .report-section {
+        margin-bottom: 24px;
+    }
+    .metric-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .loading-pulse {
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="stat-card-ai p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small"><i class="fas fa-chart-pie me-2"></i>预测准确率</span>
+                <span class="badge bg-success">98.5%</span>
+            </div>
+            <div class="progress-bar-ai">
+                <div class="progress-fill" style="width: 98.5%; background: linear-gradient(90deg, #28a745, #00d4ff);"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card-ai p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small"><i class="fas fa-bolt me-2"></i>实时分析</span>
+                <span class="badge bg-info">在线</span>
+            </div>
+            <div class="h4 mb-0 text-primary">1,234</div>
+            <small class="text-muted">/分钟</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card-ai p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small"><i class="fas fa-robot me-2"></i>模型版本</span>
+                <span class="badge bg-warning">v3.2.1</span>
+            </div>
+            <div class="h4 mb-0 text-warning">92%</div>
+            <small class="text-muted">用户满意度</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card-ai p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small"><i class="fas fa-brain me-2"></i>AI 洞察</span>
+                <span class="badge bg-primary">24h</span>
+            </div>
+            <div class="h4 mb-0 text-primary">56</div>
+            <small class="text-muted">新发现</small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="ai-panel p-4 mb-4">
+            <h5 class="mb-4 d-flex align-items-center">
+                <i class="fas fa-chart-line me-2 text-primary"></i>
+                流量预测分析
+            </h5>
+            <div id="predictionChart" style="height: 350px;"></div>
+        </div>
+        
+        <div class="ai-panel p-4 mb-4">
+            <h5 class="mb-4 d-flex align-items-center">
+                <i class="fas fa-layer-group me-2 text-success"></i>
+                风险趋势分析
+            </h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div id="riskChart" style="height: 250px;"></div>
+                </div>
+                <div class="col-md-6">
+                    <div id="captchaTypeChart" style="height: 250px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="ai-insight-card p-4 mb-4">
+            <h5 class="mb-3 d-flex align-items-center">
+                <i class="fas fa-lightbulb me-2 text-warning"></i>
+                AI 智能洞察
+            </h5>
+            <div id="aiInsightsList">
+                <div class="mb-3 pb-3 border-bottom border-secondary border-opacity-25">
+                    <div class="d-flex align-items-start mb-2">
+                        <i class="fas fa-exclamation-circle text-warning mt-1 me-2"></i>
+                        <div>
+                            <h6 class="mb-1">预测到流量高峰</h6>
+                            <p class="text-muted small mb-0">预计 18:00-20:00 将有 35% 的流量增长</p>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-warning" onclick="applyRecommendation('scale')">
+                            自动扩容
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary">
+                            忽略
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3 pb-3 border-bottom border-secondary border-opacity-25">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-check-circle text-success mt-1 me-2"></i>
+                        <div>
+                            <h6 class="mb-1">缓存策略优化建议</h6>
+                            <p class="text-muted small mb-0">调整缓存时间可提升 15% 命中率</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3 pb-3 border-bottom border-secondary border-opacity-25">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-info-circle text-info mt-1 me-2"></i>
+                        <div>
+                            <h6 class="mb-1">用户行为模式变化</h6>
+                            <p class="text-muted small mb-0">移动端验证比例上升 8%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-shield-alt text-primary mt-1 me-2"></i>
+                        <div>
+                            <h6 class="mb-1">安全防护增强</h6>
+                            <p class="text-muted small mb-0">检测到新型攻击模式，已自动更新规则</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="prediction-card p-4 mb-4">
+            <h5 class="mb-4 d-flex align-items-center">
+                <i class="fas fa-crystal-ball me-2 text-purple"></i>
+                未来 7 天预测
+            </h5>
+            <div id="forecastList">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">明天</span>
+                    <div class="text-end">
+                        <div class="fw-bold text-primary">+12%</div>
+                        <small class="text-muted">预计请求量</small>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">后天</span>
+                    <div class="text-end">
+                        <div class="fw-bold text-success">+8%</div>
+                        <small class="text-muted">预计请求量</small>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">3天后</span>
+                    <div class="text-end">
+                        <div class="fw-bold text-warning">+5%</div>
+                        <small class="text-muted">预计请求量</small>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">4天后</span>
+                    <div class="text-end">
+                        <div class="fw-bold text-danger">-3%</div>
+                        <small class="text-muted">预计请求量</small>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">5-7天</span>
+                    <div class="text-end">
+                        <div class="fw-bold text-primary">+6%</div>
+                        <small class="text-muted">平均预计增长</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ai-panel p-4">
+            <h5 class="mb-4 d-flex align-items-center">
+                <i class="fas fa-chart-bar me-2 text-info"></i>
+                性能指标
+            </h5>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <small class="text-muted">响应时间优化</small>
+                    <small class="text-success">+23%</small>
+                </div>
+                <div class="progress-bar-ai">
+                    <div class="progress-fill" style="width: 85%; background: linear-gradient(90deg, #28a745, #00d4ff);"></div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <small class="text-muted">准确率提升</small>
+                    <small class="text-success">+8%</small>
+                </div>
+                <div class="progress-bar-ai">
+                    <div class="progress-fill" style="width: 92%; background: linear-gradient(90deg, #00d4ff, #6610f2);"></div>
+                </div>
+            </div>
+            <div>
+                <div class="d-flex justify-content-between mb-1">
+                    <small class="text-muted">资源利用率</small>
+                    <small class="text-info">优化中</small>
+                </div>
+                <div class="progress-bar-ai">
+                    <div class="progress-fill loading-pulse" style="width: 78%; background: linear-gradient(90deg, #6610f2, #dc3545);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="ai-panel p-4">
+            <h5 class="mb-4 d-flex align-items-center">
+                <i class="fas fa-file-alt me-2 text-primary"></i>
+                历史报表
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>报表名称</th>
+                            <th>类型</th>
+                            <th>生成时间</th>
+                            <th>覆盖范围</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportHistoryTable">
+                        <tr>
+                            <td><strong>每日综合报告</strong></td>
+                            <td><span class="metric-badge bg-primary bg-opacity-25 text-primary">综合分析</span></td>
+                            <td>2024-01-15 00:05</td>
+                            <td>2024-01-14</td>
+                            <td><span class="badge bg-success">已完成</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewReport(1)">查看</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="downloadReport(1)">下载</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>风险分析周报</strong></td>
+                            <td><span class="metric-badge bg-warning bg-opacity-25 text-warning">风险分析</span></td>
+                            <td>2024-01-14 23:00</td>
+                            <td>2024-01-08 ~ 2024-01-14</td>
+                            <td><span class="badge bg-success">已完成</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewReport(2)">查看</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="downloadReport(2)">下载</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>性能优化报告</strong></td>
+                            <td><span class="metric-badge bg-info bg-opacity-25 text-info">性能分析</span></td>
+                            <td>2024-01-14 18:30</td>
+                            <td>最近 7 天</td>
+                            <td><span class="badge bg-warning">生成中</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary disabled" disabled>处理中...</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>月度趋势报告</strong></td>
+                            <td><span class="metric-badge bg-success bg-opacity-25 text-success">趋势分析</span></td>
+                            <td>2024-01-01 00:00</td>
+                            <td>2024-01</td>
+                            <td><span class="badge bg-success">已完成</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewReport(3)">查看</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="downloadReport(3)">下载</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="/admin/static/js/ai-analytics.js"></script>
+{% endblock %}

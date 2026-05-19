@@ -302,7 +302,7 @@ func (s *SeamlessOptimizationService) calculateTimeBasedBonus(pattern *UserBehav
 	
 	hourMatch := false
 	for _, t := range pattern.PreferredTimes {
-		if abs(t.Hour()-currentHour) <= 2 {
+		if seamlessOptimizationAbs(t.Hour()-currentHour) <= 2 {
 			hourMatch = true
 			break
 		}
@@ -472,7 +472,7 @@ type SeamlessOptimizationResult struct {
 	OptimizationApplied []string
 }
 
-func abs(x int) int {
+func seamlessOptimizationAbs(x int) int {
 	if x < 0 {
 		return -x
 	}

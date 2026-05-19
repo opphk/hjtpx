@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -688,15 +689,15 @@ func applyLaplaceNoise(data []float64, epsilon float64) ([]float64, error) {
 }
 
 func gaussianRandom(mean, stddev float64) float64 {
-	u1 := math.Random()
-	u2 := math.Random()
+	u1 := rand.Float64()
+	u2 := rand.Float64()
 	z := math.Sqrt(-2*math.Log(u1)) * math.Cos(2*math.Pi*u2)
 	return mean + stddev*z
 }
 
 func laplaceRandom(mean, b float64) float64 {
-	u := math.Random() - 0.5
-	return mean - b*math.Sign(u)*math.Log(1-2*math.Abs(u))
+	u := rand.Float64() - 0.5
+	return mean - b*math.Copysign(1, u)*math.Log(1-2*math.Abs(u))
 }
 
 func NewFLCoordinationService() *FLCoordinationService {

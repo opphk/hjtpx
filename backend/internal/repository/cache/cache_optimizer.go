@@ -156,6 +156,10 @@ type PreheatProfile struct {
 	AvgDuration    time.Duration
 	LastRun        time.Time
 	Enabled        bool
+	TotalRuns      int64
+	SuccessRuns    int64
+	FailedRuns     int64
+	TotalKeys      int64
 }
 
 type PreheatRetryPolicy struct {
@@ -170,6 +174,7 @@ type AccessLog struct {
 	Count     int64
 	LastTime  time.Time
 	Pattern   string
+	FirstTime time.Time
 }
 
 type HotKeyInfo struct {
@@ -1122,7 +1127,7 @@ func (pe *PreheatExecutor) processBatch(ctx context.Context, keys []string, prof
 			continue
 		}
 
-		jsonData, err := json.Marshal(data)
+		_, err = json.Marshal(data)
 		if err != nil {
 			atomic.AddInt64(&stats.FailedKeys, 1)
 			continue

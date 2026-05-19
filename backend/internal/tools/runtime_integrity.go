@@ -59,16 +59,6 @@ type WebhookAlertHandler struct {
 	timeout    time.Duration
 }
 
-type HTTPClient interface {
-	Post(url string, body []byte) error
-}
-
-type DefaultHTTPClient struct{}
-
-func (c *DefaultHTTPClient) Post(url string, body []byte) error {
-	return errors.New("http client not configured - implement for production use")
-}
-
 func NewWebhookAlertHandler(endpoint string) *WebhookAlertHandler {
 	return &WebhookAlertHandler{
 		endpoint:   endpoint,
@@ -87,26 +77,6 @@ func (h *WebhookAlertHandler) HandleAlert(alert *model.IntegrityAlert) error {
 
 type LogAlertHandler struct {
 	logger Logger
-}
-
-type Logger interface {
-	Error(format string, args ...interface{})
-	Warn(format string, args ...interface{})
-	Info(format string, args ...interface{})
-}
-
-type DefaultLogger struct{}
-
-func (l *DefaultLogger) Error(format string, args ...interface{}) {
-	fmt.Printf("[ERROR] "+format+"\n", args...)
-}
-
-func (l *DefaultLogger) Warn(format string, args ...interface{}) {
-	fmt.Printf("[WARN] "+format+"\n", args...)
-}
-
-func (l *DefaultLogger) Info(format string, args ...interface{}) {
-	fmt.Printf("[INFO] "+format+"\n", args...)
 }
 
 func NewLogAlertHandler() *LogAlertHandler {

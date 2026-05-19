@@ -196,16 +196,16 @@ type HistoricalBehaviorAnalyzer struct {
 }
 
 type UserBehaviorHistory struct {
-	UserID              string                 `json:"user_id"`
-	VerificationHistory []*VerificationRecord  `json:"verification_history"`
-	DeviceHistory       []*DeviceRecord        `json:"device_history"`
-	LocationHistory     []*LocationRecord      `json:"location_history"`
+	UserID              string                         `json:"user_id"`
+	VerificationHistory []*InvisibleCaptchaVerificationRecord  `json:"verification_history"`
+	DeviceHistory       []*DeviceRecord                `json:"device_history"`
+	LocationHistory     []*LocationRecord              `json:"location_history"`
 	SessionMetrics      *InvisibleCaptchaSessionMetrics `json:"session_metrics"`
-	RiskEvolution       []float64              `json:"risk_evolution"`
-	LastUpdate          time.Time              `json:"last_update"`
+	RiskEvolution       []float64                      `json:"risk_evolution"`
+	LastUpdate          time.Time                      `json:"last_update"`
 }
 
-type VerificationRecord struct {
+type InvisibleCaptchaVerificationRecord struct {
 	Timestamp           time.Time              `json:"timestamp"`
 	Fingerprint         string                 `json:"fingerprint"`
 	RiskScore           float64               `json:"risk_score"`
@@ -324,13 +324,13 @@ type TrustWeightManager struct {
 }
 
 type RiskScoreEngine struct {
-	riskFactors   map[string]RiskFactor
+	riskFactors   map[string]InvisibleCaptchaRiskFactor
 	globalRules   []GlobalRiskRule
 	historicalRisk map[string][]float64
 	mu            sync.RWMutex
 }
 
-type RiskFactor struct {
+type InvisibleCaptchaRiskFactor struct {
 	Name     string  `json:"name"`
 	Weight   float64 `json:"weight"`
 	Score    float64 `json:"score"`
@@ -543,7 +543,7 @@ func newCompositeTrustCalculator() *CompositeTrustCalculator {
 			performanceLog:  make(map[string][]float64),
 		},
 		riskEngine: &RiskScoreEngine{
-			riskFactors:   make(map[string]RiskFactor),
+			riskFactors:   make(map[string]InvisibleCaptchaRiskFactor),
 			globalRules:   initGlobalRiskRules(),
 			historicalRisk: make(map[string][]float64),
 		},
@@ -1040,7 +1040,7 @@ func (s *HistoricalBehaviorAnalyzer) GetOrCreateHistory(userID string) *UserBeha
 	if !exists {
 		history = &UserBehaviorHistory{
 			UserID:              userID,
-			VerificationHistory: make([]*VerificationRecord, 0),
+			VerificationHistory: make([]*InvisibleCaptchaVerificationRecord, 0),
 			DeviceHistory:       make([]*DeviceRecord, 0),
 			LocationHistory:     make([]*LocationRecord, 0),
 			SessionMetrics: &InvisibleCaptchaSessionMetrics{
@@ -1065,7 +1065,7 @@ func (s *HistoricalBehaviorAnalyzer) AnalyzeBehavior(userID string, behaviorData
 	if !exists {
 		history = &UserBehaviorHistory{
 			UserID:              userID,
-			VerificationHistory: make([]*VerificationRecord, 0),
+			VerificationHistory: make([]*InvisibleCaptchaVerificationRecord, 0),
 			DeviceHistory:       make([]*DeviceRecord, 0),
 			LocationHistory:     make([]*LocationRecord, 0),
 			SessionMetrics: &InvisibleCaptchaSessionMetrics{
@@ -1317,7 +1317,7 @@ func (s *HistoricalBehaviorAnalyzer) calculateRecentSuccessRate(history *UserBeh
 }
 
 func (s *HistoricalBehaviorAnalyzer) updateHistory(history *UserBehaviorHistory, behaviorData []models.BehaviorData, envData map[string]interface{}) {
-	record := &VerificationRecord{
+	record := &InvisibleCaptchaVerificationRecord{
 		Timestamp:       time.Now(),
 		RiskScore:       0.0,
 		Confidence:      0.0,
@@ -1966,7 +1966,7 @@ func (s *InvisibleCaptchaService) RecordVerificationResult(req *InvisibleVerific
 
 	history := s.behaviorAnalyzer.GetOrCreateHistory(req.UserID)
 
-	record := &VerificationRecord{
+	record := &InvisibleCaptchaVerificationRecord{
 		Timestamp:           time.Now(),
 		Fingerprint:         req.DeviceFingerprint,
 		RiskScore:           result.RiskScore,

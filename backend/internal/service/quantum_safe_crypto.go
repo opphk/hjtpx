@@ -5,13 +5,11 @@ import (
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -395,7 +393,7 @@ func (d *DilithiumSignature) GenerateKeyPair() (*DilithiumPublicKey, *DilithiumP
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	publicKey := DilithiumPublicKey{
+	publicKey := &DilithiumPublicKey{
 		Rho: make([]byte, 32),
 		T1:  make([][]int16, 4),
 		T2:  make([][]int16, 4),
@@ -515,7 +513,7 @@ func (m *McElieceCrypto) GenerateKeyPair() (*McEliecePublicKey, *McEliecePrivate
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	publicKey := McEliecePublicKey{
+	publicKey := &McEliecePublicKey{
 		G:  make([][]int16, m.k),
 		S:  make([][]int16, m.t),
 		P:  make([]int, m.n),

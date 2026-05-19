@@ -17,7 +17,7 @@ func NewTrajectoryNNEnhanced() *TrajectoryNNEnhanced {
 	}
 }
 
-func (t *TrajectoryNNEnhanced) ExtractFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) ExtractFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 768)
 
 	basicFeatures := t.extractBasicFeatures(trajectory)
@@ -41,7 +41,7 @@ func (t *TrajectoryNNEnhanced) ExtractFeatures(trajectory []TrajectoryPoint) []f
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractBasicFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractBasicFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 64)
 
 	if len(trajectory) == 0 {
@@ -69,7 +69,7 @@ func (t *TrajectoryNNEnhanced) extractBasicFeatures(trajectory []TrajectoryPoint
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractSpeedFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractSpeedFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 128)
 
 	if len(trajectory) < 2 {
@@ -99,7 +99,7 @@ func (t *TrajectoryNNEnhanced) extractSpeedFeatures(trajectory []TrajectoryPoint
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractDirectionFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractDirectionFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 128)
 
 	if len(trajectory) < 2 {
@@ -120,7 +120,7 @@ func (t *TrajectoryNNEnhanced) extractDirectionFeatures(trajectory []TrajectoryP
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractCurvatureFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractCurvatureFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 128)
 
 	if len(trajectory) < 3 {
@@ -148,7 +148,7 @@ func (t *TrajectoryNNEnhanced) extractCurvatureFeatures(trajectory []TrajectoryP
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractPositionFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractPositionFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 128)
 
 	if len(trajectory) == 0 {
@@ -192,7 +192,7 @@ func (t *TrajectoryNNEnhanced) extractPositionFeatures(trajectory []TrajectoryPo
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) extractBehaviorFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractBehaviorFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 192)
 
 	pattern := t.classifyBehaviorPattern(trajectory)
@@ -207,7 +207,7 @@ func (t *TrajectoryNNEnhanced) extractBehaviorFeatures(trajectory []TrajectoryPo
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) calculateTotalDistance(trajectory []TrajectoryPoint) float64 {
+func (t *TrajectoryNNEnhanced) calculateTotalDistance(trajectory []TrajectoryNNPoint) float64 {
 	total := 0.0
 	for i := 1; i < len(trajectory); i++ {
 		dx := trajectory[i].X - trajectory[i-1].X
@@ -217,7 +217,7 @@ func (t *TrajectoryNNEnhanced) calculateTotalDistance(trajectory []TrajectoryPoi
 	return total
 }
 
-func (t *TrajectoryNNEnhanced) calculateSpeeds(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) calculateSpeeds(trajectory []TrajectoryNNPoint) []float64 {
 	speeds := make([]float64, 0, len(trajectory)-1)
 	for i := 1; i < len(trajectory); i++ {
 		dx := trajectory[i].X - trajectory[i-1].X
@@ -299,7 +299,7 @@ func (t *TrajectoryNNEnhanced) calculateVarianceFromValues(values []float64) flo
 	return t.calculateVariance(values, mean)
 }
 
-func (t *TrajectoryNNEnhanced) calculateDirections(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) calculateDirections(trajectory []TrajectoryNNPoint) []float64 {
 	if len(trajectory) < 2 {
 		return []float64{}
 	}
@@ -382,7 +382,7 @@ func (t *TrajectoryNNEnhanced) calculateMainDirection(directions []float64) []fl
 	return mainDir
 }
 
-func (t *TrajectoryNNEnhanced) calculateCurvatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) calculateCurvatures(trajectory []TrajectoryNNPoint) []float64 {
 	if len(trajectory) < 3 {
 		return []float64{}
 	}
@@ -418,7 +418,7 @@ func (t *TrajectoryNNEnhanced) calculateCurvatures(trajectory []TrajectoryPoint)
 	return curvatures
 }
 
-func (t *TrajectoryNNEnhanced) calculatePositionHistogram(trajectory []TrajectoryPoint, isX bool, bins int) []float64 {
+func (t *TrajectoryNNEnhanced) calculatePositionHistogram(trajectory []TrajectoryNNPoint, isX bool, bins int) []float64 {
 	histogram := make([]float64, bins)
 	if len(trajectory) == 0 {
 		return histogram
@@ -470,7 +470,7 @@ func (t *TrajectoryNNEnhanced) calculatePositionHistogram(trajectory []Trajector
 	return histogram
 }
 
-func (t *TrajectoryNNEnhanced) calculateCoverage(trajectory []TrajectoryPoint, gridSize int) []float64 {
+func (t *TrajectoryNNEnhanced) calculateCoverage(trajectory []TrajectoryNNPoint, gridSize int) []float64 {
 	coverage := make([]float64, gridSize*gridSize)
 	if len(trajectory) == 0 {
 		return coverage
@@ -523,7 +523,7 @@ func (t *TrajectoryNNEnhanced) calculateCoverage(trajectory []TrajectoryPoint, g
 	return coverage
 }
 
-func (t *TrajectoryNNEnhanced) classifyBehaviorPattern(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) classifyBehaviorPattern(trajectory []TrajectoryNNPoint) []float64 {
 	pattern := make([]float64, 32)
 	if len(trajectory) < 2 {
 		return pattern
@@ -581,7 +581,7 @@ func (t *TrajectoryNNEnhanced) calculateDirectionEntropy(directions []float64) f
 	return entropy / math.Log(8.0)
 }
 
-func (t *TrajectoryNNEnhanced) detectAnomalies(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) detectAnomalies(trajectory []TrajectoryNNPoint) []float64 {
 	anomalies := make([]float64, 32)
 	if len(trajectory) < 3 {
 		return anomalies
@@ -620,7 +620,7 @@ func (t *TrajectoryNNEnhanced) detectAnomalies(trajectory []TrajectoryPoint) []f
 	return anomalies
 }
 
-func (t *TrajectoryNNEnhanced) extractLearningFeatures(trajectory []TrajectoryPoint) []float64 {
+func (t *TrajectoryNNEnhanced) extractLearningFeatures(trajectory []TrajectoryNNPoint) []float64 {
 	features := make([]float64, 96)
 	if len(trajectory) < 2 {
 		return features
@@ -669,27 +669,27 @@ func (t *TrajectoryNNEnhanced) extractLearningFeatures(trajectory []TrajectoryPo
 	return features
 }
 
-func (t *TrajectoryNNEnhanced) calculateAverageSpeed(trajectory []TrajectoryPoint) float64 {
+func (t *TrajectoryNNEnhanced) calculateAverageSpeed(trajectory []TrajectoryNNPoint) float64 {
 	speeds := t.calculateSpeeds(trajectory)
 	return t.calculateAverage(speeds)
 }
 
-func (t *TrajectoryNNEnhanced) calculateMaxSpeed(trajectory []TrajectoryPoint) float64 {
+func (t *TrajectoryNNEnhanced) calculateMaxSpeed(trajectory []TrajectoryNNPoint) float64 {
 	speeds := t.calculateSpeeds(trajectory)
 	return t.calculateMax(speeds)
 }
 
-func (t *TrajectoryNNEnhanced) calculateMinSpeed(trajectory []TrajectoryPoint) float64 {
+func (t *TrajectoryNNEnhanced) calculateMinSpeed(trajectory []TrajectoryNNPoint) float64 {
 	speeds := t.calculateSpeeds(trajectory)
 	return t.calculateMin(speeds)
 }
 
-func (t *TrajectoryNNEnhanced) calculateSpeedVariance(trajectory []TrajectoryPoint) float64 {
+func (t *TrajectoryNNEnhanced) calculateSpeedVariance(trajectory []TrajectoryNNPoint) float64 {
 	speeds := t.calculateSpeeds(trajectory)
 	return t.calculateVarianceFromValues(speeds)
 }
 
-type TrajectoryPoint struct {
+type TrajectoryNNPoint struct {
 	X         float64
 	Y         float64
 	Timestamp int64

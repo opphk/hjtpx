@@ -810,11 +810,11 @@ func getClientIPFromRequest(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func (s *OWASPProtectionService) GenerateComplianceReport() *ComplianceReport {
+func (s *OWASPProtectionService) GenerateComplianceReport() *OWASPComplianceReport {
 	s.auditMu.RLock()
 	defer s.auditMu.RUnlock()
 
-	report := &ComplianceReport{
+	report := &OWASPComplianceReport{
 		GeneratedAt: time.Now(),
 		TotalChecks:  len(s.validators),
 		Checks:       make(map[string]*RiskCheck),
@@ -839,7 +839,7 @@ func (s *OWASPProtectionService) GenerateComplianceReport() *ComplianceReport {
 	return report
 }
 
-type ComplianceReport struct {
+type OWASPComplianceReport struct {
 	GeneratedAt      time.Time
 	TotalChecks      int
 	Checks           map[string]*RiskCheck
@@ -853,7 +853,7 @@ type RiskCheck struct {
 	IsCompliant bool
 }
 
-func (s *OWASPProtectionService) calculateComplianceScore(report *ComplianceReport) float64 {
+func (s *OWASPProtectionService) calculateComplianceScore(report *OWASPComplianceReport) float64 {
 	compliantCount := 0
 	for _, check := range report.Checks {
 		if check.IsCompliant {
@@ -863,7 +863,7 @@ func (s *OWASPProtectionService) calculateComplianceScore(report *ComplianceRepo
 	return float64(compliantCount) / float64(report.TotalChecks) * 100
 }
 
-func (s *OWASPProtectionService) generateRecommendations(report *ComplianceReport) []string {
+func (s *OWASPProtectionService) generateRecommendations(report *OWASPComplianceReport) []string {
 	var recommendations []string
 
 	for id, check := range report.Checks {
@@ -904,7 +904,7 @@ func (s *OWASPProtectionService) ExportReport(format string) ([]byte, error) {
 	}
 }
 
-func (s *OWASPProtectionService) generateHTMLReport(report *ComplianceReport) ([]byte, error) {
+func (s *OWASPProtectionService) generateHTMLReport(report *OWASPComplianceReport) ([]byte, error) {
 	htmlTemplate := `
 <!DOCTYPE html>
 <html>

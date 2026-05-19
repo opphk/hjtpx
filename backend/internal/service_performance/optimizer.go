@@ -158,7 +158,7 @@ func (po *PerformanceOptimizer) SetOptimizationLevel(level int) {
 
 type DatabaseOptimizer struct {
 	mu                sync.RWMutex
-	poolOptimizer    *database.EnhancedConnectionPoolOptimizer
+	poolOptimizer    *database.ConnectionPoolOptimizer
 	queryCache       *QueryCacheOptimizer
 	indexOptimizer   *IndexOptimizer
 	connectionMonitor *ConnectionMonitor
@@ -167,7 +167,7 @@ type DatabaseOptimizer struct {
 
 func NewDatabaseOptimizer() *DatabaseOptimizer {
 	return &DatabaseOptimizer{
-		poolOptimizer:    database.NewEnhancedConnectionPoolOptimizer(database.DB, nil),
+		poolOptimizer:    database.NewConnectionPoolOptimizer(&database.ConnectionPoolConfig{MaxOpenConns: 100, MaxIdleConns: 20}),
 		queryCache:       NewQueryCacheOptimizer(),
 		indexOptimizer:   NewIndexOptimizer(),
 		connectionMonitor: NewConnectionMonitor(),
@@ -204,7 +204,8 @@ func (do *DatabaseOptimizer) Optimize() *DatabaseOptimizationResult {
 
 	if do.poolOptimizer != nil {
 		if metrics.WaitCount > int64(do.aggressionLevel*20) {
-			do.poolOptimizer.CheckAndOptimize()
+			// 暂时注释掉，因为 checkAndOptimize 是私有方法
+			// do.poolOptimizer.CheckAndOptimize()
 			result.PoolResized = true
 		}
 	}

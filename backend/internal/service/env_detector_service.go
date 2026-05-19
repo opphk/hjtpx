@@ -43,11 +43,6 @@ type EnvInfo struct {
 	Fingerprint         string   `json:"fingerprint"`
 }
 
-type EnvAutomationResult struct {
-	Detected bool
-	Risks    []string
-}
-
 type EnvRiskResult struct {
 	RiskLevel string   `json:"risk_level"`
 	Score     float64  `json:"score"`
@@ -61,6 +56,11 @@ type RiskCheckResult struct {
 	Detected bool   `json:"detected"`
 	Score    int    `json:"score"`
 	Reason   string `json:"reason,omitempty"`
+}
+
+type EnvDetectorResult struct {
+	Detected bool
+	Risks    []string
 }
 
 type EnvDetectionReport struct {
@@ -180,8 +180,8 @@ var automationHeaders = map[string]string{
 	"X-CRAWLER":       "crawler",
 }
 
-func (d *EnvDetector) DetectAutomation(info *EnvInfo) *AutomationResult {
-	result := &AutomationResult{
+func (d *EnvDetector) DetectAutomation(info *EnvInfo) *EnvDetectorResult {
+	result := &EnvDetectorResult{
 		Detected: false,
 		Risks:    []string{},
 	}
@@ -460,7 +460,7 @@ func (d *EnvDetector) EvaluateRisk(info *EnvInfo) *EnvRiskResult {
 	}
 }
 
-func (d *EnvDetector) determineAction(automation *EnvAutomationResult, score float64) string {
+func (d *EnvDetector) determineAction(automation *EnvDetectorResult, score float64) string {
 	if automation.Detected && len(automation.Risks) >= 2 {
 		return "block"
 	} else if automation.Detected || score < 70 {
@@ -560,7 +560,7 @@ func (d *EnvDetector) RunAllChecks(info *EnvInfo) *EnvDetectionReport {
 		RiskLevel:     riskLevel,
 		DetectedTools: detectedTools,
 		Checks:        checks,
-		Action:        d.determineAction(&EnvAutomationResult{Detected: envScore < 80, Risks: detectedTools}, envScore),
+		Action:        d.determineAction(&EnvDetectorResult{Detected: envScore < 80, Risks: detectedTools}, envScore),
 	}
 }
 

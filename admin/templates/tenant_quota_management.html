@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 配额管理{% endblock %}
+{% block page_title %}配额管理{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-primary" onclick="window.location.href='/admin/tenants'">
+        <i class="fas fa-arrow-left"></i> 返回租户列表
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .quota-card {
+        background: linear-gradient(145deg, rgba(20,25,45,0.95), rgba(15,20,35,0.98));
+        border: 1px solid rgba(0,212,255,0.15);
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    .quota-item {
+        padding: 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .quota-item:last-child {
+        border-bottom: none;
+    }
+    .progress-wrapper {
+        margin-top: 8px;
+    }
+    .progress-bar-quota {
+        height: 8px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .isolation-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .quota-edit-btn {
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    .quota-item:hover .quota-edit-btn {
+        opacity: 1;
+    }
+    .usage-warning {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+</style>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card quota-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i>租户信息</h5>
+            </div>
+            <div class="card-body">
+                <div id="tenantInfo">
+                    <div class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="sr-only">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card quota-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>配额管理</h5>
+                <button class="btn btn-sm btn-primary" onclick="showEditAllQuotaModal()">
+                    <i class="fas fa-edit me-1"></i> 批量编辑
+                </button>
+            </div>
+            <div class="card-body" id="quotaList">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card quota-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>租户隔离配置</h5>
+            </div>
+            <div class="card-body" id="isolationConfig">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card quota-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>配额变更记录</h5>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-default" onclick="refreshAuditLogs()">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap mb-0">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>操作人</th>
+                            <th>变更项</th>
+                            <th>变更前</th>
+                            <th>变更后</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditLogTable">
+                        <tr>
+                            <td colspan="6" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+const tenantId = {{ tenant_id|default:0|safe }};
+let currentQuota = null;
+let currentIsolation = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (tenantId) {
+        loadTenantInfo();
+        loadQuota();
+        loadIsolationConfig();
+        loadAuditLogs();
+    }
+});
+
+async function loadTenantInfo() {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId);
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            renderTenantInfo(result.data);
+        }
+    } catch (error) {
+        console.error('Failed to load tenant info:', error);
+    }
+}
+
+function renderTenantInfo(tenant) {
+    const html = `
+        <div class="text-center mb-3">
+            <div class="display-4 mb-2">
+                <i class="fas fa-building text-primary"></i>
+            </div>
+            <h4 class="mb-0">${escapeHtml(tenant.name)}</h4>
+            <small class="text-muted">${escapeHtml(tenant.code)}</small>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-6">
+                <p class="mb-1"><small class="text-muted">套餐</small></p>
+                <p class="mb-0"><strong>${getPlanBadge(tenant.plan)}</strong></p>
+            </div>
+            <div class="col-6">
+                <p class="mb-1"><small class="text-muted">状态</small></p>
+                <p class="mb-0"><strong>${getStatusBadge(tenant.status)}</strong></p>
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-6">
+                <p class="mb-1"><small class="text-muted">创建时间</small></p>
+                <p class="mb-0">${formatDate(tenant.created_at)}</p>
+            </div>
+            <div class="col-6">
+                <p class="mb-1"><small class="text-muted">到期时间</small></p>
+                <p class="mb-0">${tenant.expires_at ? formatDate(tenant.expires_at) : '-'}</p>
+            </div>
+        </div>
+    `;
+    document.getElementById('tenantInfo').innerHTML = html;
+}
+
+async function loadQuota() {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/quota');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            currentQuota = result.data;
+            renderQuota(result.data);
+        }
+    } catch (error) {
+        console.error('Failed to load quota:', error);
+    }
+}
+
+function renderQuota(quota) {
+    const items = [
+        { key: 'max_users', name: '最大用户数', icon: 'users', current: quota.current_users || 0 },
+        { key: 'max_applications', name: '最大应用数', icon: 'mobile-alt', current: quota.current_apps || 0 },
+        { key: 'max_webhooks', name: '最大Webhook数', icon: 'plug', current: quota.current_webhooks || 0 },
+        { key: 'max_api_calls_per_day', name: '每日API调用限制', icon: 'exchange-alt', current: quota.current_api_calls_today || 0, unit: '次' },
+        { key: 'max_storage_mb', name: '最大存储空间', icon: 'database', current: quota.current_storage_mb || 0, unit: 'MB' },
+        { key: 'max_concurrent_connections', name: '最大并发连接数', icon: 'network-wired', current: quota.current_concurrent_connections || 0 },
+        { key: 'max_verifications_per_month', name: '每月验证限制', icon: 'check-double', current: quota.current_verifications_month || 0, unit: '次' }
+    ];
+    
+    const html = items.map(item => {
+        const max = quota[item.key];
+        const isUnlimited = max === -1 || max === null;
+        const usagePercent = isUnlimited ? 0 : Math.min((item.current / max) * 100, 100);
+        const isWarning = usagePercent >= 80;
+        const isCritical = usagePercent >= 95;
+        let barColor = 'linear-gradient(90deg, #00d4ff, #00ff88)';
+        if (isCritical) barColor = 'linear-gradient(90deg, #dc3545, #ff6b6b)';
+        else if (isWarning) barColor = 'linear-gradient(90deg, #ffc107, #fd7e14)';
+        
+        return `
+            <div class="quota-item ${isWarning ? 'bg-warning bg-opacity-10' : ''}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">
+                            <i class="fas fa-${item.icon} me-2"></i>${item.name}
+                            ${isWarning ? '<span class="badge bg-warning ms-2 usage-warning">⚠ 接近上限</span>' : ''}
+                            ${isCritical ? '<span class="badge bg-danger ms-2 usage-warning">🔴 即将超限</span>' : ''}
+                        </h6>
+                        <div class="text-muted small">
+                            当前使用: <strong>${formatNumber(item.current)}</strong> / 
+                            ${isUnlimited ? '<span class="text-success">∞ 无限制</span>' : `<strong>${formatNumber(max)}</strong>`}
+                            ${item.unit || ''}
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-default quota-edit-btn" onclick="showEditQuotaModal('${item.key}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+                ${!isUnlimited ? `
+                    <div class="progress-wrapper">
+                        <div class="progress-bar-quota">
+                            <div class="progress-fill" style="width: ${usagePercent}%; background: ${barColor};"></div>
+                        </div>
+                        <small class="text-muted">${usagePercent.toFixed(1)}% 已使用</small>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('quotaList').innerHTML = html;
+}
+
+async function loadIsolationConfig() {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/isolation');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            currentIsolation = result.data;
+            renderIsolationConfig(result.data);
+        }
+    } catch (error) {
+        console.error('Failed to load isolation config:', error);
+    }
+}
+
+function renderIsolationConfig(config) {
+    const html = `
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center p-3 bg-dark bg-opacity-50 rounded">
+                    <div>
+                        <h6 class="mb-1"><i class="fas fa-database me-2"></i>数据库隔离</h6>
+                        <small class="text-muted">独立数据库 schema</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="dbIsolation" ${config.isolated_db ? 'checked' : ''} onchange="updateIsolationConfig('isolated_db', this.checked)">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center p-3 bg-dark bg-opacity-50 rounded">
+                    <div>
+                        <h6 class="mb-1"><i class="fas fa-layer-group me-2"></i>缓存隔离</h6>
+                        <small class="text-muted">独立 Redis 命名空间</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="cacheIsolation" ${config.isolated_cache ? 'checked' : ''} onchange="updateIsolationConfig('isolated_cache', this.checked)">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center p-3 bg-dark bg-opacity-50 rounded">
+                    <div>
+                        <h6 class="mb-1"><i class="fas fa-file-alt me-2"></i>文件存储隔离</h6>
+                        <small class="text-muted">独立文件存储路径</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="storageIsolation" ${config.isolated_storage ? 'checked' : ''} onchange="updateIsolationConfig('isolated_storage', this.checked)">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center p-3 bg-dark bg-opacity-50 rounded">
+                    <div>
+                        <h6 class="mb-1"><i class="fas fa-bolt me-2"></i>资源隔离</h6>
+                        <small class="text-muted">独立资源配额限制</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="resourceIsolation" ${config.isolated_resource ? 'checked' : ''} onchange="updateIsolationConfig('isolated_resource', this.checked)">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>说明：</strong>启用隔离可以提供更好的数据安全性和性能隔离，但会增加系统资源消耗。
+        </div>
+    `;
+    document.getElementById('isolationConfig').innerHTML = html;
+}
+
+async function updateIsolationConfig(key, value) {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/isolation', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({[key]: value})
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('配置更新成功', 'success');
+            loadAuditLogs();
+        } else {
+            showAdminToast(result.message || '更新失败', 'error');
+            loadIsolationConfig();
+        }
+    } catch (error) {
+        console.error('Failed to update isolation config:', error);
+        showAdminToast('更新失败', 'error');
+        loadIsolationConfig();
+    }
+}
+
+function showEditQuotaModal(key) {
+    const currentValue = currentQuota[key];
+    const names = {
+        'max_users': '最大用户数',
+        'max_applications': '最大应用数',
+        'max_webhooks': '最大Webhook数',
+        'max_api_calls_per_day': '每日API调用限制',
+        'max_storage_mb': '最大存储空间 (MB)',
+        'max_concurrent_connections': '最大并发连接数',
+        'max_verifications_per_month': '每月验证限制'
+    };
+    
+    const modalHtml = `
+        <div class="modal fade" id="editQuotaModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">编辑配额 - ${names[key]}</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editQuotaForm">
+                            <div class="form-group">
+                                <label>新配额值（-1 表示无限制）</label>
+                                <input type="number" class="form-control" name="value" value="${currentValue}" min="-1" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>备注</label>
+                                <textarea class="form-control" name="remark" rows="2" placeholder="变更备注..."></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="submitQuotaChange('${key}')">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    $('body').append(modalHtml);
+    $('#editQuotaModal').modal('show');
+    
+    $('#editQuotaModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+async function submitQuotaChange(key) {
+    const form = document.getElementById('editQuotaForm');
+    const formData = new FormData(form);
+    const value = parseInt(formData.get('value'));
+    const remark = formData.get('remark');
+    
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/quota', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({[key]: value, remark: remark})
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('配额更新成功', 'success');
+            $('#editQuotaModal').modal('hide');
+            loadQuota();
+            loadAuditLogs();
+        } else {
+            showAdminToast(result.message || '更新失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to update quota:', error);
+        showAdminToast('更新失败', 'error');
+    }
+}
+
+function showEditAllQuotaModal() {
+    const html = `
+        <div class="modal fade" id="editAllQuotaModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">批量编辑配额</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editAllQuotaForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大用户数</label>
+                                        <input type="number" class="form-control" name="max_users" value="${currentQuota.max_users}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大应用数</label>
+                                        <input type="number" class="form-control" name="max_applications" value="${currentQuota.max_applications}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大Webhook数</label>
+                                        <input type="number" class="form-control" name="max_webhooks" value="${currentQuota.max_webhooks}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>每日API调用限制</label>
+                                        <input type="number" class="form-control" name="max_api_calls_per_day" value="${currentQuota.max_api_calls_per_day}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大存储空间 (MB)</label>
+                                        <input type="number" class="form-control" name="max_storage_mb" value="${currentQuota.max_storage_mb}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大并发连接数</label>
+                                        <input type="number" class="form-control" name="max_concurrent_connections" value="${currentQuota.max_concurrent_connections}" min="-1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>每月验证限制</label>
+                                        <input type="number" class="form-control" name="max_verifications_per_month" value="${currentQuota.max_verifications_per_month}" min="-1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>备注</label>
+                                <textarea class="form-control" name="remark" rows="2" placeholder="变更备注..."></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="submitAllQuotaChange()">保存全部</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    $('body').append(html);
+    $('#editAllQuotaModal').modal('show');
+    
+    $('#editAllQuotaModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+async function submitAllQuotaChange() {
+    const form = document.getElementById('editAllQuotaForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    
+    const numericData = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (key !== 'remark') {
+            numericData[key] = parseInt(value);
+        } else {
+            numericData[key] = value;
+        }
+    }
+    
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/quota', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(numericData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            showAdminToast('批量更新成功', 'success');
+            $('#editAllQuotaModal').modal('hide');
+            loadQuota();
+            loadAuditLogs();
+        } else {
+            showAdminToast(result.message || '更新失败', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to update quota:', error);
+        showAdminToast('更新失败', 'error');
+    }
+}
+
+async function loadAuditLogs() {
+    try {
+        const response = await fetch('/admin/api/tenants/' + tenantId + '/quota-audit');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            renderAuditLogs(result.data);
+        }
+    } catch (error) {
+        console.error('Failed to load audit logs:', error);
+    }
+}
+
+function renderAuditLogs(logs) {
+    if (!logs || logs.length === 0) {
+        document.getElementById('auditLogTable').innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无记录</td></tr>';
+        return;
+    }
+    
+    const html = logs.map(log => `
+        <tr>
+            <td>${formatDate(log.created_at)}</td>
+            <td>${escapeHtml(log.operator || '系统')}</td>
+            <td>${escapeHtml(log.field_name || '-')}</td>
+            <td><code>${escapeHtml(log.old_value || '-')}</code></td>
+            <td><code>${escapeHtml(log.new_value || '-')}</code></td>
+            <td>${escapeHtml(log.remark || '-')}</td>
+        </tr>
+    `).join('');
+    
+    document.getElementById('auditLogTable').innerHTML = html;
+}
+
+function refreshAuditLogs() {
+    loadAuditLogs();
+}
+
+function getPlanBadge(plan) {
+    const badges = {
+        'free': '<span class="badge badge-secondary">Free</span>',
+        'starter': '<span class="badge badge-info">Starter</span>',
+        'professional': '<span class="badge badge-primary">Professional</span>',
+        'enterprise': '<span class="badge badge-danger">Enterprise</span>'
+    };
+    return badges[plan] || '<span class="badge badge-secondary">Unknown</span>';
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'active': '<span class="badge badge-success">活跃</span>',
+        'suspended': '<span class="badge badge-warning">已暂停</span>',
+        'inactive': '<span class="badge badge-secondary">未激活</span>'
+    };
+    return badges[status] || '<span class="badge badge-secondary">Unknown</span>';
+}
+
+function formatNumber(num) {
+    if (num === -1 || num === null) return '∞';
+    return num?.toLocaleString() || '0';
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN');
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

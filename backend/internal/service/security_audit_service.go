@@ -97,7 +97,7 @@ type SecurityEvent struct {
 	RawData       string                 `json:"raw_data,omitempty"`
 }
 
-type ThreatIntelEntry struct {
+type SecurityAuditThreatIntelEntry struct {
 	IP              string
 	ThreatType      string
 	Confidence      float64
@@ -110,7 +110,7 @@ type SecurityAuditService struct {
 	events              []*SecurityEvent
 	eventBuffer         chan *SecurityEvent
 	alertHandlers       []func(event *SecurityEvent)
-	threatIntel         map[string][]*ThreatIntelEntry
+	threatIntel         map[string][]*SecurityAuditThreatIntelEntry
 	ipEventCounts       map[string]int
 	geoIPCache          map[string]map[string]string
 	mu                  sync.RWMutex
@@ -128,7 +128,7 @@ func NewSecurityAuditService() *SecurityAuditService {
 		events:            make([]*SecurityEvent, 0),
 		eventBuffer:       make(chan *SecurityEvent, 1000),
 		alertHandlers:     make([]func(event *SecurityEvent), 0),
-		threatIntel:       make(map[string][]*ThreatIntelEntry),
+		threatIntel:       make(map[string][]*SecurityAuditThreatIntelEntry),
 		ipEventCounts:     make(map[string]int),
 		geoIPCache:        make(map[string]map[string]string),
 		maxEvents:         10000,
@@ -346,7 +346,7 @@ func (s *SecurityAuditService) AddThreatIntel(ip, threatType, source, descriptio
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	entry := &ThreatIntelEntry{
+	entry := &SecurityAuditThreatIntelEntry{
 		IP:          ip,
 		ThreatType:  threatType,
 		Confidence:  confidence,

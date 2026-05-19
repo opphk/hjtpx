@@ -15,32 +15,6 @@ var (
 	ErrReportGenerationFailed = errors.New("report generation failed")
 )
 
-type ComplianceFramework string
-
-type ComplianceReport struct {
-	Framework       ComplianceFramework `json:"framework"`
-	ReportID        string              `json:"report_id"`
-	GeneratedAt     time.Time           `json:"generated_at"`
-	Period          string              `json:"period"`
-	Status          string              `json:"status"`
-	ComplianceScore float64             `json:"compliance_score"`
-	Violations      []ComplianceViolation `json:"violations"`
-	Recommendations []string            `json:"recommendations"`
-	Summary         string              `json:"summary"`
-}
-
-type ComplianceViolation struct {
-	ID          string    `json:"id"`
-	Type        string    `json:"type"`
-	Severity    string    `json:"severity"`
-	Description string    `json:"description"`
-	Regulation  string    `json:"regulation"`
-	Article     string    `json:"article"`
-	DataAffected []string `json:"data_affected"`
-	DetectedAt  time.Time `json:"detected_at"`
-	Remediated  bool      `json:"remediated"`
-}
-
 type ComplianceReportRequest struct {
 	Framework   string    `json:"framework"`
 	Period      string    `json:"period"`
@@ -84,11 +58,6 @@ type DashboardTrend struct {
 	DataPoints  []TrendPoint `json:"data_points"`
 	Change      float64   `json:"change"`
 	Direction   string    `json:"direction"`
-}
-
-type TrendPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	Value     float64   `json:"value"`
 }
 
 type RealTimeCompliance struct {
@@ -298,7 +267,7 @@ func (s *governanceService) GetRealTimeCompliance(ctx context.Context) (*RealTim
 
 func (s *governanceService) GenerateComplianceReport(ctx context.Context, req *ComplianceReportRequest) (*ComplianceReport, error) {
 	report := &ComplianceReport{
-		Framework:       ComplianceFramework(req.Framework),
+		Framework:       req.Framework,
 		ReportID:        fmt.Sprintf("comp-report-%d", time.Now().UnixNano()),
 		GeneratedAt:     time.Now(),
 		Period:          req.Period,

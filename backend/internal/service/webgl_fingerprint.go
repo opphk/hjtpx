@@ -187,11 +187,11 @@ func (s *WebGLFingerprintService) extractGPUInfo(info *model.EnvInfo) model.WebG
 
 	gpuInfo.RendererType = s.identifyRendererType(rendererLower)
 
-	if containsAny(rendererLower, s.config.TrustedVendors) {
+	if webGLContainsAny(rendererLower, s.config.TrustedVendors) {
 		gpuInfo.RendererType = model.WebGLRendererTypeHardware
-	} else if containsAny(rendererLower, s.config.SoftwareRenderers) {
+	} else if webGLContainsAny(rendererLower, s.config.SoftwareRenderers) {
 		gpuInfo.RendererType = model.WebGLRendererTypeSoftware
-	} else if containsAny(rendererLower, s.config.VirtualGPUs) {
+	} else if webGLContainsAny(rendererLower, s.config.VirtualGPUs) {
 		gpuInfo.RendererType = model.WebGLRendererTypeVirtual
 	}
 
@@ -686,7 +686,7 @@ func (s *WebGLFingerprintService) AnalyzeStability(fingerprintID string, session
 		stored.HitCount++
 
 		if stored.SessionID != sessionID {
-			if !containsString(stored.Variations, sessionID) {
+			if !webGLContainsString(stored.Variations, sessionID) {
 				stored.Variations = append(stored.Variations, sessionID)
 				stored.RendererChanges++
 			}
@@ -1147,7 +1147,7 @@ func (s *WebGLFingerprintService) UpdateConfig(config *model.WebGLEnhancementCon
 	}
 }
 
-func containsString(slice []string, str string) bool {
+func webGLContainsString(slice []string, str string) bool {
 	for _, s := range slice {
 		if s == str {
 			return true
@@ -1156,7 +1156,7 @@ func containsString(slice []string, str string) bool {
 	return false
 }
 
-func containsAny(str string, list []string) bool {
+func webGLContainsAny(str string, list []string) bool {
 	strLower := strings.ToLower(str)
 	for _, item := range list {
 		if strings.Contains(strLower, strings.ToLower(item)) {

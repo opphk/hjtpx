@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -473,7 +472,7 @@ func (d *FaceSwapDetector) compareColorDistribution(img image.Image, r1, r2 Face
 	r1Avg := d.calculateAverageColor(img, r1)
 	r2Avg := d.calculateAverageColor(img, r2)
 
-	diff := math.Abs(r1Avg.R-r2Avg.R) + math.Abs(r1Avg.G-r2Avg.G) + math.Abs(r1Avg.B-r2Avg.B)
+	diff := math.Abs(float64(r1Avg.R)-float64(r2Avg.R)) + math.Abs(float64(r1Avg.G)-float64(r2Avg.G)) + math.Abs(float64(r1Avg.B)-float64(r2Avg.B))
 	return diff / (3 * 255)
 }
 
@@ -686,13 +685,13 @@ func (d *VoiceSynthesisDetector) analyzeSpectralFeatures(audioData []byte) *Spec
 	analysis := &SpectralAnalysis{
 		HighFreqAttenuation: 0.3 + math.Mod(float64(len(audioData)), 0.5)*0.1,
 		LowFreqAmplitude:     0.5 + math.Mod(float64(len(audioData)), 0.3)*0.1,
-		MFCCFeatures:        make([]float64, 13),
+		MelFreqCepstralCoeffs: make([]float64, 13),
 		SpectralFlux:        0.4 + math.Mod(float64(len(audioData)), 0.2)*0.1,
 		HarmonicRatio:       0.5 + math.Mod(float64(len(audioData)), 0.4)*0.1,
 	}
 
 	for i := 0; i < 13; i++ {
-		analysis.MFCCFeatures[i] = 0.1 + math.Mod(float64(len(audioData)+i), 0.3)
+		analysis.MelFreqCepstralCoeffs[i] = 0.1 + math.Mod(float64(len(audioData)+i), 0.3)
 	}
 
 	return analysis

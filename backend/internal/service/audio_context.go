@@ -8,8 +8,6 @@ import (
 	"math"
 	"math/rand"
 	"regexp"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 

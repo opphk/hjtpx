@@ -1,10 +1,26 @@
 package service
 
-import "math"
+import (
+	"math"
+)
+
+func sliderMax(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func sliderMin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 type SliderAnalysisV2 struct{}
 
-func (s *SliderAnalysisV2) AnalyzeTrajectory(points []TrajectoryPoint) *TrajectoryAnalysisResult {
+func (s *SliderAnalysisV2) AnalyzeTrajectory(points []SliderTrajectoryPoint) *TrajectoryAnalysisResult {
 	smoothedPoints := s.smoothTrajectory(points)
 	speedFeatures := s.extractSpeedFeatures(smoothedPoints)
 	jitterScore := s.detectJitter(smoothedPoints)
@@ -18,17 +34,17 @@ func (s *SliderAnalysisV2) AnalyzeTrajectory(points []TrajectoryPoint) *Trajecto
 	}
 }
 
-func (s *SliderAnalysisV2) smoothTrajectory(points []TrajectoryPoint) []TrajectoryPoint {
+func (s *SliderAnalysisV2) smoothTrajectory(points []SliderTrajectoryPoint) []SliderTrajectoryPoint {
 	if len(points) < 3 {
 		return points
 	}
-	smoothed := make([]TrajectoryPoint, len(points))
+	smoothed := make([]SliderTrajectoryPoint, len(points))
 	windowSize := 5
 
 	for i := range points {
 		sumX, sumY := 0.0, 0.0
 		count := 0
-		for j := max(0, i-windowSize/2); j <= min(len(points)-1, i+windowSize/2); j++ {
+		for j := sliderMax(0, i-windowSize/2); j <= sliderMin(len(points)-1, i+windowSize/2); j++ {
 			sumX += points[j].X
 			sumY += points[j].Y
 			count++
@@ -52,10 +68,10 @@ func (s *SliderAnalysisV2) extractSpeedFeatures(points []SliderTrajectoryPoint) 
 		}
 	}
 
-	avgSpeed := calculateAverage(speeds)
-	maxSpeed := calculateMax(speeds)
-	minSpeed := calculateMin(speeds)
-	variance := calculateVariance(speeds, avgSpeed)
+	avgSpeed := sliderAnalysisCalculateAverage(speeds)
+	maxSpeed := sliderAnalysisCalculateMax(speeds)
+	minSpeed := sliderAnalysisCalculateMin(speeds)
+	variance := sliderAnalysisCalculateVariance(speeds, avgSpeed)
 
 	return SpeedFeatures{
 		Average:  avgSpeed,
@@ -83,7 +99,7 @@ func (s *SliderAnalysisV2) detectJitter(points []SliderTrajectoryPoint) float64 
 	return float64(jitterCount) / float64(len(points))
 }
 
-func (s *SliderAnalysisV2) detectAccelerationPattern(points []TrajectoryPoint) AccelerationPattern {
+func (s *SliderAnalysisV2) detectAccelerationPattern(points []SliderTrajectoryPoint) AccelerationPattern {
 	var accelerations []float64
 	for i := 2; i < len(points); i++ {
 		speed1 := s.calculateSpeed(points[i-2], points[i-1])
@@ -115,8 +131,8 @@ func (s *SliderAnalysisV2) detectAccelerationPattern(points []TrajectoryPoint) A
 
 	return AccelerationPattern{
 		Type:            pattern,
-		Average:         calculateAverage(accelerations),
-		MaxAcceleration: calculateMax(accelerations),
+		Average:         sliderAnalysisCalculateAverage(accelerations),
+		MaxAcceleration: sliderAnalysisCalculateMax(accelerations),
 	}
 }
 
@@ -130,7 +146,7 @@ func (s *SliderAnalysisV2) calculateSpeed(p1, p2 SliderTrajectoryPoint) float64 
 	return math.Sqrt(dx*dx+dy*dy) / float64(dt)
 }
 
-func calculateAverage(values []float64) float64 {
+func sliderAnalysisCalculateAverage(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -141,7 +157,7 @@ func calculateAverage(values []float64) float64 {
 	return sum / float64(len(values))
 }
 
-func calculateMax(values []float64) float64 {
+func sliderAnalysisCalculateMax(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -154,7 +170,7 @@ func calculateMax(values []float64) float64 {
 	return max
 }
 
-func calculateMin(values []float64) float64 {
+func sliderAnalysisCalculateMin(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -167,7 +183,7 @@ func calculateMin(values []float64) float64 {
 	return min
 }
 
-func calculateVariance(values []float64, mean float64) float64 {
+func sliderAnalysisCalculateVariance(values []float64, mean float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}

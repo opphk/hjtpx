@@ -29,17 +29,6 @@ type Trajectory struct {
 	Duration  int64               `json:"duration"`
 }
 
-type Anomaly struct {
-	PatternID     string `json:"patternId"`
-	Type          string `json:"type"`
-	Description   string `json:"description"`
-	Severity      string `json:"severity"`
-	Count         int    `json:"count"`
-	AffectedUsers int    `json:"affectedUsers"`
-	FirstSeen     string `json:"firstSeen"`
-	LastSeen      string `json:"lastSeen"`
-}
-
 type BehaviorRiskDistribution struct {
 	Range      string  `json:"range"`
 	Count      int     `json:"count"`
@@ -141,8 +130,19 @@ func (s *BehaviorAnalyticsService) GetRecentTrajectories(limit int) ([]Trajector
 	return trajectories, nil
 }
 
-func (s *BehaviorAnalyticsService) GetAnomalyPatterns(period string) ([]Anomaly, error) {
-	anomalies := []Anomaly{
+type BehaviorAnomaly struct {
+	PatternID     string
+	Type          string
+	Description   string
+	Severity      string
+	Count         int
+	AffectedUsers int
+	FirstSeen     string
+	LastSeen      string
+}
+
+func (s *BehaviorAnalyticsService) GetAnomalyPatterns(period string) ([]BehaviorAnomaly, error) {
+	anomalies := []BehaviorAnomaly{
 		{
 			PatternID:     "ANOM_001",
 			Type:          "linear_mouse_movement",

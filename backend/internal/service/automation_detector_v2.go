@@ -81,6 +81,14 @@ type EnvAutomationResult struct {
 	RiskScore         float64
 }
 
+type AutomationDetectorResult struct {
+	AutomationDetected bool
+	Detections        []interface{}
+	MouseAnalysis     *MouseAnalysisResult
+	KeyboardAnalysis  *KeyboardAnalysisResult
+	RiskScore         float64
+}
+
 func (a *AutomationDetectorV2) DetectSelenium(userAgent string, navigator map[string]interface{}) SeleniumDetection {
 	result := SeleniumDetection{}
 
@@ -283,8 +291,8 @@ func (a *AutomationDetectorV2) AnalyzeKeyboardInput(keypresses []KeyPress) Keybo
 	return result
 }
 
-func (a *AutomationDetectorV2) DetectAutomation(data AutomationData) AutomationResult {
-	result := AutomationResult{}
+func (a *AutomationDetectorV2) DetectAutomation(data AutomationData) AutomationDetectorResult {
+	result := AutomationDetectorResult{}
 
 	if data.UserAgent != "" && data.Navigator != nil {
 		selenium := a.DetectSelenium(data.UserAgent, data.Navigator)

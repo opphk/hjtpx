@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -165,7 +164,7 @@ func NewDataPipeline() *DataPipeline {
 	return dp
 }
 
-func (dp *DataPipeline) CreateStream(name, streamType string) *StreamProcessor {
+func (dp *DataPipeline) CreateStream(name string, streamType string) (*StreamProcessor, error) {
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
 
@@ -174,9 +173,9 @@ func (dp *DataPipeline) CreateStream(name, streamType string) *StreamProcessor {
 		Name: name,
 		Type: streamType,
 		Status: "idle",
-		BufferSize: int32(dp.config.BufferSize),
 		Metadata:   make(map[string]string),
 	}
+	stream.BufferSize.Store(int32(dp.config.BufferSize))
 
 	processor := &StreamProcessor{
 		ID:      generateID(),
@@ -189,7 +188,7 @@ func (dp *DataPipeline) CreateStream(name, streamType string) *StreamProcessor {
 
 	dp.streams[processor.ID] = processor
 
-	return processor
+	return processor, nil
 }
 
 func (sp *StreamProcessor) Start(ctx context.Context) {
@@ -245,7 +244,7 @@ func (sp *StreamProcessor) Stop() {
 }
 
 func (sp *StreamProcessor) Push(data interface{}) bool {
-	if !sp.IsRunning.Load() || sp.Stream.BufferSize <= 0 {
+	if !sp.IsRunning.Load() || sp.Stream.BufferSize.Load() <= 0 {
 		sp.Stream.Errors.Add(1)
 		return false
 	}
@@ -558,14 +557,14 @@ func (dp *DataPipeline) GetPipelineStats() map[string]interface{} {
 			"total_records":    qualityMetrics.TotalRecords.Load(),
 			"valid_records":    qualityMetrics.ValidRecords.Load(),
 			"invalid_records":  qualityMetrics.InvalidRecords.Load(),
-			"quality_score":    qualityMetrics.QualityScore.Load(),
+			"quality_score":    qualityMetrics.QualityScore,
 			"violations_count": len(qualityMetrics.Violations),
 		},
 		"dashboard": map[string]interface{}{
-			"events_per_second": dp.dashboard.EventsPerSecond.Load(),
+			"events_per_second": dp.dashboard.EventsPerSecond,
 			"avg_latency_ms":    dp.dashboard.AvgLatencyMs.Load(),
-			"error_rate":        dp.dashboard.ErrorRate.Load(),
-			"success_rate":      dp.dashboard.SuccessRate.Load(),
+			"error_rate":        dp.dashboard.ErrorRate,
+			"success_rate":      dp.dashboard.SuccessRate,
 		},
 	}
 }

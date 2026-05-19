@@ -25,11 +25,11 @@ const (
 )
 
 type ComplianceService interface {
-	CheckCompliance(ctx context.Context, framework ComplianceFramework, data *ComplianceCheckData) (*ComplianceReport, error)
-	GetDataSubjectRights(ctx context.Context, framework ComplianceFramework, userID uint) (*DataSubjectRights, error)
-	ProcessDataSubjectRequest(ctx context.Context, framework ComplianceFramework, request *DSRRequest) (*DSRResponse, error)
-	GenerateComplianceReport(ctx context.Context, framework ComplianceFramework, period string) (*ComplianceReport, error)
-	ValidateDataProcessing(ctx context.Context, framework ComplianceFramework, processing *DataProcessingActivity) (*ComplianceValidation, error)
+	CheckCompliance(ctx context.Context, framework string, data *ComplianceCheckData) (*ComplianceReport, error)
+	GetDataSubjectRights(ctx context.Context, framework string, userID uint) (*DataSubjectRights, error)
+	ProcessDataSubjectRequest(ctx context.Context, framework string, request *DSRRequest) (*DSRResponse, error)
+	GenerateComplianceReport(ctx context.Context, framework string, period string) (*ComplianceReport, error)
+	ValidateDataProcessing(ctx context.Context, framework string, processing *DataProcessingActivity) (*ComplianceValidation, error)
 }
 
 type ComplianceCheckData struct {
@@ -45,7 +45,7 @@ type ComplianceCheckData struct {
 }
 
 type ComplianceReport struct {
-	Framework       ComplianceFramework `json:"framework"`
+	Framework       string `json:"framework"`
 	ReportID        string              `json:"report_id"`
 	GeneratedAt     time.Time           `json:"generated_at"`
 	Period          string              `json:"period"`
@@ -69,7 +69,7 @@ type ComplianceViolation struct {
 }
 
 type DataSubjectRights struct {
-	Framework    ComplianceFramework `json:"framework"`
+	Framework    string `json:"framework"`
 	Rights       []DataSubjectRight  `json:"rights"`
 	AvailableIn  []string            `json:"available_in"`
 	ResponseTime time.Duration       `json:"response_time"`
@@ -86,7 +86,7 @@ type DataSubjectRight struct {
 type DSRRequest struct {
 	Type        string                 `json:"type"`
 	UserID      uint                   `json:"user_id"`
-	Framework   ComplianceFramework     `json:"framework"`
+	Framework   string     `json:"framework"`
 	Data        map[string]interface{} `json:"data"`
 	Preferences map[string]string      `json:"preferences"`
 	RequestDate time.Time              `json:"request_date"`
@@ -140,7 +140,7 @@ func NewComplianceService() ComplianceService {
 	return &complianceService{}
 }
 
-func (s *complianceService) CheckCompliance(ctx context.Context, framework ComplianceFramework, data *ComplianceCheckData) (*ComplianceReport, error) {
+func (s *complianceService) CheckCompliance(ctx context.Context, framework string, data *ComplianceCheckData) (*ComplianceReport, error) {
 	report := &ComplianceReport{
 		Framework:       framework,
 		ReportID:        generateReportID(framework),
@@ -152,16 +152,16 @@ func (s *complianceService) CheckCompliance(ctx context.Context, framework Compl
 	}
 
 	switch framework {
-	case FrameworkCCPA:
+	case "ccpa":
 		report.Period = "CCPA Reporting Period"
 		report.Summary = s.checkCCPACompliance(data)
-	case FrameworkPIPL:
+	case "pipl":
 		report.Period = "PIPL Reporting Period"
 		report.Summary = s.checkPIPLCompliance(data)
-	case FrameworkLGPD:
+	case "lgpd":
 		report.Period = "LGPD Reporting Period"
 		report.Summary = s.checkLGPDCompliance(data)
-	case FrameworkGDPR:
+	case "gdpr":
 		report.Period = "GDPR Reporting Period"
 		report.Summary = s.checkGDPRCompliance(data)
 	default:
@@ -171,7 +171,7 @@ func (s *complianceService) CheckCompliance(ctx context.Context, framework Compl
 	return report, nil
 }
 
-func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework ComplianceFramework, userID uint) (*DataSubjectRights, error) {
+func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework string, userID uint) (*DataSubjectRights, error) {
 	rights := &DataSubjectRights{
 		Framework:    framework,
 		Rights:       []DataSubjectRight{},
@@ -179,7 +179,7 @@ func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework 
 	}
 
 	switch framework {
-	case FrameworkCCPA:
+	case "ccpa":
 		rights.AvailableIn = []string{"California"}
 		rights.Rights = append(rights.Rights, DataSubjectRight{
 			Name:        "Right to Know",
@@ -204,7 +204,7 @@ func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework 
 		})
 		rights.ResponseTime = 45 * 24 * time.Hour
 
-	case FrameworkPIPL:
+	case "pipl":
 		rights.AvailableIn = []string{"China"}
 		rights.Rights = append(rights.Rights, DataSubjectRight{
 			Name:        "知情权",
@@ -236,7 +236,7 @@ func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework 
 		})
 		rights.ResponseTime = 15 * 24 * time.Hour
 
-	case FrameworkLGPD:
+	case "lgpd":
 		rights.AvailableIn = []string{"Brazil"}
 		rights.Rights = append(rights.Rights, DataSubjectRight{
 			Name:        "Direito de Confirmação",
@@ -275,7 +275,7 @@ func (s *complianceService) GetDataSubjectRights(ctx context.Context, framework 
 	return rights, nil
 }
 
-func (s *complianceService) ProcessDataSubjectRequest(ctx context.Context, framework ComplianceFramework, request *DSRRequest) (*DSRResponse, error) {
+func (s *complianceService) ProcessDataSubjectRequest(ctx context.Context, framework string, request *DSRRequest) (*DSRResponse, error) {
 	response := &DSRResponse{
 		RequestID:   generateRequestID(),
 		Status:      "processing",
@@ -289,7 +289,7 @@ func (s *complianceService) ProcessDataSubjectRequest(ctx context.Context, frame
 		response.ActionTaken = "data_extracted"
 		response.DataProvided = map[string]interface{}{
 			"user_id":      request.UserID,
-			"frameworks":   []string{string(framework)},
+			"frameworks":   []string{framework},
 			"request_date": request.RequestDate,
 		}
 	case "deletion":
@@ -314,7 +314,7 @@ func (s *complianceService) ProcessDataSubjectRequest(ctx context.Context, frame
 	return response, nil
 }
 
-func (s *complianceService) GenerateComplianceReport(ctx context.Context, framework ComplianceFramework, period string) (*ComplianceReport, error) {
+func (s *complianceService) GenerateComplianceReport(ctx context.Context, framework string, period string) (*ComplianceReport, error) {
 	report := &ComplianceReport{
 		Framework:       framework,
 		ReportID:        generateReportID(framework),
@@ -334,7 +334,7 @@ func (s *complianceService) GenerateComplianceReport(ctx context.Context, framew
 	return report, nil
 }
 
-func (s *complianceService) ValidateDataProcessing(ctx context.Context, framework ComplianceFramework, processing *DataProcessingActivity) (*ComplianceValidation, error) {
+func (s *complianceService) ValidateDataProcessing(ctx context.Context, framework string, processing *DataProcessingActivity) (*ComplianceValidation, error) {
 	validation := &ComplianceValidation{
 		IsCompliant: true,
 		Issues:      []ComplianceIssue{},
@@ -348,7 +348,7 @@ func (s *complianceService) ValidateDataProcessing(ctx context.Context, framewor
 			Code:        "MISSING_PURPOSE",
 			Description: "Processing purpose must be specified",
 			Severity:    "high",
-			Regulation:  string(framework),
+			Regulation:  framework,
 			Remediation: "Define a clear processing purpose before collecting data",
 		})
 	}
@@ -443,7 +443,7 @@ func (s *complianceService) checkGDPRCompliance(data *ComplianceCheckData) strin
 	return "GDPR compliance status: " + formatScore(score)
 }
 
-func generateReportID(framework ComplianceFramework) string {
+func generateReportID(framework string) string {
 	return fmt.Sprintf("%s-REP-%d", framework, time.Now().UnixNano())
 }
 

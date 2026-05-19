@@ -17,10 +17,75 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/jwt"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	"github.com/hjtpx/hjtpx/pkg/performance"
 )
 
 func main() {
 	cfg := config.LoadConfig()
+	
+	// Initialize Performance Engine (High Priority)
+	perfEngine := performance.NewPerformanceEngine()
+	ctx := context.Background()
+	if err := perfEngine.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start performance engine: %v", err)
+	} else {
+		log.Println("Performance engine started successfully")
+	}
+	defer perfEngine.Stop()
+	
+	// Initialize Database Optimizer
+	dbOptimizer := performance.NewDatabaseOptimizer()
+	if err := dbOptimizer.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start database optimizer: %v", err)
+	} else {
+		log.Println("Database optimizer started successfully")
+	}
+	defer dbOptimizer.Stop()
+	
+	// Initialize Cache Optimizer
+	cacheOptimizer := performance.NewCacheOptimizer()
+	if err := cacheOptimizer.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start cache optimizer: %v", err)
+	} else {
+		log.Println("Cache optimizer started successfully")
+	}
+	defer cacheOptimizer.Stop()
+	
+	// Initialize Concurrency Manager
+	concurrencyMgr := performance.NewConcurrencyManager()
+	if err := concurrencyMgr.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start concurrency manager: %v", err)
+	} else {
+		log.Println("Concurrency manager started successfully")
+	}
+	defer concurrencyMgr.Stop()
+	
+	// Initialize Resource Manager
+	resourceMgr := performance.NewResourceManager()
+	if err := resourceMgr.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start resource manager: %v", err)
+	} else {
+		log.Println("Resource manager started successfully")
+	}
+	defer resourceMgr.Stop()
+	
+	// Initialize Edge Compute
+	edgeCompute := performance.NewEdgeCompute()
+	if err := edgeCompute.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start edge compute: %v", err)
+	} else {
+		log.Println("Edge compute started successfully")
+	}
+	defer edgeCompute.Stop()
+	
+	// Initialize WASM Engine
+	wasmEngine := performance.NewWASMEngine()
+	if err := wasmEngine.Start(ctx); err != nil {
+		log.Printf("Warning: Failed to start WASM engine: %v", err)
+	} else {
+		log.Println("WASM engine started successfully")
+	}
+	defer wasmEngine.Stop()
 
 	i18nConfig := i18n.LocaleConfig{
 		DefaultLang:     cfg.I18n.DefaultLang,
