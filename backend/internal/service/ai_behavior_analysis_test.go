@@ -9,7 +9,7 @@ import (
 	"github.com/hjtpx/hjtpx/internal/model"
 )
 
-func TestLSTMFeatureExtractor_ExtractFeatures(t *testing.T) {
+func TestLSTMFeatureExtractor_ExtractFeaturesAIBehavior(t *testing.T) {
 	extractor := NewLSTMFeatureExtractor()
 
 	points := make([]model.TracePoint, 10)

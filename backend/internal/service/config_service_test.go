@@ -11,7 +11,7 @@ func TestNewConfigService(t *testing.T) {
 	}
 }
 
-func TestGetConfig(t *testing.T) {
+func TestGetConfigConfig(t *testing.T) {
 	configService := NewConfigService()
 	
 	config, err := configService.GetConfig()
@@ -23,7 +23,7 @@ func TestGetConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig(t *testing.T) {
+func TestUpdateConfigConfig(t *testing.T) {
 	configService := NewConfigService()
 	
 	currentConfig, err := configService.GetConfig()
@@ -78,7 +78,7 @@ func TestReloadConfig(t *testing.T) {
 	}
 }
 
-func TestValidateConfig(t *testing.T) {
+func TestValidateConfigConfig(t *testing.T) {
 	configService := NewConfigService()
 	
 	validConfig := map[string]interface{}{

@@ -305,9 +305,9 @@ func TestComboService_GetAvailableTypes(t *testing.T) {
 		t.Error("Should return at least one available type")
 	}
 
-	for _, t := range types {
-		if !service.isTypeAvailable(t) {
-			t.Errorf("Type '%s' should be available", t)
+	for _, typ := range types {
+		if !service.isTypeAvailable(typ) {
+			t.Errorf("Type '%s' should be available", typ)
 		}
 	}
 }

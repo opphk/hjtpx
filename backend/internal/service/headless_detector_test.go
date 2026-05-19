@@ -111,7 +111,7 @@ func TestDetectHeadlessChrome(t *testing.T) {
 	}
 }
 
-func TestDetectSelenium(t *testing.T) {
+func TestDetectSeleniumHeadless(t *testing.T) {
 	detector := NewHeadlessDetector()
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -145,7 +145,7 @@ func TestDetectSelenium(t *testing.T) {
 	}
 }
 
-func TestDetectPuppeteer(t *testing.T) {
+func TestDetectPuppeteerHeadless(t *testing.T) {
 	detector := NewHeadlessDetector()
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -491,7 +491,7 @@ func TestMultipleAutomationIndicators(t *testing.T) {
 	}
 }
 
-func TestGetStats(t *testing.T) {
+func TestGetStatsHeadless(t *testing.T) {
 	detector := NewHeadlessDetector()
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -569,7 +569,7 @@ func TestCacheResult(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig(t *testing.T) {
+func TestUpdateConfigHeadless(t *testing.T) {
 	detector := NewHeadlessDetector()
 
 	newConfig := &model.HeadlessDetectionConfig{
@@ -618,7 +618,7 @@ func TestGetTopSeverityIndicators(t *testing.T) {
 	}
 }
 
-func TestCalculateConfidence(t *testing.T) {
+func TestCalculateConfidenceHeadless(t *testing.T) {
 	result := &model.HeadlessDetectionResult{
 		Indicators: []model.HeadlessIndicator{
 			{Type: "test1", Severity: 50.0},

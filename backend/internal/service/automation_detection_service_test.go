@@ -19,7 +19,7 @@ func TestNewAutomationDetectionService(t *testing.T) {
 	}
 }
 
-func TestDetectSelenium(t *testing.T) {
+func TestDetectSeleniumAutomation(t *testing.T) {
 	service := NewAutomationDetectionService()
 
 	testCases := []struct {
@@ -147,7 +147,7 @@ func TestDetectPhantomJS(t *testing.T) {
 	}
 }
 
-func TestDetectPuppeteer(t *testing.T) {
+func TestDetectPuppeteerAutomation(t *testing.T) {
 	service := NewAutomationDetectionService()
 
 	testCases := []struct {

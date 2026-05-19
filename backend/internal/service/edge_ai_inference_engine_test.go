@@ -319,7 +319,7 @@ func TestAdjustPowerProfile(t *testing.T) {
 	}
 }
 
-func TestGetStats(t *testing.T) {
+func TestGetStatsEdgeAI(t *testing.T) {
 	engine := NewEdgeAIInferenceEngine()
 	ctx := context.Background()
 

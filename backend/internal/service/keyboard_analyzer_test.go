@@ -301,7 +301,7 @@ func TestDetectPauses(t *testing.T) {
 	assert.Equal(t, 2, len(pauses))
 }
 
-func TestCalculateEntropy(t *testing.T) {
+func TestCalculateEntropyKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	values := []float64{100, 100, 100, 100, 100}
@@ -383,7 +383,7 @@ func TestCountSimultaneousPress(t *testing.T) {
 	assert.GreaterOrEqual(t, count, 0)
 }
 
-func TestMean(t *testing.T) {
+func TestMeanKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	values := []float64{10, 20, 30, 40, 50}
@@ -401,7 +401,7 @@ func TestMean_Empty(t *testing.T) {
 	assert.Equal(t, 0.0, mean)
 }
 
-func TestMax(t *testing.T) {
+func TestMaxKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	values := []float64{10, 50, 30, 20, 40}
@@ -411,7 +411,7 @@ func TestMax(t *testing.T) {
 	assert.Equal(t, 50.0, max)
 }
 
-func TestMin(t *testing.T) {
+func TestMinKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	values := []float64{50, 10, 30, 20, 40}
@@ -421,7 +421,7 @@ func TestMin(t *testing.T) {
 	assert.Equal(t, 10.0, min)
 }
 
-func TestVariance(t *testing.T) {
+func TestVarianceKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	values := []float64{10, 20, 30, 40, 50}
@@ -535,7 +535,7 @@ func TestIsBotBehavior_Human(t *testing.T) {
 	assert.False(t, isBot)
 }
 
-func TestGenerateReport(t *testing.T) {
+func TestGenerateReportKeyboard(t *testing.T) {
 	analyzer := NewKeyboardAnalyzer()
 
 	features := &model.KeyboardBehaviorFeatures{

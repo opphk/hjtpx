@@ -114,7 +114,7 @@ func TestSelectVariantByHash(t *testing.T) {
 	assert.NotNil(t, variant)
 }
 
-func TestCalculateConfidence(t *testing.T) {
+func TestCalculateConfidenceABTest(t *testing.T) {
 	service := NewABTestService()
 
 	tests := []struct {

@@ -19,7 +19,9 @@ func SetupRoutes(r *gin.Engine) {
 
 	// 初始化VR验证码handler
 	vrGen := captcha.NewVRGeneratorServiceSimple()
-	handler.InitVRCaptchaHandler(vrGen)
+	vrVer := captcha.NewVRVerifierServiceSimple()
+	handler.InitVRCaptchaHandler(vrGen, vrVer)
+	handler.InitVrArCaptchaHandler(vrGen, vrVer)
 
 	// 初始化神经验证码handler
 	neuralSvc := service.NewNeuralCaptchaService()
@@ -28,6 +30,9 @@ func SetupRoutes(r *gin.Engine) {
 	// 初始化时空验证码handler
 	stSvc := service.NewSpatioTemporalCaptchaService()
 	handler.InitSpatioTemporalCaptchaHandler(stSvc)
+
+	// 初始化生物识别增强版验证码handler
+	handler.InitBiometricEnhancedHandler()
 
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
@@ -129,6 +134,15 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/spatio-temporal/create", handler.CreateSpatioTemporalCaptcha)
 		api.POST("/captcha/spatio-temporal/verify", handler.VerifySpatioTemporalCaptcha)
 		api.GET("/captcha/spatio-temporal/status/:session_id", handler.GetSpatioTemporalCaptchaStatus)
+
+		// VR/AR验证码
+		api.POST("/captcha/vr-ar/generate", handler.GenerateVrArCaptcha)
+		api.POST("/captcha/vr-ar/verify", handler.VerifyVrArCaptcha)
+		api.GET("/captcha/vr-ar/status/:session_id", handler.GetVrArCaptchaStatus)
+
+		// 生物识别验证码
+		api.POST("/captcha/biometric/generate", handler.GenerateBiometricCaptcha)
+		api.POST("/captcha/biometric/verify", handler.VerifyBiometricCaptcha)
 
 		// 增强的组合验证码系统
 		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)

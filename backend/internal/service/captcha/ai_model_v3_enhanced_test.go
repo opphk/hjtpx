@@ -3,6 +3,7 @@ package captcha
 import (
 	"context"
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -144,7 +145,7 @@ func TestEnhancedGPTCaptchaGenerator_GenerateHint(t *testing.T) {
 	}
 }
 
-func TestLSTMFeatureExtractor_ExtractFeatures(t *testing.T) {
+func TestLSTMFeatureExtractor_ExtractFeaturesCaptchaV3(t *testing.T) {
 	extractor := NewLSTMFeatureExtractor()
 
 	traceData := &model.TraceData{

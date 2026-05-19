@@ -26,7 +26,7 @@ func TestNewAudioContextService(t *testing.T) {
 	}
 }
 
-func TestGenerateFingerprint(t *testing.T) {
+func TestGenerateFingerprintAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data := map[string]interface{}{
@@ -120,7 +120,7 @@ func TestGenerateFingerprintWithEmptyData(t *testing.T) {
 	}
 }
 
-func TestAnalyzeFingerprint(t *testing.T) {
+func TestAnalyzeFingerprintAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data := map[string]interface{}{
@@ -164,7 +164,7 @@ func TestAnalyzeFingerprintNotFound(t *testing.T) {
 	}
 }
 
-func TestCompareFingerprints(t *testing.T) {
+func TestCompareFingerprintsAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data1 := map[string]interface{}{
@@ -230,7 +230,7 @@ func TestCompareFingerprintsNotFound(t *testing.T) {
 	}
 }
 
-func TestDetectAnomalies(t *testing.T) {
+func TestDetectAnomaliesAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data := map[string]interface{}{
@@ -301,7 +301,7 @@ func TestGetSimilarFingerprints(t *testing.T) {
 	_ = fp2
 }
 
-func TestValidateFingerprint(t *testing.T) {
+func TestValidateFingerprintAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data := map[string]interface{}{
@@ -395,7 +395,7 @@ func TestRemoveFingerprint(t *testing.T) {
 	}
 }
 
-func TestGetStatistics(t *testing.T) {
+func TestGetStatisticsAudio(t *testing.T) {
 	service := NewAudioContextService()
 
 	data := map[string]interface{}{

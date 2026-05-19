@@ -10,7 +10,7 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/models"
 )
 
-func TestEnhancedFingerprintEngine(t *testing.T) {
+func TestEnhancedFingerprintEngineEnhanced(t *testing.T) {
 	t.Log("测试增强指纹引擎功能")
 	
 	engine := newEnhancedFingerprintEngine()
@@ -64,7 +64,7 @@ func TestEnhancedFingerprintEngine(t *testing.T) {
 	t.Log("指纹引擎测试通过")
 }
 
-func TestMultiDimensionalTrustScorer(t *testing.T) {
+func TestMultiDimensionalTrustScorerEnhanced(t *testing.T) {
 	t.Log("测试多维度信任评分器")
 	
 	scorer := newMultiDimensionalTrustScorer()
@@ -111,7 +111,7 @@ func TestMultiDimensionalTrustScorer(t *testing.T) {
 	t.Log("信任评分器测试通过")
 }
 
-func TestOnlineContinuousLearner(t *testing.T) {
+func TestOnlineContinuousLearnerEnhanced(t *testing.T) {
 	t.Log("测试在线连续学习器")
 	
 	learner := newOnlineContinuousLearner()
@@ -153,7 +153,7 @@ func TestOnlineContinuousLearner(t *testing.T) {
 	t.Log("连续学习器测试通过")
 }
 
-func TestIntelligentDisturbSuppressor(t *testing.T) {
+func TestIntelligentDisturbSuppressorEnhanced(t *testing.T) {
 	t.Log("测试智能打扰抑制器")
 	
 	suppressor := newIntelligentDisturbSuppressor()
@@ -188,7 +188,7 @@ func TestIntelligentDisturbSuppressor(t *testing.T) {
 	t.Log("打扰抑制器测试通过")
 }
 
-func TestEnhancedSeamlessService(t *testing.T) {
+func TestEnhancedSeamlessServiceEnhanced(t *testing.T) {
 	t.Log("测试增强无感验证服务")
 	
 	service := NewEnhancedSeamlessService()
@@ -239,7 +239,7 @@ func TestEnhancedSeamlessService(t *testing.T) {
 	t.Log("增强服务测试通过")
 }
 
-func TestSeamlessIntegrationService(t *testing.T) {
+func TestSeamlessIntegrationServiceEnhanced(t *testing.T) {
 	t.Log("测试无感验证集成服务")
 	
 	integrationService := NewSeamlessIntegrationService()
@@ -386,7 +386,7 @@ func TestDisturbanceThresholdOptimization(t *testing.T) {
 	t.Log("阈值优化测试通过")
 }
 
-func TestFingerprintStabilityValidation(t *testing.T) {
+func TestFingerprintStabilityValidationEnhanced(t *testing.T) {
 	t.Log("测试指纹稳定性验证")
 	
 	service := NewEnhancedSeamlessService()
@@ -411,7 +411,7 @@ func TestFingerprintStabilityValidation(t *testing.T) {
 	t.Log("指纹稳定性验证测试通过")
 }
 
-func TestDataCleanup(t *testing.T) {
+func TestDataCleanupEnhanced(t *testing.T) {
 	t.Log("测试数据清理功能")
 
 	svc := NewEnhancedSeamlessService()
@@ -589,7 +589,7 @@ func TestIntegrationServiceHybridMode(t *testing.T) {
 	t.Log("混合模式测试通过")
 }
 
-func TestEnhancedFingerprintComponents(t *testing.T) {
+func TestEnhancedFingerprintComponentsEnhanced(t *testing.T) {
 	t.Log("测试增强指纹组件收集")
 	
 	components := &EnhancedFingerprintComponents{
@@ -740,7 +740,7 @@ func BenchmarkEnhancedSeamlessService(b *testing.B) {
 	})
 }
 
-func TestGlobalDisturbanceStatistics(t *testing.T) {
+func TestGlobalDisturbanceStatisticsEnhanced(t *testing.T) {
 	t.Log("测试全局打扰统计")
 	
 	service := NewEnhancedSeamlessService()

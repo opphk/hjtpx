@@ -94,7 +94,7 @@ func TestAnalyzeClickPattern_SingleClick(t *testing.T) {
 	assert.Equal(t, 1, pattern.ClickCount)
 }
 
-func TestCalculateClickIntervals(t *testing.T) {
+func TestCalculateClickIntervalsClick(t *testing.T) {
 	analyzer := NewClickAnalyzer()
 
 	clicks := []SliderClickData{
@@ -139,7 +139,7 @@ func TestAnalyzePositionDistribution_SingleClick(t *testing.T) {
 	assert.Equal(t, 200.0, distribution.YMean)
 }
 
-func TestCalculateEntropy(t *testing.T) {
+func TestCalculateEntropyClick(t *testing.T) {
 	analyzer := NewClickAnalyzer()
 
 	values := []float64{1.0, 2.0, 3.0, 4.0, 5.0}

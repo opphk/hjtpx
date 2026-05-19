@@ -78,7 +78,7 @@ func TestNewWebGLFingerprintServiceWithNilConfig(t *testing.T) {
 	}
 }
 
-func TestGenerateEnhancedFingerprint(t *testing.T) {
+func TestGenerateEnhancedFingerprintWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	tests := []struct {
@@ -560,7 +560,7 @@ func TestAnalyzeWebGLRisk(t *testing.T) {
 	}
 }
 
-func TestDetectAnomalies(t *testing.T) {
+func TestDetectAnomaliesWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	tests := []struct {
@@ -661,7 +661,7 @@ func TestDetectAnomalies(t *testing.T) {
 	}
 }
 
-func TestAnalyzeStability(t *testing.T) {
+func TestAnalyzeStabilityWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	result, err := service.AnalyzeStability("test-fp-1", "session-1")
@@ -752,7 +752,7 @@ func TestCalculateStabilityScore(t *testing.T) {
 	}
 }
 
-func TestCompareFingerprints(t *testing.T) {
+func TestCompareFingerprintsWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	data1 := &model.WebGLFingerprintData{
@@ -812,7 +812,7 @@ func TestCompareFingerprints(t *testing.T) {
 	}
 }
 
-func TestDetectSpoofing(t *testing.T) {
+func TestDetectSpoofingWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	originalData := &model.WebGLFingerprintData{
@@ -880,7 +880,7 @@ func TestDetectSpoofing(t *testing.T) {
 	}
 }
 
-func TestGenerateRenderAnalysis(t *testing.T) {
+func TestGenerateRenderAnalysisWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	data := &model.WebGLFingerprintData{
@@ -933,7 +933,7 @@ func TestGenerateRenderAnalysis(t *testing.T) {
 	}
 }
 
-func TestExportFingerprintData(t *testing.T) {
+func TestExportFingerprintDataWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	service.AnalyzeStability("test-fp-export", "session-1")
@@ -954,7 +954,7 @@ func TestExportFingerprintData(t *testing.T) {
 	}
 }
 
-func TestImportFingerprintData(t *testing.T) {
+func TestImportFingerprintDataWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	jsonData := `{
@@ -978,7 +978,7 @@ func TestImportFingerprintData(t *testing.T) {
 	}
 }
 
-func TestClearExpiredData(t *testing.T) {
+func TestClearExpiredDataWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	service.AnalyzeStability("recent-fp", "session-1")
@@ -995,7 +995,7 @@ func TestClearExpiredData(t *testing.T) {
 	}
 }
 
-func TestGetStatistics(t *testing.T) {
+func TestGetStatisticsWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	service.AnalyzeStability("fp-stat-1", "session-1")
@@ -1012,7 +1012,7 @@ func TestGetStatistics(t *testing.T) {
 	}
 }
 
-func TestGetConfig(t *testing.T) {
+func TestGetConfigWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	config := service.GetConfig()
@@ -1026,7 +1026,7 @@ func TestGetConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig(t *testing.T) {
+func TestUpdateConfigWebGL(t *testing.T) {
 	service := NewWebGLFingerprintService()
 
 	originalThreshold := service.config.StabilityThreshold
@@ -1047,7 +1047,7 @@ func TestUpdateConfig(t *testing.T) {
 	}
 }
 
-func TestContainsString(t *testing.T) {
+func TestContainsStringWebGL(t *testing.T) {
 	tests := []struct {
 		slice   []string
 		str     string

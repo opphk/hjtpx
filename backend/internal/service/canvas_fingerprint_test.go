@@ -75,7 +75,7 @@ func TestNewCanvasFingerprintServiceWithConfig(t *testing.T) {
 	}
 }
 
-func TestGenerateEnhancedFingerprint(t *testing.T) {
+func TestGenerateEnhancedFingerprintCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	tests := []struct {
@@ -444,7 +444,7 @@ func TestCalculateImageEntropy(t *testing.T) {
 	}
 }
 
-func TestAnalyzeStability(t *testing.T) {
+func TestAnalyzeStabilityCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	fingerprintID := "test-fp-123"
@@ -486,7 +486,7 @@ func TestAnalyzeStability(t *testing.T) {
 	}
 }
 
-func TestCompareFingerprints(t *testing.T) {
+func TestCompareFingerprintsCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	tests := []struct {
@@ -541,7 +541,7 @@ func TestCompareFingerprints(t *testing.T) {
 	}
 }
 
-func TestDetectSpoofing(t *testing.T) {
+func TestDetectSpoofingCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	tests := []struct {
@@ -592,7 +592,7 @@ func TestDetectSpoofing(t *testing.T) {
 	}
 }
 
-func TestGenerateRenderAnalysis(t *testing.T) {
+func TestGenerateRenderAnalysisCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	canvasHash := "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
@@ -737,7 +737,7 @@ func TestSimulateImageDataExtraction(t *testing.T) {
 	}
 }
 
-func TestGetConfig(t *testing.T) {
+func TestGetConfigCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	config := svc.GetConfig()
@@ -751,7 +751,7 @@ func TestGetConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig(t *testing.T) {
+func TestUpdateConfigCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	newConfig := &model.CanvasEnhancementConfig{
@@ -775,7 +775,7 @@ func TestUpdateConfig(t *testing.T) {
 	}
 }
 
-func TestExportFingerprintData(t *testing.T) {
+func TestExportFingerprintDataCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	svc.AnalyzeStability("export-test-fp", "session-1")
@@ -799,7 +799,7 @@ func TestExportFingerprintData(t *testing.T) {
 	}
 }
 
-func TestImportFingerprintData(t *testing.T) {
+func TestImportFingerprintDataCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	jsonData := `{
@@ -826,7 +826,7 @@ func TestImportFingerprintData(t *testing.T) {
 	}
 }
 
-func TestClearExpiredData(t *testing.T) {
+func TestClearExpiredDataCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	svc.AnalyzeStability("expire-test-fp", "session-1")
@@ -840,7 +840,7 @@ func TestClearExpiredData(t *testing.T) {
 	}
 }
 
-func TestGetStatistics(t *testing.T) {
+func TestGetStatisticsCanvas(t *testing.T) {
 	svc := NewCanvasFingerprintService()
 
 	for i := 0; i < 5; i++ {
@@ -925,7 +925,7 @@ func TestHashString(t *testing.T) {
 	}
 }
 
-func TestContainsString(t *testing.T) {
+func TestContainsStringCanvas(t *testing.T) {
 	slice := []string{"a", "b", "c"}
 
 	if !containsString(slice, "b") {
@@ -941,7 +941,7 @@ func TestContainsString(t *testing.T) {
 	}
 }
 
-func TestAbs(t *testing.T) {
+func TestAbsCanvas(t *testing.T) {
 	tests := []struct {
 		input int
 		want  int

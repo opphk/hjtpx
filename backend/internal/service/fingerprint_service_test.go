@@ -11,7 +11,7 @@ func TestNewFingerprintService(t *testing.T) {
 	}
 }
 
-func TestGenerateFingerprint(t *testing.T) {
+func TestGenerateFingerprintFingerprint(t *testing.T) {
 	fingerprintService := NewFingerprintService()
 	
 	fingerprint, err := fingerprintService.GenerateFingerprint("test-user-agent", map[string]string{
@@ -25,7 +25,7 @@ func TestGenerateFingerprint(t *testing.T) {
 	}
 }
 
-func TestValidateFingerprint(t *testing.T) {
+func TestValidateFingerprintFingerprint(t *testing.T) {
 	fingerprintService := NewFingerprintService()
 	
 	fingerprint, err := fingerprintService.GenerateFingerprint("test-user-agent", nil)
@@ -48,7 +48,7 @@ func TestValidateFingerprint_Invalid(t *testing.T) {
 	}
 }
 
-func TestCompareFingerprints(t *testing.T) {
+func TestCompareFingerprintsFingerprint(t *testing.T) {
 	fingerprintService := NewFingerprintService()
 	
 	fp1, _ := fingerprintService.GenerateFingerprint("user-agent-1", nil)
@@ -73,7 +73,7 @@ func TestGetFingerprintComponents(t *testing.T) {
 	}
 }
 
-func TestAnalyzeFingerprint(t *testing.T) {
+func TestAnalyzeFingerprintFingerprint(t *testing.T) {
 	fingerprintService := NewFingerprintService()
 	
 	fingerprint, _ := fingerprintService.GenerateFingerprint("test-user-agent", nil)

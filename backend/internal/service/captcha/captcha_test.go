@@ -401,7 +401,7 @@ func TestCalculatePartialScore(t *testing.T) {
 	}
 }
 
-func TestAbs(t *testing.T) {
+func TestAbsCaptcha(t *testing.T) {
 	tests := []struct {
 		input    int
 		expected int
@@ -540,7 +540,7 @@ func TestGenerateSilence(t *testing.T) {
 	assert.Greater(t, len(silence), 0)
 }
 
-func TestMathSin(t *testing.T) {
+func TestMathSinCaptcha(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  float64

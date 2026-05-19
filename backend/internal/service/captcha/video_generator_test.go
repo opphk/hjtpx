@@ -454,7 +454,7 @@ func TestReverseSequence(t *testing.T) {
 	}
 }
 
-func TestMathSin(t *testing.T) {
+func TestMathSinVideo(t *testing.T) {
 	testCases := []struct {
 		input    float64
 		expected float64

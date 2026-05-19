@@ -368,7 +368,7 @@ func TestCalculateAccelerations(t *testing.T) {
 	}
 }
 
-func TestCalculateClickIntervals(t *testing.T) {
+func TestCalculateClickIntervalsBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	clicks := []model.ClickPoint{
@@ -414,7 +414,7 @@ func TestCalculateLatencies(t *testing.T) {
 	}
 }
 
-func TestMean(t *testing.T) {
+func TestMeanBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {
@@ -462,7 +462,7 @@ func TestMedian(t *testing.T) {
 	}
 }
 
-func TestVariance(t *testing.T) {
+func TestVarianceBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {
@@ -489,7 +489,7 @@ func TestVariance(t *testing.T) {
 	}
 }
 
-func TestMax(t *testing.T) {
+func TestMaxBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {
@@ -513,7 +513,7 @@ func TestMax(t *testing.T) {
 	}
 }
 
-func TestMin(t *testing.T) {
+func TestMinBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {
@@ -640,7 +640,7 @@ func TestCountDirectionChanges(t *testing.T) {
 	}
 }
 
-func TestCalculateEntropy(t *testing.T) {
+func TestCalculateEntropyBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {
@@ -785,7 +785,7 @@ func TestAnalyzeHumanLikelihood(t *testing.T) {
 	}
 }
 
-func TestGenerateReport(t *testing.T) {
+func TestGenerateReportBehavior(t *testing.T) {
 	extractor := NewMouseBehaviorExtractor()
 
 	testCases := []struct {

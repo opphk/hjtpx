@@ -7,11 +7,14 @@ import (
 )
 
 var vrGeneratorService *captcha.VRGeneratorService
+var vrVerifierService *captcha.VRVerifierService
 
 func InitVRCaptchaHandler(
 	gen *captcha.VRGeneratorService,
+	ver *captcha.VRVerifierService,
 ) {
 	vrGeneratorService = gen
+	vrVerifierService = ver
 }
 
 type VRCaptchaRequest struct {
@@ -69,7 +72,7 @@ func VerifyVRCaptcha(c *gin.Context) {
 		TraceData:    req.TraceData,
 	}
 
-	result, err := vrGeneratorService.Verify(c.Request.Context(), verifyReq)
+	result, err := vrVerifierService.Verify(c.Request.Context(), verifyReq)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, "验证失败")
 		return
@@ -85,7 +88,7 @@ func GetVRCaptchaStatus(c *gin.Context) {
 		return
 	}
 
-	session, err := vrGeneratorService.GetSession(c.Request.Context(), sessionID)
+	session, err := vrVerifierService.GetSession(c.Request.Context(), sessionID)
 	if err != nil {
 		response.Fail(c, response.CodeNotFound, "会话不存在")
 		return

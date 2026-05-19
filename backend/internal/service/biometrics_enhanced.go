@@ -600,6 +600,228 @@ func (p *EnhancedBiometricProfile) SerializeEnhancedProfile() ([]byte, error) {
 	return json.Marshal(p)
 }
 
+// BiometricCaptchaChallenge 生物识别验证码挑战
+type BiometricCaptchaChallenge struct {
+	SessionID       string                 `json:"session_id"`
+	ChallengeType   string                 `json:"challenge_type"` // "keyboard", "mouse", "multimodal"
+	ChallengeData   map[string]interface{} `json:"challenge_data"`
+	ExpiresAt       time.Time              `json:"expires_at"`
+	CreatedAt       time.Time              `json:"created_at"`
+}
+
+// BiometricCaptchaVerifyRequest 生物识别验证码验证请求
+type BiometricCaptchaVerifyRequest struct {
+	SessionID       string                  `json:"session_id" binding:"required"`
+	KeyboardSample  *KeyboardSample         `json:"keyboard_sample,omitempty"`
+	MouseSample     *MouseSample            `json:"mouse_sample,omitempty"`
+	ChallengeResponse map[string]interface{} `json:"challenge_response,omitempty"`
+}
+
+// BiometricCaptchaVerifyResponse 生物识别验证码验证响应
+type BiometricCaptchaVerifyResponse struct {
+	Success         bool                   `json:"success"`
+	Confidence      float64                `json:"confidence"`
+	Message         string                 `json:"message"`
+	RiskAssessment  *BiometricsRiskAssessment `json:"risk_assessment,omitempty"`
+}
+
+// BiometricCaptchaService 生物识别验证码服务
+type BiometricCaptchaService struct {
+	challenges map[string]*BiometricCaptchaChallenge
+	enhancedSvc *EnhancedBiometricsService
+}
+
+// NewBiometricCaptchaService 创建新的生物识别验证码服务
+func NewBiometricCaptchaService() *BiometricCaptchaService {
+	return &BiometricCaptchaService{
+		challenges: make(map[string]*BiometricCaptchaChallenge),
+		enhancedSvc: NewEnhancedBiometricsService(),
+	}
+}
+
+// GenerateBiometricCaptcha 生成生物识别验证码挑战
+func (s *BiometricCaptchaService) GenerateBiometricCaptcha(challengeType string) (*BiometricCaptchaChallenge, error) {
+	if challengeType == "" {
+		challengeType = "multimodal"
+	}
+
+	sessionID := generateSessionID()
+	challengeData := make(map[string]interface{})
+
+	switch challengeType {
+	case "keyboard":
+		challengeData["prompt"] = "请输入以下短语：'verify human'"
+		challengeData["expected_text"] = "verify human"
+	case "mouse":
+		challengeData["instruction"] = "请将鼠标从左上角移动到右下角"
+		challengeData["start_area"] = map[string]int{"x": 0, "y": 0, "width": 50, "height": 50}
+		challengeData["end_area"] = map[string]int{"x": 550, "y": 350, "width": 50, "height": 50}
+	case "multimodal":
+		challengeData["keyboard_prompt"] = "请输入：'biometric'"
+		challengeData["keyboard_expected"] = "biometric"
+		challengeData["mouse_instruction"] = "请绘制一个圆形路径"
+	default:
+		return nil, fmt.Errorf("unsupported challenge type: %s", challengeType)
+	}
+
+	challenge := &BiometricCaptchaChallenge{
+		SessionID:     sessionID,
+		ChallengeType: challengeType,
+		ChallengeData: challengeData,
+		CreatedAt:     time.Now(),
+		ExpiresAt:     time.Now().Add(5 * time.Minute),
+	}
+
+	s.challenges[sessionID] = challenge
+	return challenge, nil
+}
+
+// VerifyBiometricCaptcha 验证生物识别验证码
+func (s *BiometricCaptchaService) VerifyBiometricCaptcha(req *BiometricCaptchaVerifyRequest) (*BiometricCaptchaVerifyResponse, error) {
+	challenge, exists := s.challenges[req.SessionID]
+	if !exists {
+		return &BiometricCaptchaVerifyResponse{
+			Success:    false,
+			Confidence: 0,
+			Message:    "Challenge not found or expired",
+		}, nil
+	}
+
+	if time.Now().After(challenge.ExpiresAt) {
+		delete(s.challenges, req.SessionID)
+		return &BiometricCaptchaVerifyResponse{
+			Success:    false,
+			Confidence: 0,
+			Message:    "Challenge expired",
+		}, nil
+	}
+
+	var confidence float64
+	var success bool
+
+	switch challenge.ChallengeType {
+	case "keyboard":
+		confidence, success = s.verifyKeyboardChallenge(challenge, req)
+	case "mouse":
+		confidence, success = s.verifyMouseChallenge(challenge, req)
+	case "multimodal":
+		confidence, success = s.verifyMultimodalChallenge(challenge, req)
+	default:
+		return &BiometricCaptchaVerifyResponse{
+			Success:    false,
+			Confidence: 0,
+			Message:    "Unsupported challenge type",
+		}, nil
+	}
+
+	// 删除已验证的挑战
+	delete(s.challenges, req.SessionID)
+
+	response := &BiometricCaptchaVerifyResponse{
+		Success:    success,
+		Confidence: confidence,
+		Message:    getMessage(success, confidence),
+	}
+
+	// 简单风险评估
+	if !success || confidence < 0.7 {
+		response.RiskAssessment = &BiometricsRiskAssessment{
+			RiskLevel: "medium",
+			RiskScore: 1.0 - confidence,
+			Factors:   []string{"Biometric verification confidence below threshold"},
+		}
+	}
+
+	return response, nil
+}
+
+// verifyKeyboardChallenge 验证键盘挑战
+func (s *BiometricCaptchaService) verifyKeyboardChallenge(challenge *BiometricCaptchaChallenge, req *BiometricCaptchaVerifyRequest) (float64, bool) {
+	if req.KeyboardSample == nil || len(req.KeyboardSample.KeyEvents) < 10 {
+		return 0, false
+	}
+
+	// 模拟验证键盘输入特征
+	rand.Seed(time.Now().UnixNano())
+	baseConfidence := 0.6 + rand.Float64()*0.4
+
+	// 检查按键事件的合理性
+	keyCount := len(req.KeyboardSample.KeyEvents)
+	if keyCount < 10 {
+		baseConfidence *= 0.5
+	} else if keyCount > 50 {
+		baseConfidence *= 0.9
+	}
+
+	return baseConfidence, baseConfidence >= 0.7
+}
+
+// verifyMouseChallenge 验证鼠标挑战
+func (s *BiometricCaptchaService) verifyMouseChallenge(challenge *BiometricCaptchaChallenge, req *BiometricCaptchaVerifyRequest) (float64, bool) {
+	if req.MouseSample == nil || len(req.MouseSample.MouseEvents) < 5 {
+		return 0, false
+	}
+
+	// 模拟验证鼠标移动特征
+	rand.Seed(time.Now().UnixNano())
+	baseConfidence := 0.55 + rand.Float64()*0.45
+
+	moveEventCount := 0
+	for _, event := range req.MouseSample.MouseEvents {
+		if event.Type == "mousemove" {
+			moveEventCount++
+		}
+	}
+
+	if moveEventCount < 10 {
+		baseConfidence *= 0.6
+	}
+
+	return baseConfidence, baseConfidence >= 0.65
+}
+
+// verifyMultimodalChallenge 验证多模态挑战
+func (s *BiometricCaptchaService) verifyMultimodalChallenge(challenge *BiometricCaptchaChallenge, req *BiometricCaptchaVerifyRequest) (float64, bool) {
+	var totalConfidence float64
+	var modalCount float64
+
+	if req.KeyboardSample != nil && len(req.KeyboardSample.KeyEvents) > 0 {
+		keyConf, _ := s.verifyKeyboardChallenge(challenge, req)
+		totalConfidence += keyConf * 0.5
+		modalCount++
+	}
+
+	if req.MouseSample != nil && len(req.MouseSample.MouseEvents) > 0 {
+		mouseConf, _ := s.verifyMouseChallenge(challenge, req)
+		totalConfidence += mouseConf * 0.5
+		modalCount++
+	}
+
+	if modalCount == 0 {
+		return 0, false
+	}
+
+	finalConfidence := totalConfidence / modalCount
+	return finalConfidence, finalConfidence >= 0.68
+}
+
+// generateSessionID 生成会话ID
+func generateSessionID() string {
+	rand.Seed(time.Now().UnixNano())
+	return fmt.Sprintf("bio_cap_%d_%x", time.Now().UnixNano(), rand.Int63())
+}
+
+// getMessage 获取响应消息
+func getMessage(success bool, confidence float64) string {
+	if success {
+		if confidence >= 0.9 {
+			return "Verification successful with high confidence"
+		}
+		return "Verification successful"
+	}
+	return "Verification failed"
+}
+
 // DeserializeEnhancedProfile 反序列化增强版档案
 func (s *EnhancedBiometricsService) DeserializeEnhancedProfile(data []byte) (*EnhancedBiometricProfile, error) {
 	var profile EnhancedBiometricProfile
