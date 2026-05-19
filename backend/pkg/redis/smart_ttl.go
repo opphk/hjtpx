@@ -1,286 +1,546 @@
 package redis
 
 import (
-	"math"
+	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type AccessPattern struct {
-	Key           string
-	AccessCount   int64
-	LastAccess    time.Time
-	AvgAccessTime time.Duration
+type TTLStrategy int
+
+const (
+	TTLStrategyFixed TTLStrategy = iota
+	TTLStrategySliding
+	TTLStrategyAdaptive
+	TTLStrategyPredictive
+	TTLStrategyTiered
+)
+
+type TTLConfig struct {
+	BaseTTL         time.Duration
+	MinTTL          time.Duration
+	MaxTTL          time.Duration
+	Strategy        TTLStrategy
+	RefreshInterval time.Duration
+	LoadMultiplier  float64
+	StalenessCutoff time.Duration
 }
 
-type SmartTTLOptimizer struct {
-	mu               sync.RWMutex
-	accessPatterns   map[string]*AccessPattern
-	baseTTL          time.Duration
-	minTTL           time.Duration
-	maxTTL           time.Duration
-	ttlAdjustments   map[string]time.Duration
-	stats            *SmartTTLStats
+var defaultTTLConfig = &TTLConfig{
+	BaseTTL:         5 * time.Minute,
+	MinTTL:          1 * time.Minute,
+	MaxTTL:          60 * time.Minute,
+	Strategy:        TTLStrategyAdaptive,
+	RefreshInterval: 30 * time.Second,
+	LoadMultiplier:  1.5,
+	StalenessCutoff: 30 * time.Second,
 }
 
-type SmartTTLStats struct {
-	TotalAdjustments atomic.Int64
-	CacheHits        atomic.Int64
-	CacheMisses      atomic.Int64
-	MemorySaved      atomic.Int64
+type TTLManager struct {
+	mu           sync.RWMutex
+	config       *TTLConfig
+	accessCounts map[string]*accessCount
+	ttlCache     map[string]time.Duration
+	stats        *TTLStats
 }
 
-type SmartTTLConfig struct {
-	BaseTTL          time.Duration
-	MinTTL           time.Duration
-	MaxTTL           time.Duration
-	HotKeyThreshold  int64
-	ColdKeyThreshold int64
+type accessCount struct {
+	count    int64
+	lastTime time.Time
 }
 
-var DefaultSmartTTLConfig = &SmartTTLConfig{
-	BaseTTL:          10 * time.Minute,
-	MinTTL:           1 * time.Minute,
-	MaxTTL:           2 * time.Hour,
-	HotKeyThreshold:  100,
-	ColdKeyThreshold: 5,
-}
-
-func NewSmartTTLOptimizer(config *SmartTTLConfig) *SmartTTLOptimizer {
-	if config == nil {
-		config = DefaultSmartTTLConfig
-	}
-
-	return &SmartTTLOptimizer{
-		accessPatterns: make(map[string]*AccessPattern),
-		baseTTL:        config.BaseTTL,
-		minTTL:         config.MinTTL,
-		maxTTL:         config.MaxTTL,
-		ttlAdjustments: make(map[string]time.Duration),
-		stats:          &SmartTTLStats{},
-	}
-}
-
-func (st *SmartTTLOptimizer) RecordAccess(key string) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-
-	pattern, exists := st.accessPatterns[key]
-	if !exists {
-		pattern = &AccessPattern{
-			Key:        key,
-			LastAccess: time.Now(),
-		}
-		st.accessPatterns[key] = pattern
-	}
-
-	now := time.Now()
-	if pattern.AccessCount > 0 {
-		timeSinceLast := now.Sub(pattern.LastAccess)
-		pattern.AvgAccessTime = (pattern.AvgAccessTime*time.Duration(pattern.AccessCount) + timeSinceLast) / time.Duration(pattern.AccessCount+1)
-	}
-
-	pattern.AccessCount++
-	pattern.LastAccess = now
-}
-
-func (st *SmartTTLOptimizer) CalculateTTL(key string) time.Duration {
-	st.mu.RLock()
-	pattern, exists := st.accessPatterns[key]
-	st.mu.RUnlock()
-
-	if !exists {
-		return st.baseTTL
-	}
-
-	// 根据访问频率和平均访问间隔计算调整因子
-	factor := st.calculateAdjustmentFactor(pattern)
-	adjustedTTL := time.Duration(float64(st.baseTTL) * factor)
-
-	// 确保 TTL 在合理范围内
-	if adjustedTTL < st.minTTL {
-		adjustedTTL = st.minTTL
-	}
-	if adjustedTTL > st.maxTTL {
-		adjustedTTL = st.maxTTL
-	}
-
-	st.stats.TotalAdjustments.Add(1)
-	return adjustedTTL
-}
-
-func (st *SmartTTLOptimizer) calculateAdjustmentFactor(pattern *AccessPattern) float64 {
-	// 访问频率因子
-	frequencyFactor := math.Min(1.0+float64(pattern.AccessCount)/50.0, 3.0)
-
-	// 访问模式因子 - 如果平均访问间隔短，说明是热数据
-	intervalFactor := 1.0
-	if pattern.AvgAccessTime > 0 {
-		normalizedInterval := pattern.AvgAccessTime.Minutes() / 30.0 // 30分钟为基准
-		if normalizedInterval < 1.0 {
-			intervalFactor = 2.0 - normalizedInterval // 短间隔增加 TTL
-		} else if normalizedInterval > 5.0 {
-			intervalFactor = math.Max(0.3, 1.0 - (normalizedInterval-5.0)/10.0) // 长间隔减少 TTL
-		}
-	}
-
-	// 综合因子
-	return frequencyFactor * intervalFactor
-}
-
-func (st *SmartTTLOptimizer) GetHotKeys(threshold int64) []string {
-	st.mu.RLock()
-	defer st.mu.RUnlock()
-
-	var hotKeys []string
-	for key, pattern := range st.accessPatterns {
-		if pattern.AccessCount >= threshold {
-			hotKeys = append(hotKeys, key)
-		}
-	}
-	return hotKeys
-}
-
-func (st *SmartTTLOptimizer) CleanupStalePatterns(olderThan time.Duration) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-
-	cutoff := time.Now().Add(-olderThan)
-	for key, pattern := range st.accessPatterns {
-		if pattern.LastAccess.Before(cutoff) {
-			delete(st.accessPatterns, key)
-			delete(st.ttlAdjustments, key)
-		}
-	}
-}
-
-func (st *SmartTTLOptimizer) GetStats() *SmartTTLStats {
-	return st.stats
-}
-
-type ImprovedBloomFilter struct {
-	mu          sync.RWMutex
-	bits        []uint64
-	m           uint64
-	k           uint64
-	expectedN   uint64
-	fpRate      float64
-	insertCount uint64
-}
-
-func NewImprovedBloomFilter(expectedItems uint64, falsePositiveRate float64) *ImprovedBloomFilter {
-	m := optimalM(expectedItems, falsePositiveRate)
-	k := optimalK(m, expectedItems)
-
-	return &ImprovedBloomFilter{
-		bits:      make([]uint64, (m+63)/64),
-		m:         m,
-		k:         k,
-		expectedN: expectedItems,
-		fpRate:    falsePositiveRate,
-	}
-}
-
-func (ibf *ImprovedBloomFilter) Add(item string) {
-	ibf.mu.Lock()
-	defer ibf.mu.Unlock()
-
-	h1 := hashItem(item, 0)
-	h2 := hashItem(item, 1)
-
-	for i := uint64(0); i < ibf.k; i++ {
-		hash := h1 + i*h2
-		bitPos := hash % ibf.m
-		wordPos := bitPos / 64
-		bitIdx := bitPos % 64
-		ibf.bits[wordPos] |= 1 << bitIdx
-	}
-
-	ibf.insertCount++
-}
-
-func (ibf *ImprovedBloomFilter) MayContain(item string) bool {
-	ibf.mu.RLock()
-	defer ibf.mu.RUnlock()
-
-	h1 := hashItem(item, 0)
-	h2 := hashItem(item, 1)
-
-	for i := uint64(0); i < ibf.k; i++ {
-		hash := h1 + i*h2
-		bitPos := hash % ibf.m
-		wordPos := bitPos / 64
-		bitIdx := bitPos % 64
-		if (ibf.bits[wordPos] & (1 << bitIdx)) == 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (ibf *ImprovedBloomFilter) Clear() {
-	ibf.mu.Lock()
-	defer ibf.mu.Unlock()
-
-	ibf.bits = make([]uint64, (ibf.m+63)/64)
-	ibf.insertCount = 0
-}
-
-func (ibf *ImprovedBloomFilter) Count() uint64 {
-	ibf.mu.RLock()
-	defer ibf.mu.RUnlock()
-	return ibf.insertCount
-}
-
-func (ibf *ImprovedBloomFilter) EstimatedFalsePositiveRate() float64 {
-	ibf.mu.RLock()
-	defer ibf.mu.RUnlock()
-
-	if ibf.insertCount == 0 {
-		return 0
-	}
-
-	// 公式: (1 - e^(-k*n/m))^k
-	n := float64(ibf.insertCount)
-	m := float64(ibf.m)
-	k := float64(ibf.k)
-
-	term := 1 - math.Exp(-k*n/m)
-	return math.Pow(term, k)
-}
-
-func hashItem(item string, seed uint64) uint64 {
-	var h uint64 = seed
-	for i := 0; i < len(item); i++ {
-		h = h*31 + uint64(item[i])
-	}
-	return h
-}
-
-func optimalM(n uint64, p float64) uint64 {
-	return uint64(math.Ceil(-float64(n) * math.Log(p) / (math.Ln2 * math.Ln2)))
-}
-
-func optimalK(m, n uint64) uint64 {
-	return uint64(math.Max(1, math.Min(30, math.Ceil(math.Ln2*float64(m)/float64(n)))))
+type TTLStats struct {
+	TotalRequests     atomic.Int64
+	CacheHits         atomic.Int64
+	CacheMisses       atomic.Int64
+	TTLAdjustments    atomic.Int64
+	AdaptiveRefreshes atomic.Int64
+	AverageTTL        atomic.Int64
 }
 
 var (
-	globalSmartTTLOptimizer *SmartTTLOptimizer
-	smartTTLOnce            sync.Once
+	globalTTLManager *TTLManager
+	ttlManagerOnce   sync.Once
 )
 
-func InitSmartTTLOptimizer(config *SmartTTLConfig) {
-	smartTTLOnce.Do(func() {
-		globalSmartTTLOptimizer = NewSmartTTLOptimizer(config)
+func InitTTLManager(config *TTLConfig) {
+	ttlManagerOnce.Do(func() {
+		if config == nil {
+			config = defaultTTLConfig
+		}
+		globalTTLManager = &TTLManager{
+			config:       config,
+			accessCounts: make(map[string]*accessCount),
+			ttlCache:     make(map[string]time.Duration),
+			stats:        &TTLStats{},
+		}
+		go globalTTLManager.startAdaptiveRefresh()
 	})
 }
 
-func GetSmartTTLOptimizer() *SmartTTLOptimizer {
-	if globalSmartTTLOptimizer == nil {
-		InitSmartTTLOptimizer(nil)
+func GetTTLManager() *TTLManager {
+	if globalTTLManager == nil {
+		InitTTLManager(nil)
 	}
-	return globalSmartTTLOptimizer
+	return globalTTLManager
+}
+
+func (t *TTLManager) startAdaptiveRefresh() {
+	ticker := time.NewTicker(t.config.RefreshInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		t.adaptiveRefresh()
+	}
+}
+
+func (t *TTLManager) adaptiveRefresh() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for key, ac := range t.accessCounts {
+		if time.Since(ac.lastTime) > t.config.StalenessCutoff {
+			delete(t.accessCounts, key)
+			delete(t.ttlCache, key)
+		}
+	}
+}
+
+func (t *TTLManager) GetTTL(key string) time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if ttl, ok := t.ttlCache[key]; ok {
+		return ttl
+	}
+
+	return t.calculateTTL(key, 0)
+}
+
+func (t *TTLManager) CalculateTTL(key string, accessCount int64) time.Duration {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.calculateTTL(key, accessCount)
+}
+
+func (t *TTLManager) calculateTTL(key string, accessCount int64) time.Duration {
+	baseTTL := t.config.BaseTTL
+
+	switch t.config.Strategy {
+	case TTLStrategyFixed:
+		return baseTTL
+
+	case TTLStrategySliding:
+		ac := t.accessCounts[key]
+		if ac != nil {
+			elapsed := time.Since(ac.lastTime)
+			remaining := baseTTL - elapsed
+			if remaining > 0 {
+				return remaining + t.config.RefreshInterval
+			}
+		}
+		return baseTTL
+
+	case TTLStrategyAdaptive:
+		if accessCount > 1000 {
+			return time.Duration(float64(baseTTL) * t.config.LoadMultiplier)
+		} else if accessCount < 10 {
+			return time.Duration(float64(baseTTL) * 0.5)
+		}
+		return baseTTL
+
+	case TTLStrategyPredictive:
+		ac := t.accessCounts[key]
+		if ac != nil && ac.count > 0 {
+			rate := float64(ac.count) / time.Since(ac.lastTime).Seconds()
+			if rate > 10 {
+				return time.Duration(float64(baseTTL) * 2)
+			} else if rate < 0.1 {
+				return time.Duration(float64(baseTTL) * 0.3)
+			}
+		}
+		return baseTTL
+
+	case TTLStrategyTiered:
+		if accessCount > 10000 {
+			return t.config.MaxTTL
+		} else if accessCount > 1000 {
+			return 30 * time.Minute
+		} else if accessCount > 100 {
+			return 15 * time.Minute
+		} else if accessCount > 10 {
+			return 5 * time.Minute
+		}
+		return t.config.MinTTL
+
+	default:
+		return baseTTL
+	}
+}
+
+func (t *TTLManager) RecordAccess(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	ac := t.accessCounts[key]
+	if ac == nil {
+		ac = &accessCount{}
+		t.accessCounts[key] = ac
+	}
+
+	atomic.AddInt64(&ac.count, 1)
+	ac.lastTime = time.Now()
+
+	ttl := t.calculateTTL(key, atomic.LoadInt64(&ac.count))
+	t.ttlCache[key] = ttl
+
+	t.stats.TotalRequests.Add(1)
+}
+
+func (t *TTLManager) GetAndRefreshTTL(key string) (time.Duration, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	ttl := t.GetTTL(key)
+	ac := t.accessCounts[key]
+
+	if ac == nil {
+		return ttl, false
+	}
+
+	currentTTL := t.ttlCache[key]
+	newTTL := t.calculateTTL(key, atomic.LoadInt64(&ac.count))
+
+	if newTTL != currentTTL {
+		t.ttlCache[key] = newTTL
+		t.stats.TTLAdjustments.Add(1)
+		return newTTL, true
+	}
+
+	return ttl, false
+}
+
+func (t *TTLManager) SetTTL(key string, ttl time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if ttl < t.config.MinTTL {
+		ttl = t.config.MinTTL
+	}
+	if ttl > t.config.MaxTTL {
+		ttl = t.config.MaxTTL
+	}
+
+	t.ttlCache[key] = ttl
+}
+
+func (t *TTLManager) InvalidateTTL(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	delete(t.accessCounts, key)
+	delete(t.ttlCache, key)
+}
+
+func (t *TTLManager) GetStats() *TTLStats {
+	return &TTLStats{
+		TotalRequests:     t.stats.TotalRequests,
+		CacheHits:         t.stats.CacheHits,
+		CacheMisses:       t.stats.CacheMisses,
+		TTLAdjustments:    t.stats.TTLAdjustments,
+		AdaptiveRefreshes: t.stats.AdaptiveRefreshes,
+		AverageTTL:        t.stats.AverageTTL,
+	}
+}
+
+func (t *TTLManager) GetCacheHitRate() float64 {
+	total := t.stats.TotalRequests.Load()
+	hits := t.stats.CacheHits.Load()
+
+	if total == 0 {
+		return 0
+	}
+
+	return float64(hits) / float64(total) * 100
+}
+
+func (t *TTLManager) Optimize() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.adaptiveRefresh()
+	t.stats.AdaptiveRefreshes.Add(1)
+}
+
+type TTLObserver struct {
+	mu           sync.RWMutex
+	observations map[string][]time.Duration
+	maxObs       int
+}
+
+func NewTTLObserver(maxObs int) *TTLObserver {
+	if maxObs <= 0 {
+		maxObs = 100
+	}
+	return &TTLObserver{
+		observations: make(map[string][]time.Duration),
+		maxObs:       maxObs,
+	}
+}
+
+func (o *TTLObserver) Record(key string, ttl time.Duration) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	obs := o.observations[key]
+	obs = append(obs, ttl)
+
+	if len(obs) > o.maxObs {
+		obs = obs[len(obs)-o.maxObs:]
+	}
+
+	o.observations[key] = obs
+}
+
+func (o *TTLObserver) GetAverageTTL(key string) time.Duration {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	obs := o.observations[key]
+	if len(obs) == 0 {
+		return 0
+	}
+
+	var total int64
+	for _, ttl := range obs {
+		total += ttl.Nanoseconds()
+	}
+
+	return time.Duration(total / int64(len(obs)))
+}
+
+func (o *TTLObserver) GetTTLDistribution(key string) map[string]int {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	obs := o.observations[key]
+	dist := map[string]int{
+		"<1m":   0,
+		"1-5m":  0,
+		"5-15m": 0,
+		"15-30m": 0,
+		">30m":  0,
+	}
+
+	for _, ttl := range obs {
+		switch {
+		case ttl < time.Minute:
+			dist["<1m"]++
+		case ttl < 5*time.Minute:
+			dist["1-5m"]++
+		case ttl < 15*time.Minute:
+			dist["5-15m"]++
+		case ttl < 30*time.Minute:
+			dist["15-30m"]++
+		default:
+			dist[">30m"]++
+		}
+	}
+
+	return dist
+}
+
+func FormatTTL(ttl time.Duration) string {
+	if ttl < time.Minute {
+		return fmt.Sprintf("%ds", int(ttl.Seconds()))
+	} else if ttl < time.Hour {
+		return fmt.Sprintf("%dm", int(ttl.Minutes()))
+	} else {
+		return fmt.Sprintf("%dh", int(ttl.Hours()))
+	}
+}
+
+type TTLRecommendation struct {
+	Key         string
+	CurrentTTL  time.Duration
+	RecommendedTTL time.Duration
+	Reason      string
+	Confidence  float64
+}
+
+func (t *TTLManager) GetRecommendations() []TTLRecommendation {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	var recommendations []TTLRecommendation
+
+	for key, ac := range t.accessCounts {
+		currentTTL := t.ttlCache[key]
+		accessCount := atomic.LoadInt64(&ac.count)
+
+		recommendedTTL := t.calculateTTL(key, accessCount)
+
+		if recommendedTTL != currentTTL {
+			reason := "访问频率变化"
+			if recommendedTTL > currentTTL {
+				reason = "访问频率增加，建议延长TTL"
+			} else {
+				reason = "访问频率降低，建议缩短TTL"
+			}
+
+			recommendations = append(recommendations, TTLRecommendation{
+				Key:            key,
+				CurrentTTL:     currentTTL,
+				RecommendedTTL: recommendedTTL,
+				Reason:         reason,
+				Confidence:     0.8,
+			})
+		}
+	}
+
+	return recommendations
+}
+
+func (t *TTLManager) ApplyRecommendations(recs []TTLRecommendation) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for _, rec := range recs {
+		if rec.Confidence > 0.7 {
+			t.ttlCache[rec.Key] = rec.RecommendedTTL
+			t.stats.TTLAdjustments.Add(1)
+		}
+	}
+}
+
+type TTLPolicyRule struct {
+	KeyPattern   string
+	MinTTL       time.Duration
+	MaxTTL       time.Duration
+	Strategy     TTLStrategy
+	Priority     int
+}
+
+type TTLPolicyEngine struct {
+	mu    sync.RWMutex
+	rules []TTLPolicyRule
+}
+
+func NewTTLPolicyEngine() *TTLPolicyEngine {
+	return &TTLPolicyEngine{
+		rules: make([]TTLPolicyRule, 0),
+	}
+}
+
+func (e *TTLPolicyEngine) AddRule(rule TTLPolicyRule) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.rules = append(e.rules, rule)
+}
+
+func (e *TTLPolicyEngine) GetRule(key string) *TTLPolicyRule {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	for i := len(e.rules) - 1; i >= 0; i-- {
+		rule := &e.rules[i]
+		if matchKeyPattern(key, rule.KeyPattern) {
+			return rule
+		}
+	}
+
+	return nil
+}
+
+func (e *TTLPolicyEngine) CalculateTTL(key string, accessCount int64) time.Duration {
+	rule := e.GetRule(key)
+
+	if rule == nil {
+		return defaultTTLConfig.BaseTTL
+	}
+
+	ttlManager := GetTTLManager()
+	ttl := ttlManager.CalculateTTL(key, accessCount)
+
+	if ttl < rule.MinTTL {
+		return rule.MinTTL
+	}
+	if ttl > rule.MaxTTL {
+		return rule.MaxTTL
+	}
+
+	return ttl
+}
+
+func matchKeyPattern(key, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+
+	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
+		prefix := pattern[:len(pattern)-1]
+		return len(key) >= len(prefix) && key[:len(prefix)] == prefix
+	}
+
+	return key == pattern
+}
+
+func InitializeTTLWithDefaultRules() {
+	engine := NewTTLPolicyEngine()
+
+	engine.AddRule(TTLPolicyRule{
+		KeyPattern: "captcha:*",
+		MinTTL:     5 * time.Minute,
+		MaxTTL:     30 * time.Minute,
+		Strategy:   TTLStrategyTiered,
+		Priority:   10,
+	})
+
+	engine.AddRule(TTLPolicyRule{
+		KeyPattern: "session:*",
+		MinTTL:     15 * time.Minute,
+		MaxTTL:     60 * time.Minute,
+		Strategy:   TTLStrategySliding,
+		Priority:   10,
+	})
+
+	engine.AddRule(TTLPolicyRule{
+		KeyPattern: "stats:*",
+		MinTTL:     1 * time.Minute,
+		MaxTTL:     10 * time.Minute,
+		Strategy:   TTLStrategyFixed,
+		Priority:   5,
+	})
+
+	engine.AddRule(TTLPolicyRule{
+		KeyPattern: "config:*",
+		MinTTL:     30 * time.Minute,
+		MaxTTL:     24 * time.Hour,
+		Strategy:   TTLStrategyPredictive,
+		Priority:   10,
+	})
+
+	engine.AddRule(TTLPolicyRule{
+		KeyPattern: "user:*",
+		MinTTL:     10 * time.Minute,
+		MaxTTL:     60 * time.Minute,
+		Strategy:   TTLStrategyTiered,
+		Priority:   8,
+	})
+}
+
+func SetKeyTTLWithPolicy(ctx context.Context, key string, value interface{}, accessCount int64) error {
+	engine := NewTTLPolicyEngine()
+	ttl := engine.CalculateTTL(key, accessCount)
+
+	client := GetClient()
+	if client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	return client.Set(ctx, key, value, ttl).Err()
 }

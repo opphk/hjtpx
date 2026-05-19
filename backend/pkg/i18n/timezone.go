@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -616,4 +617,128 @@ func FormatTimeRange(start, end time.Time, tz string, lang string) string {
 func IsValidTimezone(tz string) bool {
 	_, err := time.LoadLocation(tz)
 	return err == nil
+}
+
+type DSTSchedule struct {
+	Timezone        string    `json:"timezone"`
+	DSTStart        time.Time `json:"dst_start"`
+	DSTEnd          time.Time `json:"dst_end"`
+	DSTOffset       int       `json:"dst_offset"`
+	StandardOffset  int       `json:"standard_offset"`
+}
+
+func GetDSTSchedules(timezone string, year int) []DSTSchedule {
+	loc := GetLocation(timezone)
+	
+	jan := time.Date(year, 1, 1, 0, 0, 0, 0, loc)
+	jul := time.Date(year, 7, 1, 0, 0, 0, 0, loc)
+	
+	_, janOffset := jan.Zone()
+	_, julOffset := jul.Zone()
+	
+	if janOffset == julOffset {
+		return []DSTSchedule{}
+	}
+	
+	var dstStart, dstEnd time.Time
+	var dstOffset, standardOffset int
+	
+	if janOffset < julOffset {
+		standardOffset = janOffset
+		dstOffset = julOffset
+		dstStart = findDSTTransition(timezone, time.Date(year, 1, 1, 0, 0, 0, 0, loc), true)
+		dstEnd = findDSTTransition(timezone, time.Date(year, 7, 1, 0, 0, 0, 0, loc), false)
+	} else {
+		standardOffset = julOffset
+		dstOffset = janOffset
+		dstStart = findDSTTransition(timezone, time.Date(year, 7, 1, 0, 0, 0, 0, loc), true)
+		dstEnd = findDSTTransition(timezone, time.Date(year, 1, 1, 0, 0, 0, 0, loc), false)
+	}
+	
+	return []DSTSchedule{
+		{
+			Timezone:       timezone,
+			DSTStart:       dstStart,
+			DSTEnd:         dstEnd,
+			DSTOffset:      dstOffset,
+			StandardOffset: standardOffset,
+		},
+	}
+}
+
+func findDSTTransition(timezone string, start time.Time, enteringDST bool) time.Time {
+	_ = GetLocation(timezone)
+	
+	for i := 0; i < 365; i++ {
+		t := start.AddDate(0, 0, i)
+		if IsTimezoneInDSTRange(timezone, t) == enteringDST {
+			for j := 0; j < 24; j++ {
+				hourCheck := t.Add(time.Duration(j) * time.Hour)
+				if IsTimezoneInDSTRange(timezone, hourCheck) == enteringDST {
+					for k := 0; k < 60; k++ {
+						minuteCheck := hourCheck.Add(time.Duration(k) * time.Minute)
+						if IsTimezoneInDSTRange(timezone, minuteCheck) != enteringDST {
+							return minuteCheck
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return start
+}
+
+func GetTimezoneDisplayName(timezone string, language string) string {
+	displayNames := map[string]map[string]string{
+		"Asia/Shanghai":       {"zh": "中国标准时间", "en": "China Standard Time"},
+		"America/New_York":     {"zh": "美国东部时间", "en": "Eastern Time (US)"},
+		"America/Los_Angeles":  {"zh": "太平洋时间", "en": "Pacific Time (US)"},
+		"Europe/London":        {"zh": "格林尼治标准时间", "en": "Greenwich Mean Time"},
+		"Europe/Paris":         {"zh": "中欧时间", "en": "Central European Time"},
+		"Asia/Tokyo":           {"zh": "日本标准时间", "en": "Japan Standard Time"},
+		"Asia/Seoul":           {"zh": "韩国标准时间", "en": "Korea Standard Time"},
+		"Australia/Sydney":     {"zh": "澳大利亚东部时间", "en": "Australian Eastern Time"},
+		"Asia/Dubai":           {"zh": "海湾标准时间", "en": "Gulf Standard Time"},
+		"Asia/Jerusalem":       {"zh": "以色列标准时间", "en": "Israel Standard Time"},
+		"America/Sao_Paulo":    {"zh": "巴西利亚时间", "en": "Brasilia Time"},
+		"Asia/Kolkata":         {"zh": "印度标准时间", "en": "India Standard Time"},
+		"Asia/Singapore":       {"zh": "新加坡标准时间", "en": "Singapore Time"},
+		"Asia/Bangkok":         {"zh": "印度支那时间", "en": "Indochina Time"},
+		"Asia/Jakarta":         {"zh": "印度尼西亚西部时间", "en": "Western Indonesia Time"},
+		"Asia/Ho_Chi_Minh":     {"zh": "越南标准时间", "en": "Vietnam Standard Time"},
+		"Europe/Moscow":        {"zh": "莫斯科时间", "en": "Moscow Time"},
+		"Europe/Istanbul":      {"zh": "土耳其时间", "en": "Turkey Time"},
+		"Africa/Cairo":         {"zh": "埃及标准时间", "en": "Egypt Standard Time"},
+		"Asia/Riyadh":          {"zh": "阿拉伯标准时间", "en": "Arabia Standard Time"},
+	}
+	
+	if names, ok := displayNames[timezone]; ok {
+		if langName, ok := names[language]; ok {
+			return langName
+		}
+		if enName, ok := names["en"]; ok {
+			return enName
+		}
+	}
+	
+	parts := strings.Split(timezone, "/")
+	if len(parts) > 1 {
+		return parts[len(parts)-1]
+	}
+	
+	return timezone
+}
+
+func FormatTimezoneWithOffset(timezone string) string {
+	info := GetTimezoneInfo(timezone)
+	shortName := ""
+	
+	parts := strings.Split(timezone, "/")
+	if len(parts) > 1 {
+		shortName = parts[len(parts)-1]
+		shortName = strings.ReplaceAll(shortName, "_", " ")
+	}
+	
+	return fmt.Sprintf("%s (%s)", shortName, info.Offset)
 }

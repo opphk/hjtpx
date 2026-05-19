@@ -7,440 +7,561 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	goredis "github.com/redis/go-redis/v9"
 )
 
-type ConsistencyLevel int
+type ConsistencyMode int
 
 const (
-	ConsistencyLevelEventual ConsistencyLevel = iota
-	ConsistencyLevelStrong
-	ConsistencyLevelLinearizable
+	ConsistencyModeStrong ConsistencyMode = iota
+	ConsistencyModeEventual
+	ConsistencyModeCausal
+	ConsistencyModeReadYourWrites
 )
 
-type CacheUpdateMode int
-
-const (
-	CacheUpdateModeWriteThrough CacheUpdateMode = iota
-	CacheUpdateModeWriteBehind
-	CacheUpdateModeRefreshAhead
-)
-
-type InvalidationStrategy int
-
-const (
-	InvalidationStrategyTimeBased InvalidationStrategy = iota
-	InvalidationStrategyVersionBased
-	InvalidationStrategyPubSub
-)
-
-type DistributedCacheConsistency struct {
-	config           *ConsistencyConfig
-	mu               sync.RWMutex
-	localVersionMap  *sync.Map
-	pubSubClient     *goredis.PubSub
-	pubSubCtx        context.Context
-	pubSubCancel     context.CancelFunc
-	invalidationQueue chan *InvalidationMessage
-	metrics          *ConsistencyMetrics
-}
-
-type ConsistencyConfig struct {
-	Level              ConsistencyLevel
-	UpdateMode         CacheUpdateMode
-	InvalidationStrat  InvalidationStrategy
-	InvalidationTTL    time.Duration
-	VersionCheckTTL    time.Duration
-	WriteBehindBatch   int
+type CacheConsistencyConfig struct {
+	Mode                ConsistencyMode
+	SyncWrites          bool
+	InvalidationDelay   time.Duration
+	StalenessWindow     time.Duration
+	WriteBehindEnabled  bool
 	WriteBehindInterval time.Duration
-	PubSubChannel      string
 }
 
-type InvalidationMessage struct {
-	Key      string
-	Version  int64
-	Type     string
-	Source   string
-	Time     time.Time
+var defaultConsistencyConfig = &CacheConsistencyConfig{
+	Mode:                ConsistencyModeEventual,
+	SyncWrites:          false,
+	InvalidationDelay:   100 * time.Millisecond,
+	StalenessWindow:     5 * time.Second,
+	WriteBehindEnabled:  true,
+	WriteBehindInterval: 1 * time.Second,
 }
 
-type ConsistencyMetrics struct {
-	TotalWrites       atomic.Int64
-	TotalReads        atomic.Int64
-	ConflictCount     atomic.Int64
-	InvalidationCount atomic.Int64
-	PublishSuccess    atomic.Int64
-	PublishFailures   atomic.Int64
-	LocalHits         atomic.Int64
-	LocalMisses       atomic.Int64
-	LastSyncTime      atomic.Value
+type CacheConsistencyManager struct {
+	mu          sync.RWMutex
+	config      *CacheConsistencyConfig
+	versions    map[string]int64
+	dependencies map[string][]string
+	pendingOps  chan *ConsistencyOperation
+	stats       *ConsistencyStats
 }
 
-type CacheConsistencyStatus struct {
-	Level         string
-	UpdateMode    string
-	Metrics       map[string]interface{}
-	Connected     bool
-	LastSyncTime  time.Time
+type ConsistencyOperation struct {
+	Type      string
+	Key       string
+	Value     interface{}
+	Version   int64
+	Timestamp time.Time
+	Callback  chan error
 }
 
-var DefaultConsistencyConfig = &ConsistencyConfig{
-	Level:              ConsistencyLevelEventual,
-	UpdateMode:         CacheUpdateModeWriteThrough,
-	InvalidationStrat:  InvalidationStrategyPubSub,
-	InvalidationTTL:    5 * time.Minute,
-	VersionCheckTTL:    10 * time.Second,
-	WriteBehindBatch:   100,
-	WriteBehindInterval: 5 * time.Second,
-	PubSubChannel:      "cache:invalidation",
+type ConsistencyStats struct {
+	TotalOperations     atomic.Int64
+	SuccessfulOps       atomic.Int64
+	FailedOps           atomic.Int64
+	Invalidations       atomic.Int64
+	SyncDelays          atomic.Int64
+	VersionMismatches    atomic.Int64
 }
 
-func NewDistributedCacheConsistency(config *ConsistencyConfig) *DistributedCacheConsistency {
-	if config == nil {
-		config = DefaultConsistencyConfig
-	}
+var (
+	globalConsistencyManager *CacheConsistencyManager
+	consistencyManagerOnce   sync.Once
+)
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	dcc := &DistributedCacheConsistency{
-		config:             config,
-		localVersionMap:    &sync.Map{},
-		pubSubCtx:          ctx,
-		pubSubCancel:       cancel,
-		invalidationQueue:  make(chan *InvalidationMessage, 1000),
-		metrics:            &ConsistencyMetrics{},
-	}
-
-	if config.InvalidationStrat == InvalidationStrategyPubSub {
-		go dcc.startPubSub()
-	}
-
-	go dcc.processInvalidationQueue()
-
-	if config.UpdateMode == CacheUpdateModeWriteBehind {
-		go dcc.startWriteBehindProcessor()
-	}
-
-	return dcc
-}
-
-func (dcc *DistributedCacheConsistency) startPubSub() {
-	if Client == nil {
-		return
-	}
-
-	dcc.pubSubClient = Client.Subscribe(dcc.pubSubCtx, dcc.config.PubSubChannel)
-
-	go func() {
-		ch := dcc.pubSubClient.Channel()
-		for msg := range ch {
-			var invMsg InvalidationMessage
-			if err := json.Unmarshal([]byte(msg.Payload), &invMsg); err == nil {
-				dcc.invalidationQueue <- &invMsg
-			}
+func InitConsistencyManager(config *CacheConsistencyConfig) {
+	consistencyManagerOnce.Do(func() {
+		if config == nil {
+			config = defaultConsistencyConfig
 		}
-	}()
-}
-
-func (dcc *DistributedCacheConsistency) processInvalidationQueue() {
-	for msg := range dcc.invalidationQueue {
-		dcc.processInvalidation(msg)
-	}
-}
-
-func (dcc *DistributedCacheConsistency) processInvalidation(msg *InvalidationMessage) {
-	dcc.mu.Lock()
-	defer dcc.mu.Unlock()
-
-	dcc.metrics.InvalidationCount.Add(1)
-
-	switch msg.Type {
-	case "invalidate":
-		dcc.localVersionMap.Delete(msg.Key)
-		if ec := GetEnhancedCache(); ec != nil {
-			ec.Delete(context.Background(), msg.Key, &DeleteOptions{Level: CacheLevelL1})
+		globalConsistencyManager = &CacheConsistencyManager{
+			config:       config,
+			versions:     make(map[string]int64),
+			dependencies: make(map[string][]string),
+			pendingOps:   make(chan *ConsistencyOperation, 10000),
+			stats:        &ConsistencyStats{},
 		}
-	case "update":
-		if currentVersion, ok := dcc.localVersionMap.Load(msg.Key); !ok || currentVersion.(int64) < msg.Version {
-			dcc.localVersionMap.Store(msg.Key, msg.Version)
-			if ec := GetEnhancedCache(); ec != nil {
-				ec.Delete(context.Background(), msg.Key, &DeleteOptions{Level: CacheLevelL1})
-			}
-		}
-	}
-}
-
-func (dcc *DistributedCacheConsistency) startWriteBehindProcessor() {
-	ticker := time.NewTicker(dcc.config.WriteBehindInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		dcc.flushWriteBehind()
-	}
-}
-
-func (dcc *DistributedCacheConsistency) flushWriteBehind() {
-}
-
-func (dcc *DistributedCacheConsistency) GetWithConsistency(ctx context.Context, key string) ([]byte, error) {
-	dcc.metrics.TotalReads.Add(1)
-
-	ec := GetEnhancedCache()
-	if ec == nil {
-		return nil, ErrCacheDisabled
-	}
-
-	switch dcc.config.Level {
-	case ConsistencyLevelStrong:
-		return dcc.getStrong(ctx, key)
-	case ConsistencyLevelLinearizable:
-		return dcc.getLinearizable(ctx, key)
-	default:
-		return dcc.getEventual(ctx, key)
-	}
-}
-
-func (dcc *DistributedCacheConsistency) getEventual(ctx context.Context, key string) ([]byte, error) {
-	ec := GetEnhancedCache()
-	return ec.Get(ctx, key, nil)
-}
-
-func (dcc *DistributedCacheConsistency) getStrong(ctx context.Context, key string) ([]byte, error) {
-	ec := GetEnhancedCache()
-
-	localVersion, _ := dcc.localVersionMap.LoadOrStore(key, int64(0))
-	remoteVersion, err := dcc.getRemoteVersion(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	if localVersion.(int64) == remoteVersion {
-		val, err := ec.Get(ctx, key, &GetOptions{Level: CacheLevelL1})
-		if err == nil {
-			dcc.metrics.LocalHits.Add(1)
-			return val, nil
-		}
-	}
-
-	dcc.metrics.LocalMisses.Add(1)
-	val, err := ec.Get(ctx, key, &GetOptions{Level: CacheLevelL2})
-	if err == nil {
-		dcc.localVersionMap.Store(key, remoteVersion)
-	}
-	return val, err
-}
-
-func (dcc *DistributedCacheConsistency) getLinearizable(ctx context.Context, key string) ([]byte, error) {
-	if Client == nil {
-		return nil, ErrCacheDisabled
-	}
-
-	lockKey := fmt.Sprintf("lock:linear:%s", key)
-	lockTTL := 5 * time.Second
-
-	acquired, err := Client.SetNX(ctx, lockKey, "1", lockTTL).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	if !acquired {
-		dcc.metrics.ConflictCount.Add(1)
-		return nil, fmt.Errorf("conflict: key is locked")
-	}
-	defer Client.Del(ctx, lockKey)
-
-	ec := GetEnhancedCache()
-	val, err := ec.Get(ctx, key, &GetOptions{Level: CacheLevelL2})
-	if err == nil {
-		ec.Set(ctx, key, val, &SetOptions{Level: CacheLevelL1})
-	}
-	return val, err
-}
-
-func (dcc *DistributedCacheConsistency) SetWithConsistency(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	dcc.metrics.TotalWrites.Add(1)
-
-	switch dcc.config.UpdateMode {
-	case CacheUpdateModeWriteThrough:
-		return dcc.setWriteThrough(ctx, key, value, ttl)
-	case CacheUpdateModeWriteBehind:
-		return dcc.setWriteBehind(ctx, key, value, ttl)
-	case CacheUpdateModeRefreshAhead:
-		return dcc.setRefreshAhead(ctx, key, value, ttl)
-	default:
-		return dcc.setWriteThrough(ctx, key, value, ttl)
-	}
-}
-
-func (dcc *DistributedCacheConsistency) setWriteThrough(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	ec := GetEnhancedCache()
-	if ec == nil {
-		return ErrCacheDisabled
-	}
-
-	vm := NewVersionManager()
-	newVersion, _ := vm.Increment(key)
-
-	opts := &SetOptions{
-		Level:   CacheLevelBoth,
-		TTL:     ttl,
-		Version: newVersion,
-	}
-
-	if err := ec.Set(ctx, key, value, opts); err != nil {
-		return err
-	}
-
-	dcc.localVersionMap.Store(key, newVersion)
-
-	if dcc.config.InvalidationStrat == InvalidationStrategyPubSub {
-		dcc.publishInvalidation(ctx, key, newVersion, "update")
-	}
-
-	return nil
-}
-
-func (dcc *DistributedCacheConsistency) setWriteBehind(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	ec := GetEnhancedCache()
-	if ec == nil {
-		return ErrCacheDisabled
-	}
-
-	ec.Set(ctx, key, value, &SetOptions{Level: CacheLevelL1, TTL: ttl})
-
-	return nil
-}
-
-func (dcc *DistributedCacheConsistency) setRefreshAhead(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	return dcc.setWriteThrough(ctx, key, value, ttl)
-}
-
-func (dcc *DistributedCacheConsistency) DeleteWithConsistency(ctx context.Context, key string) error {
-	ec := GetEnhancedCache()
-	if ec == nil {
-		return ErrCacheDisabled
-	}
-
-	if err := ec.Delete(ctx, key, &DeleteOptions{Level: CacheLevelBoth}); err != nil {
-		return err
-	}
-
-	dcc.localVersionMap.Delete(key)
-
-	if dcc.config.InvalidationStrat == InvalidationStrategyPubSub {
-		dcc.publishInvalidation(ctx, key, 0, "invalidate")
-	}
-
-	return nil
-}
-
-func (dcc *DistributedCacheConsistency) publishInvalidation(ctx context.Context, key string, version int64, msgType string) {
-	if Client == nil {
-		return
-	}
-
-	msg := &InvalidationMessage{
-		Key:     key,
-		Version: version,
-		Type:    msgType,
-		Source:  "local",
-		Time:    time.Now(),
-	}
-
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		dcc.metrics.PublishFailures.Add(1)
-		return
-	}
-
-	if err := Client.Publish(ctx, dcc.config.PubSubChannel, payload).Err(); err != nil {
-		dcc.metrics.PublishFailures.Add(1)
-	} else {
-		dcc.metrics.PublishSuccess.Add(1)
-	}
-}
-
-func (dcc *DistributedCacheConsistency) getRemoteVersion(ctx context.Context, key string) (int64, error) {
-	if Client == nil {
-		return 0, nil
-	}
-
-	versionKey := fmt.Sprintf("cache:version:%s", key)
-	val, err := Client.Get(ctx, versionKey).Int64()
-	if err == goredis.Nil {
-		return 0, nil
-	}
-	return val, err
-}
-
-func (dcc *DistributedCacheConsistency) GetStatus() *CacheConsistencyStatus {
-	dcc.mu.RLock()
-	defer dcc.mu.RUnlock()
-
-	levelStr := "eventual"
-	switch dcc.config.Level {
-	case ConsistencyLevelStrong:
-		levelStr = "strong"
-	case ConsistencyLevelLinearizable:
-		levelStr = "linearizable"
-	}
-
-	modeStr := "write-through"
-	switch dcc.config.UpdateMode {
-	case CacheUpdateModeWriteBehind:
-		modeStr = "write-behind"
-	case CacheUpdateModeRefreshAhead:
-		modeStr = "refresh-ahead"
-	}
-
-	metrics := map[string]interface{}{
-		"total_writes":       dcc.metrics.TotalWrites.Load(),
-		"total_reads":        dcc.metrics.TotalReads.Load(),
-		"conflict_count":     dcc.metrics.ConflictCount.Load(),
-		"invalidation_count": dcc.metrics.InvalidationCount.Load(),
-		"publish_success":    dcc.metrics.PublishSuccess.Load(),
-		"publish_failures":   dcc.metrics.PublishFailures.Load(),
-		"local_hits":         dcc.metrics.LocalHits.Load(),
-		"local_misses":       dcc.metrics.LocalMisses.Load(),
-	}
-
-	var lastSyncTime time.Time
-	if lst := dcc.metrics.LastSyncTime.Load(); lst != nil {
-		lastSyncTime = lst.(time.Time)
-	}
-
-	return &CacheConsistencyStatus{
-		Level:        levelStr,
-		UpdateMode:   modeStr,
-		Metrics:      metrics,
-		Connected:    Client != nil,
-		LastSyncTime: lastSyncTime,
-	}
-}
-
-func (dcc *DistributedCacheConsistency) Close() {
-	if dcc.pubSubClient != nil {
-		dcc.pubSubClient.Close()
-	}
-	if dcc.pubSubCancel != nil {
-		dcc.pubSubCancel()
-	}
-	close(dcc.invalidationQueue)
-}
-
-var globalDistributedConsistency *DistributedCacheConsistency
-var globalDistributedConsistencyOnce sync.Once
-
-func InitDistributedCacheConsistency(config *ConsistencyConfig) {
-	globalDistributedConsistencyOnce.Do(func() {
-		globalDistributedConsistency = NewDistributedCacheConsistency(config)
+		go globalConsistencyManager.processOperations()
 	})
 }
 
-func GetDistributedCacheConsistency() *DistributedCacheConsistency {
-	if globalDistributedConsistency == nil {
-		InitDistributedCacheConsistency(nil)
+func GetConsistencyManager() *CacheConsistencyManager {
+	if globalConsistencyManager == nil {
+		InitConsistencyManager(nil)
 	}
-	return globalDistributedConsistency
+	return globalConsistencyManager
+}
+
+func (c *CacheConsistencyManager) processOperations() {
+	ticker := time.NewTicker(c.config.WriteBehindInterval)
+	defer ticker.Stop()
+
+	var batch []ConsistencyOperation
+
+	for {
+		select {
+		case op := <-c.pendingOps:
+			batch = append(batch, *op)
+			if len(batch) >= 100 {
+				c.executeBatch(batch)
+				batch = batch[:0]
+			}
+
+		case <-ticker.C:
+			if len(batch) > 0 {
+				c.executeBatch(batch)
+				batch = batch[:0]
+			}
+
+		case <-time.After(c.config.WriteBehindInterval):
+			if len(batch) > 0 {
+				c.executeBatch(batch)
+				batch = batch[:0]
+			}
+		}
+	}
+}
+
+func (c *CacheConsistencyManager) executeBatch(ops []ConsistencyOperation) {
+	if c.config.SyncWrites {
+		for i := range ops {
+			c.executeOperation(&ops[i])
+		}
+	}
+}
+
+func (c *CacheConsistencyManager) executeOperation(op *ConsistencyOperation) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	switch op.Type {
+	case "set":
+		c.stats.SuccessfulOps.Add(1)
+	case "delete":
+		c.stats.Invalidations.Add(1)
+	case "invalidate":
+		c.invalidateKeys(op.Key)
+	}
+
+	c.stats.TotalOperations.Add(1)
+}
+
+func (c *CacheConsistencyManager) invalidateKeys(pattern string) {
+	client := GetClient()
+	if client == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	var cursor uint64
+	for {
+		keys, nextCursor, err := client.Scan(ctx, cursor, pattern+"*", 100).Result()
+		if err != nil {
+			break
+		}
+
+		if len(keys) > 0 {
+			client.Del(ctx, keys...)
+			c.stats.Invalidations.Add(int64(len(keys)))
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+}
+
+func (c *CacheConsistencyManager) GetVersion(key string) int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.versions[key]
+}
+
+func (c *CacheConsistencyManager) IncrementVersion(key string) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	version := c.versions[key] + 1
+	c.versions[key] = version
+	return version
+}
+
+func (c *CacheConsistencyManager) SetVersion(key string, version int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.versions[key] = version
+}
+
+func (c *CacheConsistencyManager) AddDependency(key, dependency string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	deps := c.dependencies[key]
+	c.dependencies[key] = append(deps, dependency)
+}
+
+func (c *CacheConsistencyManager) RemoveDependency(key, dependency string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	deps := c.dependencies[key]
+	for i, d := range deps {
+		if d == dependency {
+			c.dependencies[key] = append(deps[:i], deps[i+1:]...)
+			break
+		}
+	}
+}
+
+func (c *CacheConsistencyManager) InvalidateDependencies(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for depKey, deps := range c.dependencies {
+		for _, dep := range deps {
+			if dep == key {
+				delete(c.versions, depKey)
+				c.invalidateKeys(depKey)
+			}
+		}
+	}
+}
+
+func (c *CacheConsistencyManager) SetWithVersion(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	version := c.IncrementVersion(key)
+
+	if c.config.Mode == ConsistencyModeStrong || c.config.SyncWrites {
+		return c.setSync(ctx, key, value, ttl, version)
+	}
+
+	c.pendingOps <- &ConsistencyOperation{
+		Type:      "set",
+		Key:       key,
+		Value:     value,
+		Version:   version,
+		Timestamp: time.Now(),
+	}
+
+	return nil
+}
+
+func (c *CacheConsistencyManager) setSync(ctx context.Context, key string, value interface{}, ttl time.Duration, version int64) error {
+	client := GetClient()
+	if client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	data := map[string]interface{}{
+		"value":   value,
+		"version": version,
+		"updated": time.Now().Unix(),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return client.Set(ctx, key, jsonData, ttl).Err()
+}
+
+func (c *CacheConsistencyManager) GetWithVersion(ctx context.Context, key string) (interface{}, int64, error) {
+	client := GetClient()
+	if client == nil {
+		return nil, 0, fmt.Errorf("redis client not initialized")
+	}
+
+	result, err := client.Get(ctx, key).Result()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return result, 0, nil
+	}
+
+	version := int64(0)
+	if v, ok := data["version"].(float64); ok {
+		version = int64(v)
+	}
+
+	value := data["value"]
+
+	c.mu.RLock()
+	expectedVersion := c.versions[key]
+	c.mu.RUnlock()
+
+	if version < expectedVersion {
+		c.stats.VersionMismatches.Add(1)
+	}
+
+	return value, version, nil
+}
+
+func (c *CacheConsistencyManager) DeleteWithDependencies(ctx context.Context, key string) error {
+	c.mu.Lock()
+	c.IncrementVersion(key)
+	c.InvalidateDependencies(key)
+	c.mu.Unlock()
+
+	if c.config.Mode == ConsistencyModeStrong || c.config.SyncWrites {
+		return c.deleteSync(ctx, key)
+	}
+
+	c.pendingOps <- &ConsistencyOperation{
+		Type:      "delete",
+		Key:       key,
+		Timestamp: time.Now(),
+	}
+
+	return nil
+}
+
+func (c *CacheConsistencyManager) deleteSync(ctx context.Context, key string) error {
+	client := GetClient()
+	if client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	return client.Del(ctx, key).Err()
+}
+
+func (c *CacheConsistencyManager) InvalidatePattern(ctx context.Context, pattern string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.invalidateKeys(pattern)
+
+	if c.config.Mode == ConsistencyModeStrong {
+		client := GetClient()
+		if client == nil {
+			return fmt.Errorf("redis client not initialized")
+		}
+
+		var cursor uint64
+		for {
+			keys, nextCursor, err := client.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				return err
+			}
+
+			if len(keys) > 0 {
+				if err := client.Del(ctx, keys...).Err(); err != nil {
+					return err
+				}
+			}
+
+			cursor = nextCursor
+			if cursor == 0 {
+				break
+			}
+		}
+	}
+
+	c.stats.Invalidations.Add(1)
+	return nil
+}
+
+func (c *CacheConsistencyManager) CheckConsistency(ctx context.Context, keys []string) (map[string]bool, error) {
+	client := GetClient()
+	if client == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+
+	results := make(map[string]bool)
+
+	for _, key := range keys {
+		result, err := client.Get(ctx, key).Result()
+		if err != nil {
+			results[key] = false
+			continue
+		}
+
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(result), &data); err != nil {
+			results[key] = true
+			continue
+		}
+
+		version := int64(0)
+		if v, ok := data["version"].(float64); ok {
+			version = int64(v)
+		}
+
+		c.mu.RLock()
+		expectedVersion := c.versions[key]
+		c.mu.RUnlock()
+
+		results[key] = version >= expectedVersion
+	}
+
+	return results, nil
+}
+
+func (c *CacheConsistencyManager) GetStats() *ConsistencyStats {
+	return &ConsistencyStats{
+		TotalOperations:    c.stats.TotalOperations,
+		SuccessfulOps:     c.stats.SuccessfulOps,
+		FailedOps:        c.stats.FailedOps,
+		Invalidations:     c.stats.Invalidations,
+		SyncDelays:       c.stats.SyncDelays,
+		VersionMismatches: c.stats.VersionMismatches,
+	}
+}
+
+func (c *CacheConsistencyManager) WaitForConsistency(ctx context.Context, key string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return fmt.Errorf("timeout waiting for consistency")
+			}
+
+			c.mu.RLock()
+			version := c.versions[key]
+			c.mu.RUnlock()
+
+			client := GetClient()
+			if client == nil {
+				continue
+			}
+
+			result, err := client.Get(ctx, key).Result()
+			if err != nil {
+				continue
+			}
+
+			var data map[string]interface{}
+			if err := json.Unmarshal([]byte(result), &data); err != nil {
+				continue
+			}
+
+			if v, ok := data["version"].(float64); ok && int64(v) >= version {
+				return nil
+			}
+		}
+	}
+}
+
+type WriteThroughCache struct {
+	*CacheConsistencyManager
+	backendDB interface{}
+}
+
+func NewWriteThroughCache(config *CacheConsistencyConfig, db interface{}) *WriteThroughCache {
+	InitConsistencyManager(config)
+	return &WriteThroughCache{
+		CacheConsistencyManager: GetConsistencyManager(),
+		backendDB:              db,
+	}
+}
+
+func (w *WriteThroughCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	if err := w.CacheConsistencyManager.SetWithVersion(ctx, key, value, ttl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *WriteThroughCache) Get(ctx context.Context, key string) (interface{}, error) {
+	value, _, err := w.CacheConsistencyManager.GetWithVersion(ctx, key)
+	return value, err
+}
+
+func (w *WriteThroughCache) Delete(ctx context.Context, key string) error {
+	return w.CacheConsistencyManager.DeleteWithDependencies(ctx, key)
+}
+
+type WriteBehindCache struct {
+	*CacheConsistencyManager
+	queue chan *CacheEntry
+}
+
+type CacheEntry struct {
+	Key    string
+	Value  interface{}
+	TTL    time.Duration
+	Time   time.Time
+}
+
+func NewWriteBehindCache(config *CacheConsistencyConfig) *WriteBehindCache {
+	InitConsistencyManager(config)
+	wb := &WriteBehindCache{
+		CacheConsistencyManager: GetConsistencyManager(),
+		queue: make(chan *CacheEntry, 10000),
+	}
+	go wb.processQueue()
+	return wb
+}
+
+func (w *WriteBehindCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	w.queue <- &CacheEntry{
+		Key:   key,
+		Value: value,
+		TTL:   ttl,
+		Time:  time.Now(),
+	}
+
+	return nil
+}
+
+func (w *WriteBehindCache) processQueue() {
+	batch := make([]*CacheEntry, 0, 100)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case entry := <-w.queue:
+			batch = append(batch, entry)
+			if len(batch) >= 100 {
+				w.flushBatch(batch)
+				batch = batch[:0]
+			}
+
+		case <-ticker.C:
+			if len(batch) > 0 {
+				w.flushBatch(batch)
+				batch = batch[:0]
+			}
+		}
+	}
+}
+
+func (w *WriteBehindCache) flushBatch(entries []*CacheEntry) {
+	ctx := context.Background()
+	client := GetClient()
+	if client == nil {
+		return
+	}
+
+	for _, entry := range entries {
+		w.CacheConsistencyManager.SetWithVersion(ctx, entry.Key, entry.Value, entry.TTL)
+	}
+}
+
+func (w *WriteBehindCache) ForceFlush() {
+	ctx := context.Background()
+	client := GetClient()
+	if client == nil {
+		return
+	}
+
+	for {
+		select {
+		case entry := <-w.queue:
+			w.CacheConsistencyManager.SetWithVersion(ctx, entry.Key, entry.Value, entry.TTL)
+		default:
+			return
+		}
+	}
 }
