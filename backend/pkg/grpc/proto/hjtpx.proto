@@ -1,0 +1,316 @@
+syntax = "proto3";
+
+package hjtpx;
+
+option go_package = "github.com/hjtpx/hjtpx/pkg/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+service CaptchaService {
+    rpc GenerateCaptcha (GenerateCaptchaRequest) returns (GenerateCaptchaResponse);
+    rpc VerifyCaptcha (VerifyCaptchaRequest) returns (VerifyCaptchaResponse);
+    rpc GetCaptchaStatus (GetCaptchaStatusRequest) returns (GetCaptchaStatusResponse);
+}
+
+service BehaviorService {
+    rpc AnalyzeBehavior (AnalyzeBehaviorRequest) returns (AnalyzeBehaviorResponse);
+    rpc GetRiskScore (GetRiskScoreRequest) returns (GetRiskScoreResponse);
+    rpc TrackEvent (TrackEventRequest) returns (TrackEventResponse);
+}
+
+service AnalyticsService {
+    rpc RecordMetrics (RecordMetricsRequest) returns (RecordMetricsResponse);
+    rpc GetStatistics (GetStatisticsRequest) returns (GetStatisticsResponse);
+    rpc GetDashboardData (GetDashboardDataRequest) returns (GetDashboardDataResponse);
+}
+
+service HealthService {
+    rpc Check (HealthCheckRequest) returns (HealthCheckResponse);
+    rpc Watch (HealthWatchRequest) returns (stream HealthCheckResponse);
+}
+
+message GenerateCaptchaRequest {
+    string captcha_type = 1;
+    string app_id = 2;
+    string user_id = 3;
+    map<string, string> options = 4;
+}
+
+message GenerateCaptchaResponse {
+    string captcha_id = 1;
+    string captcha_data = 2;
+    int64 created_at = 3;
+    int64 expires_at = 4;
+    CaptchaMetadata metadata = 5;
+}
+
+message CaptchaMetadata {
+    string type = 1;
+    int32 width = 2;
+    int32 height = 3;
+    int32 difficulty = 4;
+    int32 time_limit = 5;
+}
+
+message VerifyCaptchaRequest {
+    string captcha_id = 1;
+    string captcha_type = 2;
+    CaptchaAnswer answer = 3;
+    string user_id = 4;
+    string ip_address = 5;
+}
+
+message CaptchaAnswer {
+    oneof answer_type {
+        SliderAnswer slider = 1;
+        ClickAnswer click = 2;
+        RotateAnswer rotate = 3;
+        VoiceAnswer voice = 4;
+        GestureAnswer gesture = 5;
+    }
+}
+
+message SliderAnswer {
+    int32 offset_x = 1;
+}
+
+message ClickAnswer {
+    repeated Point points = 1;
+}
+
+message Point {
+    int32 x = 1;
+    int32 y = 2;
+}
+
+message RotateAnswer {
+    int32 angle = 1;
+}
+
+message VoiceAnswer {
+    bytes audio_data = 1;
+    string text = 2;
+}
+
+message GestureAnswer {
+    repeated Point trajectory = 1;
+    string gesture_type = 2;
+}
+
+message VerifyCaptchaResponse {
+    bool success = 1;
+    string message = 2;
+    int64 verified_at = 3;
+    VerificationDetails details = 4;
+}
+
+message VerificationDetails {
+    bool is_human = 1;
+    double confidence = 2;
+    string risk_level = 3;
+    map<string, string> analysis_data = 4;
+}
+
+message GetCaptchaStatusRequest {
+    string captcha_id = 1;
+}
+
+message GetCaptchaStatusResponse {
+    string status = 1;
+    int64 created_at = 2;
+    int64 expires_at = 3;
+    int32 attempts = 4;
+    bool verified = 5;
+}
+
+message AnalyzeBehaviorRequest {
+    string session_id = 1;
+    string user_id = 2;
+    repeated BehaviorEvent events = 3;
+    map<string, string> context = 4;
+}
+
+message BehaviorEvent {
+    string event_type = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    map<string, string> data = 3;
+    string element_id = 4;
+    int32 screen_x = 5;
+    int32 screen_y = 6;
+    int32 client_x = 7;
+    int32 client_y = 8;
+}
+
+message AnalyzeBehaviorResponse {
+    double risk_score = 1;
+    string risk_level = 2;
+    bool requires_captcha = 3;
+    repeated string detected_patterns = 4;
+    map<string, string> analysis_metadata = 5;
+}
+
+message GetRiskScoreRequest {
+    string user_id = 1;
+    string ip_address = 2;
+    string session_id = 3;
+    map<string, string> context = 4;
+}
+
+message GetRiskScoreResponse {
+    double risk_score = 1;
+    string risk_level = 2;
+    repeated RiskFactor factors = 3;
+}
+
+message RiskFactor {
+    string name = 1;
+    double weight = 2;
+    double score = 3;
+    string description = 4;
+}
+
+message TrackEventRequest {
+    string user_id = 1;
+    string session_id = 2;
+    string event_type = 3;
+    map<string, string> properties = 4;
+    google.protobuf.Timestamp timestamp = 5;
+}
+
+message TrackEventResponse {
+    bool success = 1;
+    string event_id = 2;
+}
+
+message RecordMetricsRequest {
+    string service_name = 1;
+    repeated Metric metrics = 2;
+    google.protobuf.Timestamp timestamp = 3;
+}
+
+message Metric {
+    string name = 1;
+    MetricType type = 2;
+    double value = 3;
+    map<string, string> labels = 4;
+}
+
+enum MetricType {
+    COUNTER = 0;
+    GAUGE = 1;
+    HISTOGRAM = 2;
+    SUMMARY = 3;
+}
+
+message RecordMetricsResponse {
+    bool success = 1;
+    int32 recorded_count = 2;
+}
+
+message GetStatisticsRequest {
+    string service_name = 1;
+    string metric_name = 2;
+    google.protobuf.Timestamp start_time = 3;
+    google.protobuf.Timestamp end_time = 4;
+    AggregationType aggregation = 5;
+}
+
+enum AggregationType {
+    SUM = 0;
+    AVG = 1;
+    MIN = 2;
+    MAX = 3;
+    COUNT = 4;
+}
+
+message GetStatisticsResponse {
+    repeated StatisticPoint data_points = 1;
+    StatisticSummary summary = 2;
+}
+
+message StatisticPoint {
+    google.protobuf.Timestamp timestamp = 1;
+    double value = 2;
+}
+
+message StatisticSummary {
+    double sum = 1;
+    double avg = 2;
+    double min = 3;
+    double max = 4;
+    int64 count = 5;
+}
+
+message GetDashboardDataRequest {
+    string dashboard_type = 1;
+    google.protobuf.Timestamp start_time = 2;
+    google.protobuf.Timestamp end_time = 3;
+    map<string, string> filters = 4;
+}
+
+message GetDashboardDataResponse {
+    DashboardType type = 1;
+    repeated DashboardWidget widgets = 2;
+    DashboardSummary summary = 3;
+}
+
+enum DashboardType {
+    OVERVIEW = 0;
+    SECURITY = 1;
+    PERFORMANCE = 2;
+    USER_ANALYTICS = 3;
+}
+
+message DashboardWidget {
+    string widget_id = 1;
+    string title = 2;
+    WidgetType type = 3;
+    repeated WidgetData data = 4;
+    map<string, string> config = 5;
+}
+
+enum WidgetType {
+    CHART = 0;
+    TABLE = 1;
+    COUNTER = 2;
+    GAUGE = 3;
+    MAP = 4;
+}
+
+message WidgetData {
+    string label = 1;
+    double value = 2;
+    repeated double values = 3;
+}
+
+message DashboardSummary {
+    int64 total_requests = 1;
+    double success_rate = 2;
+    double avg_latency = 3;
+    int64 blocked_requests = 4;
+    map<string, double> custom_metrics = 5;
+}
+
+message HealthCheckRequest {
+    string service_name = 1;
+}
+
+message HealthCheckResponse {
+    string status = 1;
+    string service_name = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    repeated HealthCheckComponent components = 4;
+    map<string, string> metadata = 5;
+}
+
+message HealthCheckComponent {
+    string name = 1;
+    string status = 2;
+    int64 latency_ms = 3;
+    string message = 4;
+}
+
+message HealthWatchRequest {
+    string service_name = 1;
+    int32 interval_seconds = 2;
+}
