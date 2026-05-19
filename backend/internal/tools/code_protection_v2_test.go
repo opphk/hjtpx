@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -559,6 +560,10 @@ func TestCodeProtectionV2_PolymorphicCodeGeneration(t *testing.T) {
 
 	if !strings.Contains(polymorphic1, "_0xP") {
 		t.Error("Polymorphic code should contain obfuscated variables")
+	}
+
+	if polymorphic1 == polymorphic2 {
+		t.Log("Polymorphic codes may be the same due to random selection")
 	}
 
 	t.Logf("Polymorphic variation 1: %s", polymorphic1[:50])
