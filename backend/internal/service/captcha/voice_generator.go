@@ -141,7 +141,7 @@ func generateDigitWave(digit int, language string, sampleRate int) []byte {
 
 	for i := 0; i < numSamples; i++ {
 		t := float64(i) / float64(sampleRate)
-		value := int16(32767 * 0.3 * (0.6*mathSin(2*3.14159*frequency*t) + 0.3*mathSin(2*3.14159*frequency*2*t) + 0.1*mathSin(2*3.14159*frequency*3*t)))
+		value := int16(32767 * 0.3 * (0.6*voiceMathSin(2*3.14159*frequency*t) + 0.3*voiceMathSin(2*3.14159*frequency*2*t) + 0.1*voiceMathSin(2*3.14159*frequency*3*t)))
 
 		data[i*2] = byte(value & 0xff)
 		data[i*2+1] = byte((value >> 8) & 0xff)
@@ -156,7 +156,7 @@ func generateSilence(durationMs int, sampleRate int) []byte {
 	return data
 }
 
-func mathSin(x float64) float64 {
+func voiceMathSin(x float64) float64 {
 	x = x - 2*3.1415926535*float64(int(x/(2*3.1415926535)))
 	if x < 0 {
 		x += 2 * 3.1415926535

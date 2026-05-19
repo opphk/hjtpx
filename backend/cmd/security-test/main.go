@@ -190,7 +190,7 @@ func testBotPatternDetection() bool {
 
 func testAnomalyDetection() bool {
 	ddosService := service.NewDDoSProtectionService()
-	ddosService.SetAttackThreshold(0.5)
+	ddosService.SetAttackThreshold("192.168.1.1", 50)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0")

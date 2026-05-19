@@ -120,6 +120,12 @@ type RiskContext struct {
 	IPReputation      string            `json:"ip_reputation"`
 	Country           string            `json:"country"`
 	ASNumber          int               `json:"as_number"`
+	ClickCount        int               `json:"click_count"`
+	LastKnownLocation string            `json:"last_known_location"`
+	CurrentLocation   string            `json:"current_location"`
+	DeviceReputationScore float64        `json:"device_reputation_score"`
+	RiskScore         float64           `json:"risk_score"`
+	ApplicationID     *uint             `json:"application_id"`
 }
 
 type RiskRule struct {

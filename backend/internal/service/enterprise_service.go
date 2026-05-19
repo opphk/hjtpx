@@ -16,7 +16,22 @@ import (
 type EnterpriseService struct {
 	db           *gorm.DB
 	httpClient   *http.Client
-	cacheService interface{}
+	cacheService CacheServiceInterface
+}
+
+type CacheServiceInterface interface {
+	Get(ctx context.Context, key string) CacheResult
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Incr(ctx context.Context, key string) IntResult
+	Expire(ctx context.Context, key string, expiration time.Duration) bool
+}
+
+type CacheResult interface {
+	Result() (string, error)
+}
+
+type IntResult interface {
+	Result() (int64, error)
 }
 
 func NewEnterpriseService(db *gorm.DB) *EnterpriseService {
@@ -49,7 +64,8 @@ func (s *EnterpriseService) GetSSOConfig(tenantID uint) (*models.SSOConfig, erro
 	cacheKey := fmt.Sprintf("sso_config:%d", tenantID)
 
 	if s.cacheService != nil {
-		if cached, err := s.cacheService.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+		cacheResult := s.cacheService.Get(ctx, cacheKey)
+		if cached, err := cacheResult.Result(); err == nil && cached != "" {
 			var config models.SSOConfig
 			if json.Unmarshal([]byte(cached), &config) == nil {
 				return &config, nil
@@ -704,7 +720,7 @@ func (s *ComplianceService) GenerateReport(reportID uint) error {
 	report.Status = "generating"
 	s.db.Save(&report)
 
-	content, err := s.buildReportContent(&report)
+	reportContent, err := s.buildReportContent(&report)
 	if err != nil {
 		report.Status = "failed"
 		s.db.Save(&report)
@@ -715,6 +731,8 @@ func (s *ComplianceService) GenerateReport(reportID uint) error {
 		report.ID,
 		report.ReportType,
 		report.PeriodStart.Format("20060102"))
+
+	_ = reportContent
 
 	report.FilePath = filePath
 	report.Status = "completed"

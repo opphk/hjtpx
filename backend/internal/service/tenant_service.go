@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/models"
@@ -13,13 +12,29 @@ import (
 
 type TenantService struct {
 	db           *gorm.DB
-	cacheService interface{}
+	cacheService TenantCacheService
+}
+
+type TenantCacheService interface {
+	Get(ctx context.Context, key string) TenantCacheResult
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Del(ctx context.Context, key string) error
+}
+
+type TenantCacheResult interface {
+	Result() (string, error)
 }
 
 func NewTenantService(db *gorm.DB, cacheService interface{}) *TenantService {
+	var cs TenantCacheService
+	if cacheService != nil {
+		if typedCs, ok := cacheService.(TenantCacheService); ok {
+			cs = typedCs
+		}
+	}
 	return &TenantService{
 		db:           db,
-		cacheService: cacheService,
+		cacheService: cs,
 	}
 }
 
@@ -38,7 +53,8 @@ func (s *TenantService) GetTenantContext(tenantID uint) (*TenantContext, error) 
 	cacheKey := fmt.Sprintf("tenant:context:%d", tenantID)
 
 	if s.cacheService != nil {
-		cached, err := s.cacheService.Get(ctx, cacheKey).Result()
+		cacheResult := s.cacheService.Get(ctx, cacheKey)
+		cached, err := cacheResult.Result()
 		if err == nil && cached != "" {
 			var tc TenantContext
 			if json.Unmarshal([]byte(cached), &tc) == nil {
@@ -59,7 +75,6 @@ func (s *TenantService) GetTenantContext(tenantID uint) (*TenantContext, error) 
 		IsolatedDB:     tenant.IsolatedDB,
 		IsolatedCache:  tenant.IsolatedCache,
 		Plan:           tenant.Plan,
-		Quota:          tenant.Quota,
 	}
 
 	if s.cacheService != nil {
@@ -76,6 +91,9 @@ func (s *TenantService) CreateTenant(tenant *models.Tenant, creatorID uint) (*mo
 		return nil, err
 	}
 
+	now := time.Now()
+	monthLater := now.AddDate(0, 1, 0)
+	
 	quota := &models.TenantQuota{
 		TenantID:    tenant.ID,
 		MaxUsers:    10,
@@ -86,8 +104,8 @@ func (s *TenantService) CreateTenant(tenant *models.Tenant, creatorID uint) (*mo
 		MaxWebhooks: 10,
 		MaxRules:    50,
 		MaxABTests:  5,
-		PeriodStart: time.Now(),
-		PeriodEnd:   time.Now().AddDate(0, 1, 0),
+		PeriodStart: &now,
+		PeriodEnd:   &monthLater,
 	}
 	if err := s.db.Create(quota).Error; err != nil {
 		return nil, err

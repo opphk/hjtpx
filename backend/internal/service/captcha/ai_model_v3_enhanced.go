@@ -12,6 +12,26 @@ import (
 	"github.com/hjtpx/hjtpx/internal/model"
 )
 
+type CaptchaSceneType string
+
+const (
+	CaptchaSceneLogin     CaptchaSceneType = "login"
+	CaptchaSceneRegister CaptchaSceneType = "register"
+	CaptchaScenePayment  CaptchaSceneType = "payment"
+	CaptchaSceneComment CaptchaSceneType = "comment"
+	CaptchaSceneGeneral CaptchaSceneType = "general"
+)
+
+type CaptchaThemeType string
+
+const (
+	CaptchaThemeNature   CaptchaThemeType = "nature"
+	CaptchaThemeCity     CaptchaThemeType = "city"
+	CaptchaThemeAbstract CaptchaThemeType = "abstract"
+	CaptchaThemeGame     CaptchaThemeType = "game"
+	CaptchaThemeCustom   CaptchaThemeType = "custom"
+)
+
 type EnhancedGPTCaptchaGenerator struct {
 	rng            *rand.Rand
 	initialized    bool
@@ -805,4 +825,87 @@ func (s *EnhancedBehaviorLearningSystem) GetStatistics(ctx context.Context) (map
 	}
 
 	return stats, nil
+}
+
+func (a *EnhancedRiskAssessor) normalizeFeatures(features []float64) []float64 {
+	normalized := make([]float64, len(features))
+	featureRanges := []float64{1.0, 1.0, 100.0, 1.0, 1.0, 10.0, 10.0, 1.0, 1.0, 1.0}
+	featureMeans := []float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+
+	for i, f := range features {
+		if i < len(featureRanges) && featureRanges[i] > 0 {
+			normalized[i] = (f - featureMeans[i]) / featureRanges[i]
+		} else {
+			normalized[i] = f
+		}
+	}
+	return normalized
+}
+
+func (a *EnhancedRiskAssessor) calculateFeatureScores(normalizedFeatures []float64) map[string]float64 {
+	featureScores := make(map[string]float64)
+	featureNames := []string{"mouseSpeed", "clickCount", "movementVariance", "typingSpeed", "errorRate", "sessionDuration", "requestFrequency", "javascriptEnabled", "webGLSupported", "timezoneOffset"}
+
+	for i, f := range normalizedFeatures {
+		if i < len(featureNames) {
+			featureScores[featureNames[i]] = math.Min(1.0, math.Max(0.0, math.Abs(f)))
+		}
+	}
+	return featureScores
+}
+
+func (a *EnhancedRiskAssessor) determineRiskLevel(riskScore float64) string {
+	switch {
+	case riskScore >= 0.8:
+		return "high"
+	case riskScore >= 0.5:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func (a *EnhancedRiskAssessor) generateRecommendations(riskScore float64, featureScores map[string]float64) []string {
+	var recommendations []string
+
+	switch {
+	case riskScore >= 0.8:
+		recommendations = append(recommendations, "Block this request immediately", "Enable additional verification", "Log for further analysis")
+	case riskScore >= 0.5:
+		recommendations = append(recommendations, "Require additional verification", "Monitor closely")
+	default:
+		recommendations = append(recommendations, "Allow with standard processing")
+	}
+
+	return recommendations
+}
+
+func (s *EnhancedBehaviorLearningSystem) computePatternID(features []float64) string {
+	hash := 0.0
+	for i, f := range features {
+		hash += f * float64(i+1)
+	}
+	return fmt.Sprintf("pattern_%.4f", hash)
+}
+
+func (s *EnhancedBehaviorLearningSystem) computeCosineSimilarity(a, b []float64) float64 {
+	if len(a) != len(b) {
+		return 0.0
+	}
+
+	dotProduct := 0.0
+	normA := 0.0
+	normB := 0.0
+
+	for i := range a {
+		dotProduct += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+
+	if normA == 0 || normB == 0 {
+		return 0.0
+	}
+
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
 }
