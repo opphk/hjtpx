@@ -1,14 +1,29 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
   title: Behavior Verification System API
   description: |
-    行为验证系统API文档
+    行为验证系统API文档 v17.1
     
     提供多种验证码类型、用户认证、环境检测、风险分析等功能。
-  version: 2.0.0
+    
+    支持的验证码类型:
+    - 滑块验证码 (Slider)
+    - 点击验证码 (Click)
+    - 手势验证码 (Gesture)
+    - 3D验证码 (3D)
+    - 语音验证码 (Voice)
+    - Emoji验证码 (Emoji)
+    - 连连看验证码 (Lianliankan)
+    - 视频验证码 (Video)
+    - AR验证码 (AR)
+    - 无感验证 (Seamless)
+  version: 17.1.0
   contact:
     name: API Support
     email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 servers:
   - url: https://api.example.com/api/v1
     description: 生产环境
@@ -17,6 +32,10 @@ servers:
 tags:
   - name: captcha
     description: 验证码相关接口
+  - name: captcha-video
+    description: 视频验证码接口
+  - name: captcha-ar
+    description: AR验证码接口
   - name: auth
     description: 用户认证接口
   - name: user
@@ -281,6 +300,393 @@ paths:
                         type: boolean
                       message:
                         type: string
+  /captcha/video/generate:
+    post:
+      tags:
+        - captcha-video
+      summary: 生成视频验证码
+      description: 生成视频验证码，返回视频URL和问题
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                width:
+                  type: integer
+                  description: 视频宽度
+                  default: 320
+                height:
+                  type: integer
+                  description: 视频高度
+                  default: 240
+                difficulty:
+                  type: integer
+                  description: 难度等级 (1-简单, 2-中等, 3-困难)
+                  default: 1
+                  minimum: 1
+                  maximum: 3
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                        example: video_abc123def456
+                      video_url:
+                        type: string
+                        description: 视频文件URL
+                      question:
+                        type: string
+                        description: 验证问题
+                        example: 请识别视频中的人物动作
+                      action_type:
+                        type: string
+                        description: 动作类型
+                        example: wave
+                      difficulty:
+                        type: integer
+                        example: 2
+                      expires_at:
+                        type: string
+                        format: date-time
+  /captcha/video/verify:
+    post:
+      tags:
+        - captcha-video
+      summary: 验证视频验证码
+      description: 提交视频验证码答案进行验证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - answer
+              properties:
+                session_id:
+                  type: string
+                  description: 验证码会话ID
+                answer:
+                  type: string
+                  description: 用户答案
+                behavior_data:
+                  type: object
+                  description: 行为数据
+                  properties:
+                    response_time:
+                      type: number
+                      format: float
+                    interactions:
+                      type: array
+                      items:
+                        type: object
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      score:
+                        type: number
+                        format: float
+                      remaining_attempts:
+                        type: integer
+  /captcha/video/options:
+    get:
+      tags:
+        - captcha-video
+      summary: 获取视频验证码配置选项
+      description: 获取支持的视频验证码难度选项、视频格式等配置
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      difficulty_options:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: integer
+                            label:
+                              type: string
+                            description:
+                              type: string
+                      video_formats:
+                        type: array
+                        items:
+                          type: string
+                      supported_actions:
+                        type: array
+                        items:
+                          type: string
+  /captcha/ar/generate:
+    post:
+      tags:
+        - captcha-ar
+      summary: 生成AR验证码
+      description: 生成增强现实的AR验证码，提供3D交互体验
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scene_type:
+                  type: string
+                  description: 场景类型
+                  enum:
+                    - object_placement
+                    - gesture_recognition
+                    - spatial_puzzle
+                    - object_tracking
+                    - depth_estimation
+                difficulty:
+                  type: string
+                  description: 难度等级
+                  enum:
+                    - easy
+                    - medium
+                    - hard
+                    - expert
+                  default: medium
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                        example: ar_abc123def456
+                      scene_type:
+                        type: string
+                        example: object_placement
+                      scene_data:
+                        type: object
+                        description: AR场景数据
+                        properties:
+                          objects:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                type:
+                                  type: string
+                                position:
+                                  type: object
+                                model_url:
+                                  type: string
+                      target_object:
+                        type: object
+                        description: 目标对象信息
+                      instructions:
+                        type: string
+                        description: 用户操作指引
+                      difficulty:
+                        type: string
+                        example: medium
+                      expires_at:
+                        type: string
+                        format: date-time
+  /captcha/ar/verify:
+    post:
+      tags:
+        - captcha-ar
+      summary: 验证AR验证码
+      description: 提交AR验证码答案进行验证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - user_gesture
+              properties:
+                session_id:
+                  type: string
+                  description: 验证码会话ID
+                user_gesture:
+                  type: object
+                  description: 用户手势信息
+                  properties:
+                    gesture_type:
+                      type: string
+                      description: 手势类型
+                      example: tap
+                    start_time:
+                      type: integer
+                      format: int64
+                    end_time:
+                      type: integer
+                      format: int64
+                    points:
+                      type: array
+                      items:
+                        type: object
+                object_id:
+                  type: integer
+                  description: 交互对象ID
+                position_x:
+                  type: number
+                  format: float
+                  description: X坐标
+                position_y:
+                  type: number
+                  format: float
+                  description: Y坐标
+                position_z:
+                  type: number
+                  format: float
+                  description: Z坐标
+                risk_score:
+                  type: number
+                  format: float
+                  description: 风险分数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      accuracy:
+                        type: number
+                        format: float
+                        description: 精确度
+                      score:
+                        type: number
+                        format: float
+                        description: 综合得分
+                      remaining_attempts:
+                        type: integer
+                      feedback:
+                        type: string
+                        description: 反馈信息
+  /captcha/ar/options:
+    get:
+      tags:
+        - captcha-ar
+      summary: 获取AR验证码配置选项
+      description: 获取支持的AR验证码场景类型、难度选项、手势类型等配置
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      scene_types:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                            label:
+                              type: string
+                      difficulty_options:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                            label:
+                              type: string
+                      gesture_types:
+                        type: array
+                        items:
+                          type: string
+                      object_types:
+                        type: array
+                        items:
+                          type: string
+                      features:
+                        type: array
+                        items:
+                          type: string
   /auth/register:
     post:
       tags:
@@ -1897,13 +2303,71 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT Bearer Token认证
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API密钥认证
   schemas:
     Error:
       type: object
       properties:
         code:
           type: integer
+          description: 错误码
+          example: 400
         message:
           type: string
+          description: 错误信息
+          example: 请求参数错误
         data:
           nullable: true
+          description: 错误详情
+    CaptchaSession:
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: 验证码会话ID
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          description: 验证码类型
+    VerificationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 验证是否成功
+        score:
+          type: number
+          format: float
+          description: 验证得分
+        remaining_attempts:
+          type: integer
+          description: 剩余尝试次数
+        risk_score:
+          type: number
+          format: float
+          description: 风险分数
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页条数
+        total:
+          type: integer
+          description: 总记录数
+        total_pages:
+          type: integer
+          description: 总页数

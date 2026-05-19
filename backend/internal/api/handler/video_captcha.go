@@ -1,164 +1,142 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-// VideoCaptchaGenerateRequest 视频验证码生成请求
+var (
+	videoGeneratorService *captcha.VideoGeneratorService
+	videoVerifierService *captcha.VideoVerifierService
+)
+
+func InitVideoCaptchaHandler(gen *captcha.VideoGeneratorService, ver *captcha.VideoVerifierService) {
+	videoGeneratorService = gen
+	videoVerifierService = ver
+}
+
+func initVideoServices() {
+	if videoGeneratorService == nil {
+		videoGeneratorService = captcha.NewVideoGeneratorServiceSimple()
+	}
+	if videoVerifierService == nil {
+		videoVerifierService = captcha.NewVideoVerifierServiceSimple()
+	}
+}
+
 type VideoCaptchaGenerateRequest struct {
-	Width  int `json:"width" binding:"omitempty,min=320,max=1920"`
-	Height int `json:"height" binding:"omitempty,min=240,max=1080"`
-	// 验证难度：1-简单，2-中等，3-困难
-	Difficulty int `json:"difficulty" binding:"omitempty,min=1,max=3"`
+	Width      int `json:"width"`
+	Height     int `json:"height"`
+	Difficulty int `json:"difficulty"`
 }
 
-// VideoCaptchaVerifyRequest 视频验证码验证请求
 type VideoCaptchaVerifyRequest struct {
-	CaptchaID string `json:"captcha_id" binding:"required"`
-	Answer    string `json:"answer" binding:"required"`
-	// 用户行为数据
-	BehaviorData map[string]interface{} `json:"behavior_data"`
+	SessionID   string                    `json:"session_id" binding:"required"`
+	Answer      string                    `json:"answer" binding:"required"`
+	BehaviorData captcha.VideoBehaviorData `json:"behavior_data"`
 }
 
-// VideoCaptchaGenerate 生成视频验证码
-// @Summary 生成视频验证码
-// @Description 生成一个新的视频验证码
-// @Tags captcha
-// @Accept json
-// @Produce json
-// @Param request body VideoCaptchaGenerateRequest true "生成请求参数"
-// @Success 200 {object} response.Response{data=map[string]interface{}} "成功"
-// @Router /api/v1/captcha/video/generate [post]
 func VideoCaptchaGenerate(c *gin.Context) {
+	initVideoServices()
+	
 	var req VideoCaptchaGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "参数错误")
-		return
+		req = VideoCaptchaGenerateRequest{}
 	}
 
-	// 设置默认值
-	if req.Width == 0 {
-		req.Width = 640
-	}
-	if req.Height == 0 {
-		req.Height = 360
-	}
-	if req.Difficulty == 0 {
-		req.Difficulty = 2
+	createReq := &captcha.VideoCaptchaRequest{
+		Width:       req.Width,
+		Height:      req.Height,
+		Difficulty:  req.Difficulty,
+		ClientIP:    c.ClientIP(),
+		UserAgent:   c.GetHeader("User-Agent"),
+		Fingerprint: c.GetHeader("X-Fingerprint"),
 	}
 
-	captchaID := uuid.New().String()
-	videoURL, _, err := generateVideoCaptcha(req.Width, req.Height, req.Difficulty)
+	result, err := videoGeneratorService.Create(c.Request.Context(), createReq)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "生成失败")
+		response.Fail(c, response.CodeServerError, "生成视频验证码失败")
 		return
 	}
 
-	// 存储验证码信息（实际项目应存入Redis）
-	// 这里简化处理
-
-	response.Success(c, gin.H{
-		"captcha_id": captchaID,
-		"video_url":  videoURL,
-		"width":      req.Width,
-		"height":     req.Height,
-		"difficulty": req.Difficulty,
-		"message":    "请观察视频并回答问题",
-	})
+	response.Success(c, result)
 }
 
-// VideoCaptchaVerify 验证视频验证码
-// @Summary 验证视频验证码
-// @Description 验证用户对视频验证码的回答
-// @Tags captcha
-// @Accept json
-// @Produce json
-// @Param request body VideoCaptchaVerifyRequest true "验证请求参数"
-// @Success 200 {object} response.Response{data=map[string]interface{}} "成功"
-// @Router /api/v1/captcha/video/verify [post]
 func VideoCaptchaVerify(c *gin.Context) {
+	initVideoServices()
+	
 	var req VideoCaptchaVerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "参数错误")
+		response.Fail(c, response.CodeInvalidParams, "参数错误")
 		return
 	}
 
-	// 验证逻辑（实际项目需要从Redis获取答案并验证）
-	isValid, score := verifyVideoCaptchaAnswer(req.CaptchaID, req.Answer, req.BehaviorData)
-
-	if isValid {
-		response.Success(c, gin.H{
-			"success": true,
-			"score":   score,
-			"message": "验证成功",
-		})
-	} else {
-		response.Fail(c, 400, "验证失败")
-	}
-}
-
-// generateVideoCaptcha 生成视频验证码（模拟实现）
-func generateVideoCaptcha(width, height, difficulty int) (string, string, error) {
-	// 实际项目中这里应该生成真实的视频
-	// 这里返回一个模拟的视频URL和答案
-	videoURL := "/static/video/captcha_demo.mp4"
-
-	var answer string
-	switch difficulty {
-	case 1:
-		answer = "3" // 简单：视频中有多少个圆形
-	case 2:
-		answer = "blue" // 中等：主要物体是什么颜色
-	case 3:
-		answer = "triangle" // 困难：最后出现的图形是什么形状
+	verifyReq := &captcha.VerifyVideoCaptchaRequest{
+		SessionID:   req.SessionID,
+		Answer:      req.Answer,
+		BehaviorData: req.BehaviorData,
 	}
 
-	return videoURL, answer, nil
-}
-
-// verifyVideoCaptchaAnswer 验证视频验证码答案（模拟实现）
-func verifyVideoCaptchaAnswer(captchaID, answer string, behaviorData map[string]interface{}) (bool, float64) {
-	// 实际项目中需要从存储获取正确答案并验证
-	// 这里简化处理，只验证非空
-	if answer != "" {
-		// 计算行为得分（如果有行为数据）
-		score := 0.85
-		if behaviorData != nil {
-			// 根据行为数据调整分数
-			if mouseMoveCount, ok := behaviorData["mouse_move_count"].(float64); ok {
-				if mouseMoveCount > 10 {
-					score += 0.05
-				}
-			}
-		}
-		return true, score
+	result, err := videoVerifierService.Verify(c.Request.Context(), verifyReq)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "验证失败")
+		return
 	}
-	return false, 0.0
+
+	response.Success(c, result)
 }
 
-// VideoCaptchaOptions 获取视频验证码选项配置
-// @Summary 获取视频验证码选项
-// @Description 获取视频验证码的配置选项
-// @Tags captcha
-// @Produce json
-// @Success 200 {object} response.Response{data=map[string]interface{}} "成功"
-// @Router /api/v1/captcha/video/options [get]
 func VideoCaptchaOptions(c *gin.Context) {
-	response.Success(c, gin.H{
+	initVideoServices()
+	
+	options := gin.H{
 		"difficulty_options": []gin.H{
-			{"value": 1, "label": "简单"},
-			{"value": 2, "label": "中等"},
-			{"value": 3, "label": "困难"},
+			{"value": 1, "label": "简单", "description": "基础动作识别"},
+			{"value": 2, "label": "中等", "description": "复杂动作识别"},
+			{"value": 3, "label": "困难", "description": "快速动作识别"},
 		},
-		"video_formats": []string{"mp4", "webm"},
+		"video_formats":     []string{"mp4", "webm", "ogg"},
+		"supported_actions": []string{
+			"举手", "挥手", "点头", "摇头",
+			"眨眼", "张嘴", "抬手", "放下",
+			"向左看", "向右看", "向上看", "向下看",
+		},
 		"features": []string{
+			"动作识别验证",
 			"行为分析",
-			"AI检测",
-			"多难度",
+			"多难度模式",
+			"实时风险评估",
+		},
+		"duration_options": gin.H{
+			"simple":   5,
+			"medium":   8,
+			"hard":     12,
+		},
+		"max_attempts": 3,
+		"expires_in":   300,
+	}
+
+	response.Success(c, options)
+}
+
+func VideoCaptchaStatus(c *gin.Context) {
+	initVideoServices()
+	
+	sessionID := c.Param("session_id")
+	if sessionID == "" {
+		response.Fail(c, response.CodeInvalidParams, "session_id不能为空")
+		return
+	}
+
+	valid, message := videoVerifierService.CheckSessionValid(c.Request.Context(), sessionID)
+
+	c.JSON(200, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"valid":   valid,
+			"message": message,
 		},
 	})
 }

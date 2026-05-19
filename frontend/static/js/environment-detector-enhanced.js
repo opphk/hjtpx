@@ -2876,6 +2876,730 @@ class EnhancedEnvironmentDetector {
     }
 }
 
+EnhancedEnvironmentDetector.prototype.detectAdvancedAutomation = async function() {
+    let score = 0;
+    const detections = [];
+    
+    try {
+        const automationIndicators = [
+            { name: '__webdriver', weight: 45 },
+            { name: '__selenium', weight: 45 },
+            { name: '__driver', weight: 40 },
+            { name: '__fxdriver', weight: 45 },
+            { name: '__webdriver_func', weight: 50 },
+            { name: '__selenium_func', weight: 50 },
+            { name: '__driver_func', weight: 50 },
+            { name: '__webdriver_unwrapped', weight: 50 },
+            { name: '__fxdriver_unwrapped', weight: 50 }
+        ];
+        
+        for (const indicator of automationIndicators) {
+            if (window[indicator.name] !== undefined) {
+                score += indicator.weight;
+                detections.push(indicator.name + '_detected');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (window.callSelenium !== undefined) {
+            score += 40;
+            detections.push('callSelenium_detected');
+        }
+    } catch (e) {}
+    
+    try {
+        const keys = Object.keys(window);
+        const automationKeys = keys.filter(k => 
+            /^(?:__)?(?:selenium|webdriver|driver)/i.test(k)
+        );
+        
+        if (automationKeys.length > 0) {
+            score += Math.min(automationKeys.length * 15, 60);
+            detections.push('automation_keys_' + automationKeys.length);
+        }
+    } catch (e) {}
+    
+    try {
+        if (document.documentElement.getAttribute('webdriver') !== null) {
+            score += 50;
+            detections.push('webdriver_attribute');
+        }
+    } catch (e) {}
+    
+    try {
+        const ua = navigator.userAgent || '';
+        const automationPatterns = [
+            { pattern: /selenium|webdriver/gi, weight: 55 },
+            { pattern: /automation|bot|crawler/gi, weight: 60 },
+            { pattern: /headless.*chrome/gi, weight: 50 }
+        ];
+        
+        for (const ap of automationPatterns) {
+            if (ap.pattern.test(ua)) {
+                score += ap.weight;
+                detections.push('ua_automation_pattern');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (navigator.product === 'Gecko' && !/Firefox/i.test(ua)) {
+            score += 45;
+            detections.push('gecko_mismatch');
+        }
+    } catch (e) {}
+    
+    return { detected: score > 40, score: Math.min(score, 100), detections };
+};
+
+EnhancedEnvironmentDetector.prototype.detectStealthEvasion = async function() {
+    let score = 0;
+    const detections = [];
+    
+    try {
+        const stealthIndicators = [
+            { name: 'navigator.webdriver override', check: () => Object.getOwnPropertyDescriptor(navigator, 'webdriver')?.get !== undefined, weight: 35 },
+            { name: 'chrome.runtime override', check: () => window.chrome?.runtime !== undefined, weight: 30 },
+            { name: 'permissions override', check: () => navigator.permissions?.query !== undefined, weight: 25 },
+            { name: 'plugin override', check: () => Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'toDataURL')?.get !== undefined, weight: 40 },
+            { name: 'webgl override', check: () => HTMLCanvasElement.prototype.getContext !== undefined, weight: 35 }
+        ];
+        
+        for (const indicator of stealthIndicators) {
+            if (indicator.check()) {
+                score += indicator.weight;
+                detections.push(indicator.name);
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        const originalCanvas = HTMLCanvasElement.prototype.toDataURL;
+        const originalGetContext = HTMLCanvasElement.prototype.getContext;
+        
+        let canvasIntercepted = false;
+        let contextIntercepted = false;
+        
+        HTMLCanvasElement.prototype.toDataURL = function(...args) {
+            canvasIntercepted = true;
+            return originalCanvas.apply(this, args);
+        };
+        
+        HTMLCanvasElement.prototype.getContext = function(...args) {
+            contextIntercepted = true;
+            return originalGetContext.apply(this, args);
+        };
+        
+        if (canvasIntercepted || contextIntercepted) {
+            score += 50;
+            detections.push('canvas_intercepted');
+        }
+        
+        HTMLCanvasElement.prototype.toDataURL = originalCanvas;
+        HTMLCanvasElement.prototype.getContext = originalGetContext;
+    } catch (e) {}
+    
+    try {
+        const testCanvas = document.createElement('canvas');
+        testCanvas.width = 10;
+        testCanvas.height = 10;
+        const ctx = testCanvas.getContext('2d');
+        
+        if (ctx) {
+            ctx.fillText('test', 0, 0);
+            const data1 = testCanvas.toDataURL();
+            const data2 = testCanvas.toDataURL();
+            
+            if (data1 !== data2) {
+                score += 45;
+                detections.push('dynamic_canvas_fingerprinting');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        const originalRTCPeerConnection = RTCPeerConnection;
+        let rtcIntercepted = false;
+        
+        window.RTCPeerConnection = function(...args) {
+            rtcIntercepted = true;
+            return new originalRTCPeerConnection(...args);
+        };
+        
+        if (rtcIntercepted) {
+            score += 40;
+            detections.push('webrtc_intercepted');
+        }
+        
+        window.RTCPeerConnection = originalRTCPeerConnection;
+    } catch (e) {}
+    
+    return { detected: score > 35, score: Math.min(score, 100), detections };
+};
+
+EnhancedEnvironmentDetector.prototype.detectAdvancedEmulator = async function() {
+    let score = 0;
+    const detections = [];
+    
+    try {
+        const emulatorPatterns = [
+            { pattern: /android.*emulator/i, name: 'android_emulator_ua', weight: 55 },
+            { pattern: /genymotion/i, name: 'genymotion', weight: 60 },
+            { pattern: /bluestacks/i, name: 'bluestacks', weight: 55 },
+            { pattern: /nox.*player/i, name: 'nox_player', weight: 60 },
+            { pattern: /meMu/i, name: 'memu', weight: 60 },
+            { pattern: /LDPlayer/i, name: 'ldplayer', weight: 55 },
+            { pattern: /droid4x/i, name: 'droid4x', weight: 55 },
+            { pattern: /koplayer/i, name: 'koplayer', weight: 55 },
+            { pattern: /iPhone.*Simulator/i, name: 'ios_simulator', weight: 50 },
+            { pattern: /iPad.*Simulator/i, name: 'ios_simulator', weight: 50 },
+            { pattern: /x86_64.*android/i, name: 'android_x86_emulator', weight: 50 }
+        ];
+        
+        const ua = navigator.userAgent || '';
+        
+        for (const ep of emulatorPatterns) {
+            if (ep.pattern.test(ua)) {
+                score += ep.weight;
+                detections.push(ep.name);
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (navigator.platform) {
+            const platform = navigator.platform.toLowerCase();
+            
+            if (/linux/i.test(platform) && /android/i.test(ua)) {
+                score += 50;
+                detections.push('linux_android_mismatch');
+            }
+            
+            if (/win/i.test(platform) && /android/i.test(ua)) {
+                score += 45;
+                detections.push('windows_android_mismatch');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        const screenWidth = screen.width;
+        const screenHeight = screen.height;
+        
+        const emulatorResolutions = [
+            { w: 320, h: 480, name: 'iphone_3gs', weight: 40 },
+            { w: 375, h: 667, name: 'iphone_6', weight: 35 },
+            { w: 414, h: 896, name: 'iphone_xr', weight: 35 },
+            { w: 768, h: 1024, name: 'ipad', weight: 40 },
+            { w: 600, h: 1024, name: 'android_tablet', weight: 40 }
+        ];
+        
+        for (const res of emulatorResolutions) {
+            if (screenWidth === res.w && screenHeight === res.h) {
+                if (!/mobile|android|iphone|ipad/i.test(ua)) {
+                    score += res.weight;
+                    detections.push(res.name + '_resolution_no_mobile_ua');
+                }
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (screen.width === screen.availWidth && screen.height === screen.availHeight) {
+            if (/mobile|android/i.test(ua)) {
+                score += 40;
+                detections.push('fullscreen_mobile_emulator');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (navigator.maxTouchPoints === 0) {
+            const ua = navigator.userAgent || '';
+            if (/mobile|android|iphone|ipad/i.test(ua)) {
+                score += 50;
+                detections.push('mobile_no_touch_support');
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        if (navigator.hardwareConcurrency) {
+            if (navigator.hardwareConcurrency > 16) {
+                if (/android|iphone|ipad/i.test(ua)) {
+                    score += 45;
+                    detections.push('mobile_high_cpu_cores');
+                }
+            }
+        }
+    } catch (e) {}
+    
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        
+        if (gl) {
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+                const rendererLower = renderer.toLowerCase();
+                
+                const emulatorRenderers = [
+                    { pattern: /android|adr|goldfish/i, name: 'android_emulator_gpu', weight: 50 },
+                    { pattern: /llvmpipe|swiftshader|software/i, name: 'software_rendering', weight: 45 },
+                    { pattern: /virtual/i, name: 'virtual_gpu', weight: 40 }
+                ];
+                
+                for (const er of emulatorRenderers) {
+                    if (er.pattern.test(rendererLower)) {
+                        score += er.weight;
+                        detections.push(er.name);
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+    
+    return { detected: score > 45, score: Math.min(score, 100), detections };
+};
+
+EnhancedEnvironmentDetector.prototype.detectCanvasAdvanced = async function() {
+    let score = 0;
+    const detections = [];
+    
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 300;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+            score += 50;
+            detections.push('no_canvas_context');
+            return { detected: true, score: Math.min(score, 100), detections };
+        }
+        
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.font = '11pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
+        
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.font = '18pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
+        
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgb(255,0,255)';
+        ctx.beginPath();
+        ctx.arc(50, 50, 50, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+        
+        const dataURL = canvas.toDataURL();
+        const dataURL2 = canvas.toDataURL();
+        
+        if (dataURL !== dataURL2) {
+            score += 35;
+            detections.push('canvas_unstable');
+        }
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixelValues = imageData.data;
+        
+        let nonZeroPixels = 0;
+        for (let i = 0; i < pixelValues.length; i += 4) {
+            if (pixelValues[i] !== 0 || pixelValues[i+1] !== 0 || pixelValues[i+2] !== 0) {
+                nonZeroPixels++;
+            }
+        }
+        
+        const totalPixels = pixelValues.length / 4;
+        const nonZeroRatio = nonZeroPixels / totalPixels;
+        
+        if (nonZeroRatio < 0.1) {
+            score += 40;
+            detections.push('canvas_mostly_black');
+        }
+        
+        const entropy = this.calculateCanvasEntropy(pixelValues);
+        if (entropy < 2.0) {
+            score += 30;
+            detections.push('low_canvas_entropy');
+        }
+        
+        const hash = await this.hashCanvasDataURL(dataURL);
+        if (this.isCommonCanvasHash(hash)) {
+            score += 25;
+            detections.push('common_canvas_hash');
+        }
+    } catch (e) {
+        score += 45;
+        detections.push('canvas_error');
+    }
+    
+    try {
+        const testCanvas = document.createElement('canvas');
+        testCanvas.width = 100;
+        testCanvas.height = 100;
+        const testCtx = testCanvas.getContext('2d');
+        
+        testCtx.fillStyle = '#ff0000';
+        testCtx.fillRect(0, 0, 50, 50);
+        testCtx.fillStyle = '#0000ff';
+        testCtx.fillRect(50, 0, 50, 50);
+        
+        const imageData = testCtx.getImageData(0, 0, 100, 100).data;
+        
+        let anomalyDetected = 0;
+        for (let i = 0; i < imageData.length; i += 4) {
+            const r = imageData[i];
+            const g = imageData[i+1];
+            const b = imageData[i+2];
+            
+            if (r === 0 && g === 0 && b === 0) {
+                anomalyDetected++;
+            }
+        }
+        
+        if (anomalyDetected > imageData.length / 8) {
+            score += 45;
+            detections.push('canvas_color_anomaly');
+        }
+    } catch (e) {}
+    
+    return { detected: score > 40, score: Math.min(score, 100), detections };
+};
+
+EnhancedEnvironmentDetector.prototype.calculateCanvasEntropy = function(pixelData) {
+    const frequency = {};
+    for (let i = 0; i < pixelData.length; i++) {
+        const value = pixelData[i];
+        frequency[value] = (frequency[value] || 0) + 1;
+    }
+    
+    let entropy = 0;
+    const total = pixelData.length;
+    
+    for (const value in frequency) {
+        const p = frequency[value] / total;
+        if (p > 0) {
+            entropy -= p * Math.log2(p);
+        }
+    }
+    
+    return entropy;
+};
+
+EnhancedEnvironmentDetector.prototype.hashCanvasDataURL = async function(dataURL) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataURL);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+EnhancedEnvironmentDetector.prototype.isCommonCanvasHash = function(hash) {
+    const commonHashes = [
+        'a1b2c3d4e5f6',
+        '1234567890ab',
+        'ffffffffffff',
+        '000000000000',
+        'deadbeef1234'
+    ];
+    
+    const prefix = hash.substring(0, 12);
+    return commonHashes.some(common => prefix === common);
+};
+
+EnhancedEnvironmentDetector.prototype.detectWebGLAdvanced = async function() {
+    let score = 0;
+    const detections = [];
+    
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        
+        if (!gl) {
+            score += 50;
+            detections.push('no_webgl');
+            return { detected: true, score: Math.min(score, 100), detections };
+        }
+        
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+            const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+            const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+            
+            const rendererLower = renderer.toLowerCase();
+            
+            const softwareIndicators = [
+                'swiftshader', 'llvmpipe', 'mesa', 'software', 'emulated'
+            ];
+            
+            for (const indicator of softwareIndicators) {
+                if (rendererLower.includes(indicator)) {
+                    score += 45;
+                    detections.push('software_renderer_' + indicator);
+                }
+            }
+            
+            const vmIndicators = [
+                'vmware', 'virtualbox', 'parallels', 'qemu', 'kvm'
+            ];
+            
+            for (const indicator of vmIndicators) {
+                if (rendererLower.includes(indicator)) {
+                    score += 50;
+                    detections.push('vm_renderer_' + indicator);
+                }
+            }
+            
+            const anonymizedPatterns = ['generic', 'unknown', 'default'];
+            let anonymizedCount = 0;
+            for (const pattern of anonymizedPatterns) {
+                if (rendererLower.includes(pattern)) {
+                    anonymizedCount++;
+                }
+            }
+            
+            if (anonymizedCount >= 2) {
+                score += 35;
+                detections.push('anonymized_webgl');
+            }
+            
+            if (!vendor || !renderer) {
+                score += 30;
+                detections.push('missing_webgl_info');
+            }
+        } else {
+            score += 30;
+            detections.push('webgl_debug_blocked');
+        }
+        
+        const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (maxTexSize < 2048) {
+            score += 25;
+            detections.push('low_max_texture_size');
+        }
+        
+        const extensions = gl.getSupportedExtensions();
+        if (!extensions || extensions.length < 10) {
+            score += 20;
+            detections.push('few_webgl_extensions');
+        }
+        
+        const maxVertAttribs = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+        if (maxVertAttribs < 8) {
+            score += 20;
+            detections.push('low_vertex_attribs');
+        }
+        
+    } catch (e) {
+        score += 40;
+        detections.push('webgl_error');
+    }
+    
+    return { detected: score > 40, score: Math.min(score, 100), detections };
+};
+
+EnhancedEnvironmentDetector.prototype.collectEnhancedFingerprints = async function() {
+    const fingerprints = {};
+    
+    try {
+        fingerprints.canvasHash = await this.generateCanvasFingerprint();
+    } catch (e) {
+        fingerprints.canvasHash = '';
+    }
+    
+    try {
+        fingerprints.webglHash = await this.generateWebGLFingerprint();
+    } catch (e) {
+        fingerprints.webglHash = '';
+    }
+    
+    try {
+        fingerprints.audioHash = await this.generateAudioFingerprint();
+    } catch (e) {
+        fingerprints.audioHash = '';
+    }
+    
+    try {
+        fingerprints.fontHash = await this.generateFontFingerprint();
+    } catch (e) {
+        fingerprints.fontHash = '';
+    }
+    
+    try {
+        fingerprints.behavioralHash = this.generateBehavioralFingerprint();
+    } catch (e) {
+        fingerprints.behavioralHash = '';
+    }
+    
+    try {
+        fingerprints.timingHash = await this.generateTimingFingerprint();
+    } catch (e) {
+        fingerprints.timingHash = '';
+    }
+    
+    return fingerprints;
+};
+
+EnhancedEnvironmentDetector.prototype.generateCanvasFingerprint = async function() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 300;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return '';
+    
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(125, 1, 62, 20);
+    ctx.fillStyle = '#069';
+    ctx.font = '11pt Arial';
+    ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
+    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+    ctx.font = '18pt Arial';
+    ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
+    
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgb(255,0,255)';
+    ctx.beginPath();
+    ctx.arc(50, 50, 50, 0, Math.PI * 2, true);
+    ctx.closePath();
+    ctx.fill();
+    
+    const dataURL = canvas.toDataURL();
+    return await this.hashCanvasDataURL(dataURL);
+};
+
+EnhancedEnvironmentDetector.prototype.generateWebGLFingerprint = async function() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    if (!gl) return '';
+    
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    if (!debugInfo) return '';
+    
+    const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    
+    const combined = `${vendor}~${renderer}`;
+    return await this.hashCanvasDataURL(combined);
+};
+
+EnhancedEnvironmentDetector.prototype.generateAudioFingerprint = async function() {
+    try {
+        const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!AudioContext) return '';
+        
+        const ctx = new AudioContext(1, 44100, 44100);
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(10000, ctx.currentTime);
+        
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+        compressor.knee.setValueAtTime(40, ctx.currentTime);
+        compressor.ratio.setValueAtTime(12, ctx.currentTime);
+        compressor.attack.setValueAtTime(0, ctx.currentTime);
+        compressor.release.setValueAtTime(0.25, ctx.currentTime);
+        
+        osc.connect(compressor);
+        compressor.connect(ctx.destination);
+        osc.start(0);
+        
+        const buffer = await ctx.startRendering();
+        const channelData = buffer.getChannelData(0);
+        
+        let hash = 0;
+        for (let i = 0; i < 1000; i++) {
+            hash = ((hash << 5) - hash) + channelData[i];
+            hash = hash & hash;
+        }
+        
+        return Math.abs(hash).toString(16);
+    } catch (e) {
+        return '';
+    }
+};
+
+EnhancedEnvironmentDetector.prototype.generateFontFingerprint = async function() {
+    const baseFonts = ['monospace', 'sans-serif', 'serif'];
+    const testFonts = [
+        'Arial', 'Helvetica', 'Times New Roman', 'Courier New',
+        'Verdana', 'Georgia', 'Palatino', 'Garamond'
+    ];
+    
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden';
+    el.textContent = 'mmmmmmmmmmlli';
+    document.body.appendChild(el);
+    
+    const baseWidths = {};
+    for (const base of baseFonts) {
+        el.style.fontFamily = base;
+        baseWidths[base] = el.offsetWidth;
+    }
+    
+    const detected = [];
+    for (const font of testFonts) {
+        for (const base of baseFonts) {
+            el.style.fontFamily = `"${font}", ${base}`;
+            if (el.offsetWidth !== baseWidths[base]) {
+                detected.push(font);
+                break;
+            }
+        }
+    }
+    
+    document.body.removeChild(el);
+    
+    return detected.join(',');
+};
+
+EnhancedEnvironmentDetector.prototype.generateBehavioralFingerprint = function() {
+    const components = [];
+    
+    try {
+        components.push('touch:' + (navigator.maxTouchPoints || 0));
+    } catch (e) {}
+    
+    try {
+        components.push('pixel:' + (window.devicePixelRatio || ''));
+    } catch (e) {}
+    
+    try {
+        components.push('cpu:' + (navigator.hardwareConcurrency || ''));
+    } catch (e) {}
+    
+    try {
+        components.push('mem:' + (navigator.deviceMemory || ''));
+    } catch (e) {}
+    
+    return components.join('|');
+};
+
+EnhancedEnvironmentDetector.prototype.generateTimingFingerprint = async function() {
+    const samples = [];
+    
+    for (let i = 0; i < 5; i++) {
+        const start = performance.now();
+        await new Promise(resolve => setTimeout(resolve, 1));
+        const end = performance.now();
+        samples.push(end - start);
+    }
+    
+    const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+    const variance = samples.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / samples.length;
+    
+    return `${avg.toFixed(2)}~${variance.toFixed(2)}`;
+};
+
 if (typeof window !== 'undefined') {
     window.EnhancedEnvironmentDetector = EnhancedEnvironmentDetector;
 }

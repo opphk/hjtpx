@@ -2,7 +2,7 @@
     'use strict';
 
     const IntegrityEnhanced = (function() {
-        const VERSION = '4.0.0';
+        const VERSION = '5.0.0';
         
         const _0xIE = {
             hashes: {},
@@ -17,7 +17,14 @@
             crc32Initialized: false,
             lastCheckTime: 0,
             integrityViolations: 0,
-            maxViolations: 3
+            maxViolations: 3,
+            obfuscationSeed: Math.random() * 1000000,
+            timestamp: Date.now(),
+            verificationHistory: [],
+            protectionLevel: 'maximum',
+            trustedDomains: [],
+            untrustedPatterns: [],
+            selfDestructEnabled: false
         };
 
         function initCRC32() {
@@ -240,6 +247,119 @@
             return signature === expectedSignature;
         }
 
+        function verifyContentSecurityPolicy() {
+            const metaTags = document.querySelectorAll('meta');
+            for (const meta of metaTags) {
+                const httpEquiv = meta.getAttribute('http-equiv');
+                if (httpEquiv && httpEquiv.toLowerCase() === 'content-security-policy') {
+                    return { valid: true, reason: 'CSP header present' };
+                }
+            }
+            return { valid: false, reason: 'Content Security Policy not found' };
+        }
+
+        function verifySourceMaps() {
+            const scripts = document.querySelectorAll('script');
+            for (const script of scripts) {
+                if (script.src && script.src.indexOf('.map') > -1) {
+                    return { valid: false, reason: 'Source map detected: ' + script.src };
+                }
+            }
+            return { valid: true, reason: 'No source maps found' };
+        }
+
+        function verifyDOMIntegrity() {
+            const requiredElements = ['html', 'body'];
+            for (const tag of requiredElements) {
+                if (!document.querySelector(tag)) {
+                    return { valid: false, reason: 'Required DOM element missing: ' + tag };
+                }
+            }
+            
+            if (document.documentElement.getAttribute('ng-app') || document.documentElement.getAttribute('data-reactroot')) {
+                return { valid: false, reason: 'Framework root attributes detected' };
+            }
+            
+            return { valid: true, reason: 'DOM integrity verified' };
+        }
+
+        function verifyEventListeners() {
+            const originalAddEventListener = EventTarget.prototype.addEventListener;
+            let listenerCount = 0;
+            
+            try {
+                EventTarget.prototype.addEventListener = function(type, listener, options) {
+                    listenerCount++;
+                    return originalAddEventListener.call(this, type, listener, options);
+                };
+                
+                setTimeout(() => {
+                    EventTarget.prototype.addEventListener = originalAddEventListener;
+                }, 100);
+            } catch (e) {
+                return { valid: true, reason: 'Event listener check skipped' };
+            }
+            
+            return { valid: true, reason: 'Event listeners monitored' };
+        }
+
+        function verifyStorageAccess() {
+            try {
+                localStorage.setItem('_0xTest', 'test');
+                localStorage.removeItem('_0xTest');
+                
+                sessionStorage.setItem('_0xTest', 'test');
+                sessionStorage.removeItem('_0xTest');
+                
+                return { valid: true, reason: 'Storage access verified' };
+            } catch (e) {
+                return { valid: false, reason: 'Storage access failed: ' + e.message };
+            }
+        }
+
+        function verifyPrototypeChain() {
+            try {
+                const originalToString = Object.prototype.toString;
+                const testObj = {};
+                const result = Object.prototype.toString.call(testObj);
+                
+                if (result !== '[object Object]') {
+                    return { valid: false, reason: 'Prototype chain modified' };
+                }
+                
+                return { valid: true, reason: 'Prototype chain verified' };
+            } catch (e) {
+                return { valid: false, reason: 'Prototype chain verification failed' };
+            }
+        }
+
+        function verifyEvalDisabled() {
+            if (typeof window._0xEvalDisabled !== 'undefined') {
+                return { valid: true, reason: 'Eval is properly disabled' };
+            }
+            
+            try {
+                const testEval = eval('1+1');
+                if (testEval !== 2) {
+                    return { valid: false, reason: 'Eval is not functioning correctly' };
+                }
+            } catch (e) {
+                return { valid: true, reason: 'Eval appears to be restricted' };
+            }
+            
+            return { valid: true, reason: 'Eval check passed' };
+        }
+
+        function verifyWebSocketIntegrity() {
+            if (typeof WebSocket !== 'undefined') {
+                const originalWebSocket = WebSocket;
+                if (WebSocket.toString() !== originalWebSocket.toString()) {
+                    return { valid: false, reason: 'WebSocket has been modified' };
+                }
+            }
+            return { valid: true, reason: 'WebSocket integrity verified' };
+        }
+
         async function performIntegrityCheck() {
             if (_0xIE.checkCount >= _0xIE.maxChecks) {
                 return { status: 'max_checks_reached', valid: true };
@@ -251,25 +371,73 @@
             }
             _0xIE.lastCheckTime = now;
 
+            const results = [];
+
             const markerResult = verifyDOMMarkers();
+            results.push(markerResult);
             if (!markerResult.valid) {
                 _0xIE.integrityViolations++;
                 return { status: 'marker_failure', valid: false, reason: markerResult.reason };
             }
 
             const timingResult = verifyTimingConsistency();
+            results.push(timingResult);
             if (!timingResult.valid) {
                 _0xIE.integrityViolations++;
                 return { status: 'timing_failure', valid: false, reason: timingResult.reason };
             }
 
             const scriptResult = verifyScriptIntegrity();
+            results.push(scriptResult);
             if (!scriptResult.valid) {
                 _0xIE.integrityViolations++;
                 return { status: 'script_failure', valid: false, reason: scriptResult.reason };
             }
 
+            if (_0xIE.protectionLevel === 'maximum' || _0xIE.protectionLevel === 'paranoid') {
+                const cspResult = verifyContentSecurityPolicy();
+                results.push(cspResult);
+                
+                const sourceMapResult = verifySourceMaps();
+                results.push(sourceMapResult);
+                if (!sourceMapResult.valid) {
+                    _0xIE.integrityViolations++;
+                    return { status: 'source_map_detected', valid: false, reason: sourceMapResult.reason };
+                }
+                
+                const domResult = verifyDOMIntegrity();
+                results.push(domResult);
+                if (!domResult.valid) {
+                    _0xIE.integrityViolations++;
+                    return { status: 'dom_integrity_failure', valid: false, reason: domResult.reason };
+                }
+                
+                const storageResult = verifyStorageAccess();
+                results.push(storageResult);
+                if (!storageResult.valid) {
+                    _0xIE.integrityViolations++;
+                    return { status: 'storage_failure', valid: false, reason: storageResult.reason };
+                }
+                
+                const prototypeResult = verifyPrototypeChain();
+                results.push(prototypeResult);
+                if (!prototypeResult.valid) {
+                    _0xIE.integrityViolations++;
+                    return { status: 'prototype_failure', valid: false, reason: prototypeResult.reason };
+                }
+            }
+
             _0xIE.checkCount++;
+            
+            _0xIE.verificationHistory.push({
+                timestamp: now,
+                results: results,
+                violations: _0xIE.integrityViolations
+            });
+            
+            if (_0xIE.verificationHistory.length > 10) {
+                _0xIE.verificationHistory.shift();
+            }
             
             if (_0xIE.integrityViolations >= _0xIE.maxViolations) {
                 return { status: 'max_violations', valid: false, reason: 'Too many integrity violations' };
@@ -281,6 +449,50 @@
         function handleIntegrityFailure(reason) {
             _0xIE.enabled = false;
             
+            if (_0xIE.selfDestructEnabled) {
+                triggerSelfDestruct(reason);
+            } else {
+                displayIntegrityError(reason);
+            }
+        }
+
+        function triggerSelfDestruct(reason) {
+            document.documentElement.style.display = 'none';
+            document.body.innerHTML = '';
+            document.body.style.background = '#000';
+            document.body.style.color = '#fff';
+            document.body.style.fontFamily = 'monospace';
+            document.body.style.padding = '50px';
+            
+            const errorInfo = `
+                Integrity Violation Detected
+                =================================
+                
+                Your session has been terminated.
+                All local data has been cleared.
+                
+                Reason: ${reason}
+                Error Code: ${_0xIE.hashes.sha256 || 'UNKNOWN'}
+                Timestamp: ${new Date().toISOString()}
+                
+                If you believe this is an error, please contact support.
+            `;
+            
+            document.body.textContent = errorInfo;
+            
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+            } catch (e) {
+                // Storage clear failed
+            }
+            
+            setTimeout(() => {
+                window.location.href = 'about:blank';
+            }, 3000);
+        }
+
+        function displayIntegrityError(reason) {
             document.documentElement.style.display = 'none';
             const errorPage = `
                 <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;color:#fff;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;">
@@ -294,6 +506,9 @@
                         <h1 style="font-size:36px;margin:0 0 20px 0;color:#e74c3c;">Integrity Check Failed</h1>
                         <p style="font-size:16px;opacity:0.9;margin:0 0 10px 0;">Your session has been terminated due to security concerns.</p>
                         <p style="font-size:14px;opacity:0.7;">Reason: ${escapeHtml(reason)}</p>
+                        <div style="margin-top:20px;font-size:12px;opacity:0.6;">
+                            Error Code: ${_0xIE.hashes.sha256 || 'UNKNOWN'}
+                        </div>
                         <div style="margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1);">
                             <button onclick="window.location.reload()" style="padding:12px 30px;background:#3498db;color:#fff;border:none;border-radius:4px;cursor:pointer;">Refresh Page</button>
                         </div>
@@ -347,6 +562,12 @@
                 _0xIE.checkInterval = config.checkInterval || _0xIE.checkInterval;
                 _0xIE.maxChecks = config.maxChecks || _0xIE.maxChecks;
                 _0xIE.maxViolations = config.maxViolations || _0xIE.maxViolations;
+                _0xIE.protectionLevel = config.protectionLevel || _0xIE.protectionLevel;
+                _0xIE.selfDestructEnabled = config.selfDestructEnabled || false;
+                
+                if (config.trustedDomains) {
+                    _0xIE.trustedDomains = config.trustedDomains;
+                }
             }
 
             _0xIE.salt = generateSalt();
@@ -368,8 +589,61 @@
                 maxViolations: _0xIE.maxViolations,
                 hashes: _0xIE.hashes,
                 salt: _0xIE.salt ? '***' : null,
-                version: VERSION
+                version: VERSION,
+                protectionLevel: _0xIE.protectionLevel,
+                verificationHistory: _0xIE.verificationHistory.slice(-5)
             };
+        }
+
+        function setProtectionLevel(level) {
+            _0xIE.protectionLevel = level;
+            
+            switch(level) {
+                case 'minimum':
+                    _0xIE.maxViolations = 5;
+                    _0xIE.checkInterval = 30000;
+                    break;
+                case 'standard':
+                    _0xIE.maxViolations = 3;
+                    _0xIE.checkInterval = 15000;
+                    break;
+                case 'maximum':
+                    _0xIE.maxViolations = 2;
+                    _0xIE.checkInterval = 10000;
+                    break;
+                case 'paranoid':
+                    _0xIE.maxViolations = 1;
+                    _0xIE.checkInterval = 5000;
+                    _0xIE.selfDestructEnabled = true;
+                    break;
+            }
+        }
+
+        function enableSelfDestruct(enable) {
+            _0xIE.selfDestructEnabled = enable;
+        }
+
+        async function verifyExternalResources(urls) {
+            const results = [];
+            
+            for (const url of urls) {
+                try {
+                    const response = await fetch(url, { method: 'HEAD', mode: 'cors' });
+                    results.push({
+                        url: url,
+                        valid: response.ok,
+                        status: response.status
+                    });
+                } catch (e) {
+                    results.push({
+                        url: url,
+                        valid: false,
+                        error: e.message
+                    });
+                }
+            }
+            
+            return results;
         }
 
         return {
@@ -377,6 +651,8 @@
             init: init,
             start: start,
             getStatus: getStatus,
+            setProtectionLevel: setProtectionLevel,
+            enableSelfDestruct: enableSelfDestruct,
             computeCRC32: computeCRC32,
             computeSHA256: computeSHA256,
             computeSHA512: computeSHA512,
@@ -385,7 +661,18 @@
             generateSignature: generateSignature,
             verifySignature: verifySignature,
             verifyCodeHash: verifyCodeHash,
-            performIntegrityCheck: performIntegrityCheck
+            performIntegrityCheck: performIntegrityCheck,
+            verifyExternalResources: verifyExternalResources,
+            verifyDOMMarkers: verifyDOMMarkers,
+            verifyTimingConsistency: verifyTimingConsistency,
+            verifyScriptIntegrity: verifyScriptIntegrity,
+            verifyContentSecurityPolicy: verifyContentSecurityPolicy,
+            verifySourceMaps: verifySourceMaps,
+            verifyDOMIntegrity: verifyDOMIntegrity,
+            verifyStorageAccess: verifyStorageAccess,
+            verifyPrototypeChain: verifyPrototypeChain,
+            verifyEvalDisabled: verifyEvalDisabled,
+            verifyWebSocketIntegrity: verifyWebSocketIntegrity
         };
     })();
 

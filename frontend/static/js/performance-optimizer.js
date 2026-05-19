@@ -1,6 +1,216 @@
 const FrontendPerformanceOptimizer = (function() {
     'use strict';
 
+    class CodeSplitter {
+        constructor() {
+            this.moduleCache = new Map();
+            this.loadingModules = new Set();
+            this.dependencyGraph = new Map();
+        }
+
+        registerModule(name, dependencies = [], factory) {
+            this.dependencyGraph.set(name, {
+                dependencies,
+                factory,
+                instance: null,
+                loaded: false
+            });
+        }
+
+        async loadModule(name) {
+            if (this.moduleCache.has(name)) {
+                const module = this.moduleCache.get(name);
+                return module.loaded ? module.instance : this.initializeModule(name);
+            }
+
+            if (this.loadingModules.has(name)) {
+                return new Promise((resolve) => {
+                    const checkLoaded = setInterval(() => {
+                        if (this.moduleCache.has(name) && this.moduleCache.get(name).loaded) {
+                            clearInterval(checkLoaded);
+                            resolve(this.moduleCache.get(name).instance);
+                        }
+                    }, 10);
+                });
+            }
+
+            this.loadingModules.add(name);
+
+            try {
+                const moduleInfo = this.dependencyGraph.get(name);
+                if (!moduleInfo) {
+                    throw new Error(`Module ${name} not found`);
+                }
+
+                for (const dep of moduleInfo.dependencies) {
+                    if (!this.moduleCache.has(dep) || !this.moduleCache.get(dep).loaded) {
+                        await this.loadModule(dep);
+                    }
+                }
+
+                const instance = await this.initializeModule(name);
+                this.loadingModules.delete(name);
+                return instance;
+            } catch (error) {
+                this.loadingModules.delete(name);
+                throw error;
+            }
+        }
+
+        async initializeModule(name) {
+            const moduleInfo = this.dependencyGraph.get(name);
+            if (!moduleInfo) {
+                throw new Error(`Module ${name} not found`);
+            }
+
+            const deps = moduleInfo.dependencies.map(dep => {
+                return this.moduleCache.get(dep)?.instance;
+            });
+
+            const instance = await moduleInfo.factory(...deps);
+            this.moduleCache.set(name, {
+                ...moduleInfo,
+                instance,
+                loaded: true
+            });
+
+            return instance;
+        }
+
+        preloadModule(name) {
+            if (!this.loadingModules.has(name)) {
+                this.loadModule(name).catch(err => {
+                    console.warn(`Failed to preload module ${name}:`, err);
+                });
+            }
+        }
+
+        isLoaded(name) {
+            return this.moduleCache.has(name) && this.moduleCache.get(name).loaded;
+        }
+
+        getModule(name) {
+            return this.moduleCache.get(name)?.instance;
+        }
+
+        clearCache() {
+            this.moduleCache.clear();
+            this.dependencyGraph.forEach((module, name) => {
+                module.loaded = false;
+                module.instance = null;
+            });
+        }
+    }
+
+    class ScriptLoader {
+        constructor() {
+            this.loadedScripts = new Map();
+            this.loadingScripts = new Map();
+            this.scriptPromises = new Map();
+        }
+
+        loadScript(src, options = {}) {
+            const {
+                async = true,
+                defer = true,
+                crossOrigin = 'anonymous',
+                integrity = '',
+                module = false
+            } = options;
+
+            if (this.loadedScripts.has(src)) {
+                return Promise.resolve(this.loadedScripts.get(src));
+            }
+
+            if (this.scriptPromises.has(src)) {
+                return this.scriptPromises.get(src);
+            }
+
+            const promise = new Promise((resolve, reject) => {
+                if (this.loadingScripts.has(src)) {
+                    resolve(this.loadingScripts.get(src));
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = async;
+                script.defer = defer;
+
+                if (crossOrigin) {
+                    script.crossOrigin = crossOrigin;
+                }
+
+                if (integrity) {
+                    script.integrity = integrity;
+                }
+
+                if (module) {
+                    script.type = 'module';
+                }
+
+                script.onload = () => {
+                    this.loadedScripts.set(src, script);
+                    this.loadingScripts.delete(src);
+                    resolve(script);
+                };
+
+                script.onerror = () => {
+                    this.loadingScripts.delete(src);
+                    reject(new Error(`Failed to load script: ${src}`));
+                };
+
+                this.loadingScripts.set(src, script);
+                document.head.appendChild(script);
+            });
+
+            this.scriptPromises.set(src, promise);
+            return promise;
+        }
+
+        preloadScript(src, options = {}) {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'script';
+            link.href = src;
+
+            if (options.crossOrigin) {
+                link.crossOrigin = options.crossOrigin;
+            }
+
+            document.head.appendChild(link);
+        }
+
+        loadScriptsInParallel(scripts, maxConcurrent = 4) {
+            const queue = [...scripts];
+            const results = [];
+            let index = 0;
+
+            const loadNext = async () => {
+                if (queue.length === 0) return;
+
+                const src = queue.shift();
+                const result = await this.loadScript(src, scripts[index]?.options || {});
+                results.push(result);
+                index++;
+
+                if (queue.length > 0) {
+                    await loadNext();
+                }
+            };
+
+            const workers = Array(Math.min(maxConcurrent, scripts.length))
+                .fill(null)
+                .map(() => loadNext());
+
+            return Promise.all(workers).then(() => results);
+        }
+
+        isLoaded(src) {
+            return this.loadedScripts.has(src);
+        }
+    }
+
     class PerformanceOptimizer {
         constructor() {
             this.metrics = {
@@ -10,7 +220,9 @@ const FrontendPerformanceOptimizer = (function() {
                 domContentLoaded: 0,
                 loadComplete: 0,
                 resourceLoadTimes: new Map(),
-                apiCallTimes: new Map()
+                apiCallTimes: new Map(),
+                interactionTimes: [],
+                memoryUsage: []
             };
 
             this.config = {
@@ -22,10 +234,14 @@ const FrontendPerformanceOptimizer = (function() {
                 prefetchThreshold: 0.8,
                 lazyLoadThreshold: 0.2,
                 criticalCssInline: true,
-                scriptDefer: true
+                scriptDefer: true,
+                maxConcurrentScripts: 4,
+                enableModulePreload: true
             };
 
             this.observers = [];
+            this.codeSplitter = new CodeSplitter();
+            this.scriptLoader = new ScriptLoader();
             this.init();
         }
 
@@ -39,6 +255,8 @@ const FrontendPerformanceOptimizer = (function() {
             this.optimizeCriticalPath();
             this.setupServiceWorker();
             this.recordInitialMetrics();
+            this.setupInteractionTracking();
+            this.setupMemoryMonitoring();
 
             document.addEventListener('DOMContentLoaded', () => {
                 this.metrics.domContentLoaded = performance.now();
@@ -412,6 +630,67 @@ const FrontendPerformanceOptimizer = (function() {
             return Promise.resolve(0);
         }
 
+        setupInteractionTracking() {
+            const interactionTypes = ['click', 'keypress', 'touchstart', 'scroll'];
+
+            interactionTypes.forEach(type => {
+                document.addEventListener(type, () => {
+                    this.metrics.interactionTimes.push({
+                        type,
+                        time: performance.now()
+                    });
+                }, { passive: true });
+            });
+
+            if ('EventTiming' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        for (const entry of list.getEntries()) {
+                            if (entry.interactionId) {
+                                this.metrics.interactionTimes.push({
+                                    type: entry.name,
+                                    duration: entry.duration,
+                                    time: entry.startTime
+                                });
+                            }
+                        }
+                    });
+                    observer.observe({ entryTypes: ['event'] });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('Event timing not supported:', e);
+                }
+            }
+        }
+
+        setupMemoryMonitoring() {
+            if (performance.memory) {
+                setInterval(() => {
+                    this.metrics.memoryUsage.push({
+                        usedJSHeapSize: performance.memory.usedJSHeapSize,
+                        totalJSHeapSize: performance.memory.totalJSHeapSize,
+                        jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+                        timestamp: Date.now()
+                    });
+
+                    if (this.metrics.memoryUsage.length > 100) {
+                        this.metrics.memoryUsage.shift();
+                    }
+                }, 5000);
+            }
+        }
+
+        getMemoryUsage() {
+            if (performance.memory) {
+                return {
+                    used: (performance.memory.usedJSHeapSize / 1048576).toFixed(2) + ' MB',
+                    total: (performance.memory.totalJSHeapSize / 1048576).toFixed(2) + ' MB',
+                    limit: (performance.memory.jsHeapSizeLimit / 1048576).toFixed(2) + ' MB'
+                };
+            }
+            return null;
+        }
+
         reportPerformance() {
             const metrics = this.getMetrics();
             console.group('🚀 Performance Report');
@@ -420,6 +699,13 @@ const FrontendPerformanceOptimizer = (function() {
             console.log('DOM Content Loaded:', metrics.domContentLoaded.toFixed(2) + 'ms');
             console.log('Load Complete:', metrics.loadComplete.toFixed(2) + 'ms');
             console.log('Total Load Time:', this.getLoadTime().toFixed(2) + 'ms');
+
+            const memoryUsage = this.getMemoryUsage();
+            if (memoryUsage) {
+                console.log('Memory Usage:', memoryUsage);
+            }
+
+            console.log('Interaction Count:', metrics.interactionTimes.length);
             console.groupEnd();
 
             if (typeof fetch !== 'undefined') {
@@ -429,7 +715,8 @@ const FrontendPerformanceOptimizer = (function() {
                     body: JSON.stringify({
                         metrics: metrics,
                         timestamp: Date.now(),
-                        url: window.location.href
+                        url: window.location.href,
+                        memoryUsage: memoryUsage
                     })
                 }).catch(() => {});
             }
@@ -530,6 +817,102 @@ const FrontendPerformanceOptimizer = (function() {
         }
     }
 
+    class CSSOptimizer {
+        constructor() {
+            this.loadedStylesheets = new Set();
+        }
+
+        async loadStylesheet(href, options = {}) {
+            const { media = 'all', preload = true } = options;
+
+            if (this.loadedStylesheets.has(href)) {
+                return Promise.resolve();
+            }
+
+            if (preload) {
+                const preloadLink = document.createElement('link');
+                preloadLink.rel = 'preload';
+                preloadLink.as = 'style';
+                preloadLink.href = href;
+                document.head.appendChild(preloadLink);
+            }
+
+            return new Promise((resolve, reject) => {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.media = media;
+
+                link.onload = () => {
+                    this.loadedStylesheets.add(href);
+                    resolve(link);
+                };
+
+                link.onerror = () => reject(new Error(`Failed to load stylesheet: ${href}`));
+
+                document.head.appendChild(link);
+            });
+        }
+
+        async loadStylesheetsInParallel(stylesheets, maxConcurrent = 3) {
+            const results = [];
+            const batches = [];
+
+            for (let i = 0; i < stylesheets.length; i += maxConcurrent) {
+                batches.push(stylesheets.slice(i, i + maxConcurrent));
+            }
+
+            for (const batch of batches) {
+                const batchResults = await Promise.all(
+                    batch.map(stylesheet => this.loadStylesheet(stylesheet.href, stylesheet.options || {}))
+                );
+                results.push(...batchResults);
+            }
+
+            return results;
+        }
+
+        inlineCriticalCSS(css, id = 'critical-css') {
+            let style = document.getElementById(id);
+
+            if (!style) {
+                style = document.createElement('style');
+                style.id = id;
+                document.head.insertBefore(style, document.head.firstChild);
+            }
+
+            style.textContent = css;
+        }
+
+        deferStylesheet(href) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.media = 'print';
+            link.onload = () => {
+                link.media = 'all';
+            };
+            document.head.appendChild(link);
+        }
+
+        async loadStylesheetOnIdle(href, options = {}) {
+            if ('requestIdleCallback' in window) {
+                return new Promise((resolve, reject) => {
+                    requestIdleCallback(async () => {
+                        try {
+                            await this.loadStylesheet(href, options);
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }, { timeout: 3000 });
+                });
+            } else {
+                return this.loadStylesheet(href, options);
+            }
+        }
+    }
+
     class LazyLoader {
         constructor() {
             this.observer = null;
@@ -593,11 +976,17 @@ const FrontendPerformanceOptimizer = (function() {
     let optimizer = null;
     let resourceOptimizer = null;
     let lazyLoader = null;
+    let cssOptimizer = null;
+    let codeSplitter = null;
+    let scriptLoader = null;
 
     function init(options = {}) {
         optimizer = new PerformanceOptimizer();
         resourceOptimizer = new ResourceOptimizer();
         lazyLoader = new LazyLoader();
+        cssOptimizer = new CSSOptimizer();
+        codeSplitter = new CodeSplitter();
+        scriptLoader = new ScriptLoader();
         lazyLoader.init();
 
         if (options.autoReport) {
@@ -609,7 +998,10 @@ const FrontendPerformanceOptimizer = (function() {
         return {
             optimizer,
             resourceOptimizer,
-            lazyLoader
+            lazyLoader,
+            cssOptimizer,
+            codeSplitter,
+            scriptLoader
         };
     }
 
@@ -618,9 +1010,15 @@ const FrontendPerformanceOptimizer = (function() {
         getOptimizer: () => optimizer,
         getResourceOptimizer: () => resourceOptimizer,
         getLazyLoader: () => lazyLoader,
+        getCSSOptimizer: () => cssOptimizer,
+        getCodeSplitter: () => codeSplitter,
+        getScriptLoader: () => scriptLoader,
         PerformanceOptimizer,
         ResourceOptimizer,
-        LazyLoader
+        LazyLoader,
+        CSSOptimizer,
+        CodeSplitter,
+        ScriptLoader
     };
 })();
 

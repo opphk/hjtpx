@@ -5583,4 +5583,297 @@ func GenerateAdvancedCodeProtectionFinal(code string, config ObfuscatorConfig) s
 	return result.String()
 }
 
+func (o *Obfuscator) EnhanceControlFlowObfuscation(code string) string {
+	result := code
+
+	result = o.addUnpredictableBranches(result)
+	result = o.addFakeControlFlow(result)
+	result = o.addGotoBasedControlFlow(result)
+	result = o.addStateMachineObfuscation(result)
+	result = o.addIndirectControlTransfer(result)
+
+	return result
+}
+
+func (o *Obfuscator) addUnpredictableBranches(code string) string {
+	branchCount := 3 + o.functionCount%5
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString(fmt.Sprintf("var _0xUB=%d;\n", branchCount))
+	result.WriteString("var _0xStates=[];\n")
+	result.WriteString("for(var _0xI=0;_0xI<_0xUB;_0xI++){\n")
+	result.WriteString(fmt.Sprintf("_0xStates.push(%s);\n", o.generateRandomIntExpr()))
+	result.WriteString("}\n")
+	result.WriteString("var _0xR=Math.random()*_0xUB|0;\n")
+	result.WriteString("switch(_0xR){\n")
+
+	for i := 0; i < branchCount; i++ {
+		result.WriteString(fmt.Sprintf("case %d:\n", i))
+		result.WriteString(fmt.Sprintf("var _0xF%d=function(){%s};\n", i, o.generateDeadCode()))
+		result.WriteString("break;\n")
+	}
+
+	result.WriteString("}\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addFakeControlFlow(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xFC=Math.random();\n")
+	result.WriteString("if(_0xFC>0.99){\n")
+	result.WriteString(o.generateAdvancedDeadCode())
+	result.WriteString("}else if(_0xFC>0.98){\n")
+	result.WriteString(o.generateAdvancedDeadCode())
+	result.WriteString("}\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addGotoBasedControlFlow(code string) string {
+	labelCount := 2 + o.functionCount%4
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	for i := 0; i < labelCount; i++ {
+		result.WriteString(fmt.Sprintf("var _0xGotoLabel%d=function(){\n", i))
+		result.WriteString(fmt.Sprintf("var _0xTarget%d=%d;\n", i, (i+1)%labelCount))
+		result.WriteString("return _0xTarget" + fmt.Sprintf("%d", (i+1)%labelCount) + ";\n")
+		result.WriteString("};\n")
+	}
+
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addStateMachineObfuscation(code string) string {
+	stateCount := 4 + o.functionCount%3
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString(fmt.Sprintf("var _0xSM=%d;\n", stateCount))
+	result.WriteString("var _0xCurrentState=0;\n")
+	result.WriteString("var _0xTransitions=[];\n")
+
+	for i := 0; i < stateCount; i++ {
+		nextState := (i + 1) % stateCount
+		result.WriteString(fmt.Sprintf("_0xTransitions[%d]=function(){\n", i))
+		result.WriteString(fmt.Sprintf("_0xCurrentState=%d;\n", nextState))
+		result.WriteString("return true;\n")
+		result.WriteString("};\n")
+	}
+
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addIndirectControlTransfer(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xICT=[\n")
+
+	for i := 0; i < 5; i++ {
+		result.WriteString(fmt.Sprintf("function(){return %s;}", o.generateRandomIntExpr()))
+		if i < 4 {
+			result.WriteString(",\n")
+		}
+	}
+
+	result.WriteString("];\n")
+	result.WriteString("var _0xICTIdx=Math.random()*_0xICT.length|0;\n")
+	result.WriteString("_0xICT[_0xICTIdx]();\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) GenerateAdvancedDeadCode() string {
+	deadCodeTypes := []string{
+		"var _0xDeadVar=Math.random()>0.5?true:false;",
+		"if(typeof window==='undefined'){console.log('');}",
+		"var _0xDeadFunc=function(){return false;}();",
+		"(function(){var _0xI=0;while(_0xI<10){_0xI++;}})();",
+	}
+
+	idx := o.functionCount % len(deadCodeTypes)
+	return deadCodeTypes[idx]
+}
+
+func (o *Obfuscator) AddAdvancedControlFlowProtection(code string) string {
+	result := code
+
+	if o.config.EnableControlFlowFlattening {
+		result = o.EnhanceControlFlowObfuscation(result)
+	}
+
+	if o.config.EnableDeadCodeInjection {
+		result = o.addAdvancedDeadCodeInjection(result)
+	}
+
+	if o.config.EnableLoopObfuscation {
+		result = o.addLoopObfuscation(result)
+	}
+
+	return result
+}
+
+func (o *Obfuscator) addAdvancedDeadCodeInjection(code string) string {
+	injectionCount := 2 + o.functionCount%3
+	var result strings.Builder
+
+	for i := 0; i < injectionCount; i++ {
+		result.WriteString(o.GenerateAdvancedDeadCode())
+	}
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addLoopObfuscation(code string) string {
+	loopPatterns := []string{
+		"for(var _0xI=0;_0xI<10;_0xI++){if(_0xI===9){break;}}",
+		"while(true){var _0xBreak=false;if(_0xBreak){break;} _0xBreak=true;}",
+		"do{var _0xDoVar=0;}while(_0xDoVar<1);",
+	}
+
+	idx := o.functionCount % len(loopPatterns)
+	return loopPatterns[idx] + code
+}
+
+func (o *Obfuscator) ObfuscateControlFlowAdvanced(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("'use strict';\n")
+	result.WriteString("var _0xCF={};\n")
+
+	result.WriteString("_0xCF.flatten=function(_0xC){\n")
+	result.WriteString("var _0xR=[];\n")
+	result.WriteString("var _0xS=0;\n")
+	result.WriteString("while(_0xS<_0xC.length){\n")
+	result.WriteString("_0xR.push(_0xC.charCodeAt(_0xS)^(_0xS%255));\n")
+	result.WriteString("_0xS++;\n")
+	result.WriteString("}\n")
+	result.WriteString("return _0xR.join(',');\n")
+	result.WriteString("};\n")
+
+	result.WriteString("_0xCF.unflatten=function(_0xD){\n")
+	result.WriteString("var _0xR='';\n")
+	result.WriteString("var _0xP=_0xD.split(',');\n")
+	result.WriteString("for(var _0xI=0;_0xI<_0xP.length;_0xI++){\n")
+	result.WriteString("_0xR+=String.fromCharCode(_0xP[_0xI]^(_0xI%255));\n")
+	result.WriteString("}\n")
+	result.WriteString("return _0xR;\n")
+	result.WriteString("};\n")
+
+	result.WriteString("window._0xCF=_0xCF;\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) AddUnpredictableObfuscation(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xUP=Math.random();\n")
+	result.WriteString("if(_0xUP>0.999){\n")
+	result.WriteString(o.GenerateAdvancedDeadCode())
+	result.WriteString("}else if(_0xUP>0.998){\n")
+	result.WriteString(o.GenerateAdvancedDeadCode())
+	result.WriteString("}\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) EnhanceCodeStructureProtection(code string) string {
+	result := code
+
+	result = o.addCodeStructureObfuscation(result)
+	result = o.addFunctionPointerObfuscation(result)
+	result = o.addDynamicCodeGeneration(result)
+
+	return result
+}
+
+func (o *Obfuscator) addCodeStructureObfuscation(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xCS={};\n")
+	result.WriteString("_0xCS.obfuscate=function(_0xS){\n")
+	result.WriteString("return _0xS.split('').reverse().join('');\n")
+	result.WriteString("};\n")
+	result.WriteString("_0xCS.deobfuscate=function(_0xS){\n")
+	result.WriteString("return _0xS.split('').reverse().join('');\n")
+	result.WriteString("};\n")
+	result.WriteString("window._0xCS=_0xCS;\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addFunctionPointerObfuscation(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xFP=[];\n")
+
+	for i := 0; i < 3; i++ {
+		result.WriteString(fmt.Sprintf("_0xFP[%d]=function(){%s};\n", i, o.generateAdvancedDeadCode()))
+	}
+
+	result.WriteString("window._0xFP=_0xFP;\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) addDynamicCodeGeneration(code string) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString("var _0xDCG=function(_0xC){\n")
+	result.WriteString("var _0xF=new Function(_0xC);\n")
+	result.WriteString("return _0xF();\n")
+	result.WriteString("};\n")
+	result.WriteString("window._0xDCG=_0xDCG;\n")
+	result.WriteString("})();\n")
+
+	return result.String() + code
+}
+
+func (o *Obfuscator) GenerateAdvancedObfuscationCode(level int) string {
+	var result strings.Builder
+
+	result.WriteString("(function(){\n")
+	result.WriteString(fmt.Sprintf("var _0xLevel=%d;\n", level))
+
+	switch level {
+	case 1:
+		result.WriteString("var _0xF=function(){return true;};\n")
+	case 2:
+		result.WriteString("var _0xF=function(){return Math.random()>0.5;};\n")
+		result.WriteString("if(_0xF()){console.log('');}\n")
+	case 3:
+		result.WriteString(o.AddUnpredictableObfuscation(""))
+	case 4:
+		result.WriteString(o.EnhanceControlFlowObfuscation(""))
+	default:
+		result.WriteString("var _0xF=function(){return false;};\n")
+	}
+
+	result.WriteString("})();\n")
+
+	return result.String()
+}
+
 

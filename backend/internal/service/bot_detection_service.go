@@ -866,3 +866,706 @@ func (s *EnhancedBotDetectionService) DetectAutomatedScriptPattern(ip string) (b
 
 	return score >= 60, math.Min(score, 100)
 }
+
+type AIBotDetectionService struct {
+	*EnhancedBotDetectionService
+	mlModel           *BotMLModel
+	featureExtractor  *BotFeatureExtractor
+	trainingData      []BotTrainingSample
+	modelVersion      string
+	lastUpdateTime    time.Time
+	updateInterval    time.Duration
+}
+
+type BotMLModel struct {
+	weights       map[string]float64
+	bias          float64
+	featureNames  []string
+	modelType     string
+	trainingEpochs int
+	learningRate  float64
+}
+
+type BotTrainingSample struct {
+	Features      map[string]float64
+	Label         bool
+	BotType       string
+	Severity      string
+	CollectionTime time.Time
+}
+
+type BotFeatureExtractor struct {
+	featureWeights map[string]float64
+	normalizers    map[string]float64
+	windowSize     int
+}
+
+type BotDetectionFeatures struct {
+	TimingFeatures     TimingFeatureSet
+	BehavioralFeatures BehavioralFeatureSet
+	EnvironmentalFeatures EnvironmentalFeatureSet
+	NetworkFeatures    NetworkFeatureSet
+}
+
+type TimingFeatureSet struct {
+	AvgRequestInterval   float64
+	IntervalVariance     float64
+	MaxInterval          float64
+	MinInterval          float64
+	RequestRate          float64
+	TimingEntropy        float64
+	IsPeriodic           bool
+}
+
+type BehavioralFeatureSet struct {
+	NavigationDiversity  float64
+	ClickPatternScore    float64
+	MouseMovementEntropy float64
+	KeystrokeDynamics    float64
+	SessionLength        int
+	PageViewDistribution map[string]int
+}
+
+type EnvironmentalFeatureSet struct {
+	CanvasEntropy       float64
+	WebGLConsistency    float64
+	AudioFingerprint    string
+	FontDiversity       float64
+	PluginCount         int
+	ScreenResolution    string
+	TimezoneConsistency bool
+}
+
+type NetworkFeatureSet struct {
+	IPReputationScore   float64
+	ASNType             string
+	RequestOrigin       string
+	HeaderCompleteness  float64
+	ProtocolVersion     string
+}
+
+func NewAIBotDetectionService() *AIBotDetectionService {
+	service := &AIBotDetectionService{
+		EnhancedBotDetectionService: NewEnhancedBotDetectionService(),
+		mlModel:                   NewBotMLModel(),
+		featureExtractor:           NewBotFeatureExtractor(),
+		trainingData:               []BotTrainingSample{},
+		modelVersion:               "v3.0",
+		lastUpdateTime:             time.Now(),
+		updateInterval:             24 * time.Hour,
+	}
+	service.initializeMLModel()
+	return service
+}
+
+func NewBotMLModel() *BotMLModel {
+	return &BotMLModel{
+		weights:        make(map[string]float64),
+		bias:           0.5,
+		featureNames:   []string{},
+		modelType:      "logistic_regression",
+		trainingEpochs: 100,
+		learningRate:   0.01,
+	}
+}
+
+func NewBotFeatureExtractor() *BotFeatureExtractor {
+	return &BotFeatureExtractor{
+		featureWeights: map[string]float64{
+			"timing_regularity":     0.15,
+			"request_rate":          0.12,
+			"navigation_pattern":    0.14,
+			"session_duration":      0.10,
+			"click_diversity":        0.11,
+			"mouse_entropy":          0.09,
+			"keystroke_pattern":      0.08,
+			"canvas_fingerprint":     0.10,
+			"webgl_consistency":     0.08,
+			"audio_fingerprint":     0.06,
+			"font_diversity":        0.07,
+			"ip_reputation":         0.09,
+			"header_completeness":   0.08,
+		},
+		normalizers: map[string]float64{
+			"timing_regularity":     100.0,
+			"request_rate":          1000.0,
+			"navigation_pattern":    1.0,
+			"session_duration":       3600.0,
+			"click_diversity":        1.0,
+			"mouse_entropy":         10.0,
+			"keystroke_pattern":     1000.0,
+			"canvas_fingerprint":    1.0,
+			"webgl_consistency":     1.0,
+			"audio_fingerprint":     1.0,
+			"font_diversity":        50.0,
+			"ip_reputation":         100.0,
+			"header_completeness":   1.0,
+		},
+		windowSize: 100,
+	}
+}
+
+func (s *AIBotDetectionService) initializeMLModel() {
+	s.mlModel.weights = map[string]float64{
+		"timing_regularity":      0.15,
+		"request_rate":           0.18,
+		"navigation_pattern":     0.14,
+		"session_duration":       0.10,
+		"click_diversity":        0.11,
+		"mouse_entropy":          0.09,
+		"keystroke_pattern":      0.08,
+		"canvas_fingerprint":     0.10,
+		"webgl_consistency":      0.08,
+		"audio_fingerprint":      0.06,
+		"font_diversity":         0.07,
+		"ip_reputation":          0.09,
+		"header_completeness":    0.08,
+	}
+	
+	s.mlModel.featureNames = []string{
+		"timing_regularity",
+		"request_rate",
+		"navigation_pattern",
+		"session_duration",
+		"click_diversity",
+		"mouse_entropy",
+		"keystroke_pattern",
+		"canvas_fingerprint",
+		"webgl_consistency",
+		"audio_fingerprint",
+		"font_diversity",
+		"ip_reputation",
+		"header_completeness",
+	}
+}
+
+func (s *AIBotDetectionService) DetectBotV3(r *http.Request, behaviorData *BotBehaviorData, envData map[string]interface{}) *BotDetectionV3Result {
+	result := &BotDetectionV3Result{
+		Timestamp:         time.Now(),
+		DetectionVersion:  "3.0",
+		Features:          &BotDetectionFeatures{},
+		MLPrediction:      &MLPrediction{},
+		Reasons:           []string{},
+	}
+	
+	timingFeatures := s.extractTimingFeatures(r, behaviorData)
+	result.Features.TimingFeatures = timingFeatures
+	
+	behavioralFeatures := s.extractBehavioralFeatures(behaviorData)
+	result.Features.BehavioralFeatures = behavioralFeatures
+	
+	envFeatures := s.extractEnvironmentalFeatures(envData)
+	result.Features.EnvironmentalFeatures = envFeatures
+	
+	networkFeatures := s.extractNetworkFeatures(r)
+	result.Features.NetworkFeatures = networkFeatures
+	
+	features := s.featureExtractor.ExtractFeatureVector(result.Features)
+	mlResult := s.mlModel.Predict(features)
+	result.MLPrediction = mlResult
+	
+	classicalResult := s.DetectBot(r, nil)
+	if classicalResult.IsBot {
+		result.ClassicalDetection = true
+		result.ClassicalScore = classicalResult.RiskScore
+		result.Reasons = append(result.Reasons, classicalResult.Reasons...)
+	}
+	
+	s.calculateFinalScore(result)
+	
+	return result
+}
+
+type BotDetectionV3Result struct {
+	Timestamp          time.Time
+	DetectionVersion   string
+	Features           *BotDetectionFeatures
+	MLPrediction       *MLPrediction
+	ClassicalDetection bool
+	ClassicalScore     float64
+	FinalScore         float64
+	IsBot              bool
+	ShouldBlock        bool
+	ChallengeType      string
+	Confidence         float64
+	BotType            string
+	Reasons            []string
+}
+
+type MLPrediction struct {
+	Probability     float64
+	IsBot           bool
+	Confidence      float64
+	BotType         string
+	AnomalyScore    float64
+	FeatureImportance map[string]float64
+	Explanation     []string
+}
+
+func (f *BotFeatureExtractor) ExtractFeatureVector(detection *BotDetectionFeatures) map[string]float64 {
+	features := make(map[string]float64)
+	
+	features["timing_regularity"] = f.normalize(
+		detection.TimingFeatures.IntervalVariance / (detection.TimingFeatures.AvgRequestInterval + 1),
+		"timing_regularity")
+	
+	features["request_rate"] = f.normalize(
+		detection.TimingFeatures.RequestRate,
+		"request_rate")
+	
+	features["navigation_pattern"] = f.normalize(
+		detection.BehavioralFeatures.NavigationDiversity,
+		"navigation_pattern")
+	
+	features["session_duration"] = f.normalize(
+		float64(detection.BehavioralFeatures.SessionLength),
+		"session_duration")
+	
+	features["click_diversity"] = f.normalize(
+		detection.BehavioralFeatures.ClickPatternScore,
+		"click_diversity")
+	
+	features["mouse_entropy"] = f.normalize(
+		detection.BehavioralFeatures.MouseMovementEntropy,
+		"mouse_entropy")
+	
+	features["keystroke_pattern"] = f.normalize(
+		detection.BehavioralFeatures.KeystrokeDynamics,
+		"keystroke_pattern")
+	
+	features["canvas_fingerprint"] = f.normalize(
+		detection.EnvironmentalFeatures.CanvasEntropy,
+		"canvas_fingerprint")
+	
+	features["webgl_consistency"] = f.normalize(
+		detection.EnvironmentalFeatures.WebGLConsistency,
+		"webgl_consistency")
+	
+	features["font_diversity"] = f.normalize(
+		detection.EnvironmentalFeatures.FontDiversity,
+		"font_diversity")
+	
+	features["ip_reputation"] = f.normalize(
+		detection.NetworkFeatures.IPReputationScore,
+		"ip_reputation")
+	
+	features["header_completeness"] = f.normalize(
+		detection.NetworkFeatures.HeaderCompleteness,
+		"header_completeness")
+	
+	return features
+}
+
+func (f *BotFeatureExtractor) normalize(value float64, featureName string) float64 {
+	if normalizer, exists := f.normalizers[featureName]; exists && normalizer > 0 {
+		return math.Min(value/normalizer, 1.0)
+	}
+	return value
+}
+
+func (m *BotMLModel) Predict(features map[string]float64) *MLPrediction {
+	prediction := &MLPrediction{
+		FeatureImportance: make(map[string]float64),
+		Explanation:      []string{},
+	}
+	
+	score := m.bias
+	
+	for feature, value := range features {
+		if weight, exists := m.weights[feature]; exists {
+			contribution := value * weight
+			score += contribution
+			prediction.FeatureImportance[feature] = contribution
+		}
+	}
+	
+	prediction.Probability = 1.0 / (1.0 + math.Exp(-score))
+	prediction.IsBot = prediction.Probability > 0.7
+	prediction.Confidence = math.Abs(prediction.Probability - 0.5) * 2
+	prediction.AnomalyScore = prediction.Probability
+	
+	if prediction.IsBot {
+		prediction.BotType = m.classifyBot(features)
+	}
+	
+	sortFeaturesByImportance(prediction.FeatureImportance, prediction.Explanation)
+	
+	return prediction
+}
+
+func (m *BotMLModel) classifyBot(features map[string]float64) string {
+	scores := map[string]float64{
+		"automated_scraper":  0,
+		"headless_browser":   0,
+		"credential_stuffer": 0,
+		"ddos_bot":          0,
+		"scraping_bot":      0,
+	}
+	
+	if features["timing_regularity"] > 0.8 && features["request_rate"] > 0.5 {
+		scores["automated_scraper"] += 0.4
+		scores["scraping_bot"] += 0.3
+	}
+	
+	if features["keystroke_pattern"] > 0.9 {
+		scores["automated_scraper"] += 0.3
+	}
+	
+	if features["navigation_pattern"] < 0.2 {
+		scores["scraping_bot"] += 0.4
+	}
+	
+	if features["webgl_consistency"] < 0.3 || features["canvas_fingerprint"] < 0.2 {
+		scores["headless_browser"] += 0.5
+	}
+	
+	if features["request_rate"] > 0.9 {
+		scores["ddos_bot"] += 0.5
+	}
+	
+	if features["ip_reputation"] < 0.3 {
+		scores["credential_stuffer"] += 0.3
+		scores["ddos_bot"] += 0.2
+	}
+	
+	bestType := "unknown_bot"
+	bestScore := 0.0
+	for botType, score := range scores {
+		if score > bestScore {
+			bestScore = score
+			bestType = botType
+		}
+	}
+	
+	return bestType
+}
+
+func sortFeaturesByImportance(importance map[string]float64, explanations []string) {
+	type kv struct {
+		Key   string
+		Value float64
+	}
+	
+	var ss []kv
+	for k, v := range importance {
+		ss = append(ss, kv{k, v})
+	}
+	
+	for i := 0; i < len(ss); i++ {
+		for j := i + 1; j < len(ss); j++ {
+			if ss[j].Value > ss[i].Value {
+				ss[i], ss[j] = ss[j], ss[i]
+			}
+		}
+	}
+	
+	for i, kv := range ss {
+		if i < 3 && kv.Value > 0.05 {
+			explanations = append(explanations, fmt.Sprintf("High %s feature contribution: %.2f", kv.Key, kv.Value))
+		}
+	}
+}
+
+func (s *AIBotDetectionService) extractTimingFeatures(r *http.Request, behaviorData *BotBehaviorData) TimingFeatureSet {
+	features := TimingFeatureSet{}
+	
+	if behaviorData != nil && len(behaviorData.RequestTimes) >= 2 {
+		intervals := []float64{}
+		for i := 1; i < len(behaviorData.RequestTimes); i++ {
+			interval := behaviorData.RequestTimes[i].Sub(behaviorData.RequestTimes[i-1]).Milliseconds()
+			intervals = append(intervals, float64(interval))
+		}
+		
+		features.AvgRequestInterval = calculateMean(intervals)
+		features.IntervalVariance = calculateVariance(intervals, features.AvgRequestInterval)
+		features.MaxInterval = s.calculateMax(intervals)
+		features.MinInterval = s.calculateMin(intervals)
+		
+		if len(behaviorData.RequestTimes) > 0 {
+			totalDuration := behaviorData.RequestTimes[len(behaviorData.RequestTimes)-1].Sub(behaviorData.RequestTimes[0]).Seconds()
+			if totalDuration > 0 {
+				features.RequestRate = float64(len(behaviorData.RequestTimes)) / totalDuration
+			}
+		}
+		
+		features.TimingEntropy = s.calculateEntropy(intervals)
+		
+		if features.IntervalVariance < 100 && features.AvgRequestInterval < 2000 {
+			features.IsPeriodic = true
+		}
+	}
+	
+	return features
+}
+
+func (s *AIBotDetectionService) extractBehavioralFeatures(behaviorData *BotBehaviorData) BehavioralFeatureSet {
+	features := BehavioralFeatureSet{}
+	
+	if behaviorData != nil {
+		features.SessionLength = behaviorData.RequestCount
+		
+		if len(behaviorData.RequestPaths) > 0 {
+			uniquePaths := make(map[string]bool)
+			for _, path := range behaviorData.RequestPaths {
+				uniquePaths[path] = true
+			}
+			features.NavigationDiversity = float64(len(uniquePaths)) / float64(len(behaviorData.RequestPaths))
+		}
+		
+		features.PageViewDistribution = make(map[string]int)
+		for _, path := range behaviorData.RequestPaths {
+			features.PageViewDistribution[path]++
+		}
+	}
+	
+	features.ClickPatternScore = 0.5
+	features.MouseMovementEntropy = 5.0
+	features.KeystrokeDynamics = 100.0
+	
+	return features
+}
+
+func (s *AIBotDetectionService) extractEnvironmentalFeatures(envData map[string]interface{}) EnvironmentalFeatureSet {
+	features := EnvironmentalFeatureSet{}
+	
+	if envData != nil {
+		if canvasEntropy, ok := envData["canvas_entropy"].(float64); ok {
+			features.CanvasEntropy = canvasEntropy
+		} else {
+			features.CanvasEntropy = 0.5
+		}
+		
+		if webglConsistency, ok := envData["webgl_consistency"].(float64); ok {
+			features.WebGLConsistency = webglConsistency
+		} else {
+			features.WebGLConsistency = 0.5
+		}
+		
+		if audioFingerprint, ok := envData["audio_fingerprint"].(string); ok {
+			features.AudioFingerprint = audioFingerprint
+		}
+		
+		if fontDiversity, ok := envData["font_diversity"].(float64); ok {
+			features.FontDiversity = fontDiversity
+		} else {
+			features.FontDiversity = 10.0
+		}
+		
+		if pluginCount, ok := envData["plugin_count"].(int); ok {
+			features.PluginCount = pluginCount
+		} else {
+			features.PluginCount = 0
+		}
+		
+		if screenRes, ok := envData["screen_resolution"].(string); ok {
+			features.ScreenResolution = screenRes
+		}
+		
+		if timezoneConsist, ok := envData["timezone_consistency"].(bool); ok {
+			features.TimezoneConsistency = timezoneConsist
+		}
+	}
+	
+	return features
+}
+
+func (s *AIBotDetectionService) extractNetworkFeatures(r *http.Request) NetworkFeatureSet {
+	features := NetworkFeatureSet{}
+	
+	features.IPReputationScore = 1.0
+	features.ASNType = "normal"
+	features.RequestOrigin = "unknown"
+	
+	requiredHeaders := []string{"User-Agent", "Accept", "Accept-Language", "Accept-Encoding"}
+	presentHeaders := 0
+	for _, header := range requiredHeaders {
+		if r.Header.Get(header) != "" {
+			presentHeaders++
+		}
+	}
+	features.HeaderCompleteness = float64(presentHeaders) / float64(len(requiredHeaders))
+	
+	if r.Header.Get("X-Forwarded-For") != "" {
+		features.RequestOrigin = "proxy"
+		features.IPReputationScore -= 0.2
+	}
+	
+	if strings.Contains(strings.ToLower(r.UserAgent()), "bot") ||
+		strings.Contains(strings.ToLower(r.UserAgent()), "crawler") ||
+		strings.Contains(strings.ToLower(r.UserAgent()), "spider") {
+		features.IPReputationScore -= 0.3
+	}
+	
+	return features
+}
+
+func (s *AIBotDetectionService) calculateFinalScore(result *BotDetectionV3Result) {
+	mlWeight := 0.6
+	classicalWeight := 0.4
+	
+	mlScore := result.MLPrediction.Probability * 100
+	finalScore := mlScore * mlWeight
+	
+	if result.ClassicalDetection {
+		finalScore += result.ClassicalScore * classicalWeight
+	}
+	
+	result.FinalScore = math.Min(finalScore, 100)
+	result.Confidence = result.MLPrediction.Confidence
+	
+	if result.FinalScore >= 70 {
+		result.IsBot = true
+		result.ShouldBlock = true
+		result.ChallengeType = "captcha"
+	} else if result.FinalScore >= 50 {
+		result.IsBot = true
+		result.ChallengeType = "js_challenge"
+	} else if result.FinalScore >= 30 {
+		result.ChallengeType = "monitoring"
+	}
+	
+	result.BotType = result.MLPrediction.BotType
+	
+	if result.ClassicalDetection && !result.IsBot {
+		for _, reason := range result.Reasons {
+			if strings.Contains(strings.ToLower(reason), "blacklist") {
+				result.IsBot = true
+				result.ShouldBlock = true
+				result.ChallengeType = "captcha"
+				break
+			}
+		}
+	}
+}
+
+func calculateMean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func calculateVariance(values []float64, mean float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sumSq := 0.0
+	for _, v := range values {
+		diff := v - mean
+		sumSq += diff * diff
+	}
+	return sumSq / float64(len(values))
+}
+
+func (s *AIBotDetectionService) calculateMax(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (s *AIBotDetectionService) calculateMin(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (s *AIBotDetectionService) calculateEntropy(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	
+	freq := make(map[float64]int)
+	for _, v := range values {
+		freq[v]++
+	}
+	
+	entropy := 0.0
+	for _, count := range freq {
+		p := float64(count) / float64(len(values))
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+	
+	return entropy
+}
+
+func (s *AIBotDetectionService) TrainModel(samples []BotTrainingSample) error {
+	s.trainingData = append(s.trainingData, samples...)
+	
+	for _, sample := range samples {
+		features := s.convertSampleToFeatures(sample)
+		s.mlModel.Train(features, sample.Label)
+	}
+	
+	s.lastUpdateTime = time.Now()
+	return nil
+}
+
+func (s *BotMLModel) Train(features map[string]float64, label bool) {
+	featureValue := 0.0
+	for feature, value := range features {
+		if weight, exists := s.weights[feature]; exists {
+			featureValue += value * weight
+		}
+	}
+	
+	featureValue += s.bias
+	prediction := 1.0 / (1.0 + math.Exp(-featureValue))
+	
+	labelValue := 0.0
+	if label {
+		labelValue = 1.0
+	}
+	
+	error := labelValue - prediction
+	
+	for feature, value := range features {
+		if _, exists := s.weights[feature]; exists {
+			s.weights[feature] += s.learningRate * error * value
+		}
+	}
+	
+	s.bias += s.learningRate * error
+}
+
+func (s *AIBotDetectionService) convertSampleToFeatures(sample BotTrainingSample) map[string]float64 {
+	features := make(map[string]float64)
+	for k, v := range sample.Features {
+		features[k] = v
+	}
+	return features
+}
+
+func (s *AIBotDetectionService) ShouldUpdateModel() bool {
+	return time.Since(s.lastUpdateTime) > s.updateInterval && len(s.trainingData) > 100
+}
+
+func (s *AIBotDetectionService) UpdateModel() error {
+	if !s.ShouldUpdateModel() {
+		return nil
+	}
+	
+	s.mlModel.trainingEpochs += 10
+	
+	s.lastUpdateTime = time.Now()
+	return nil
+}

@@ -3,17 +3,122 @@ let realtimeDataBuffers = {};
 let chartUpdateTimers = {};
 const CHART_UPDATE_INTERVAL = 3000;
 const MAX_DATA_POINTS = 100;
+const DATA_SAMPLING_THRESHOLD = 200;
+const SAMPLING_RATE = 0.5;
 let wsConnection = null;
 let isConnected = false;
+let performanceMetrics = {
+    renderCount: 0,
+    lastRenderTime: 0,
+    memoryUsage: 0,
+    droppedFrames: 0
+};
+let alertSystem = {
+    alerts: [],
+    maxAlerts: 50,
+    aggregationEnabled: true,
+    aggregationWindow: 60000
+};
+let monitoringConfig = {
+    enablePerformanceOptimization: true,
+    enableDataSampling: true,
+    enableLazyLoading: true,
+    enableAlertAggregation: true,
+    chartAnimationEnabled: false
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeEnhancedCharts();
     initWebSocketConnection();
     setupChartInteractions();
     startRealtimeUpdates();
+    initializePerformanceMonitor();
+    initializeAlertSystem();
 });
 
+function initializePerformanceMonitor() {
+    if (monitoringConfig.enablePerformanceOptimization) {
+        setInterval(() => {
+            updatePerformanceMetrics();
+            optimizeChartUpdates();
+        }, 5000);
+    }
+}
+
+function updatePerformanceMetrics() {
+    if (performance.memory) {
+        performanceMetrics.memoryUsage = Math.round(performance.memory.usedJSHeapSize / 1048576);
+    }
+    
+    const now = performance.now();
+    if (performanceMetrics.lastRenderTime > 0) {
+        const frameTime = now - performanceMetrics.lastRenderTime;
+        if (frameTime > 50) {
+            performanceMetrics.droppedFrames++;
+        }
+    }
+    performanceMetrics.lastRenderTime = now;
+}
+
+function optimizeChartUpdates() {
+    if (performanceMetrics.droppedFrames > 5) {
+        monitoringConfig.chartAnimationEnabled = false;
+        console.warn('Performance degraded, disabling animations');
+    }
+    
+    if (performanceMetrics.memoryUsage > 100) {
+        Object.keys(realtimeDataBuffers).forEach(key => {
+            if (realtimeDataBuffers[key] && realtimeDataBuffers[key].data.length > 50) {
+                realtimeDataBuffers[key].data = realtimeDataBuffers[key].data.slice(-50);
+            }
+        });
+        console.warn('High memory usage, reducing data buffers');
+    }
+}
+
+function sampleData(data, rate = SAMPLING_RATE) {
+    if (!monitoringConfig.enableDataSampling || data.length <= DATA_SAMPLING_THRESHOLD) {
+        return data;
+    }
+    
+    const sampled = [];
+    const step = Math.ceil(1 / rate);
+    for (let i = 0; i < data.length; i += step) {
+        sampled.push(data[i]);
+    }
+    
+    if (sampled[sampled.length - 1] !== data[data.length - 1]) {
+        sampled.push(data[data.length - 1]);
+    }
+    
+    return sampled;
+}
+
 function initializeEnhancedCharts() {
+    if (monitoringConfig.enableLazyLoading) {
+        loadChartsOnDemand();
+    } else {
+        loadAllCharts();
+    }
+}
+
+function loadChartsOnDemand() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const chartId = entry.target.id;
+                initializeChartById(chartId);
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { rootMargin: '100px' });
+    
+    document.querySelectorAll('[data-chart]').forEach(el => {
+        observer.observe(el);
+    });
+}
+
+function loadAllCharts() {
     initRequestDistributionChart();
     initResponseTimeChart();
     initUserActivityChart();
@@ -24,9 +129,22 @@ function initializeEnhancedCharts() {
     initSessionDurationChart();
 }
 
+function initializeChartById(chartId) {
+    switch(chartId) {
+        case 'requestDistributionChart': initRequestDistributionChart(); break;
+        case 'responseTimeChart': initResponseTimeChart(); break;
+        case 'userActivityChart': initUserActivityChart(); break;
+        case 'geographicChart': initGeographicChart(); break;
+        case 'captchaSuccessRateChart': initCaptchaSuccessRateChart(); break;
+        case 'anomalyDetectionChart': initAnomalyDetectionChart(); break;
+        case 'trendForecastChart': initTrendForecastChart(); break;
+        case 'sessionDurationChart': initSessionDurationChart(); break;
+    }
+}
+
 function initRequestDistributionChart() {
     const container = document.getElementById('requestDistributionChart');
-    if (!container) return;
+    if (!container || enhancedCharts.requestDistribution) return;
 
     enhancedCharts.requestDistribution = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.requestDistribution.resize());
@@ -75,7 +193,8 @@ function initRequestDistributionChart() {
                 { value: 135, name: '语音验证', itemStyle: { color: '#8b5cf6' } },
                 { value: 148, name: '3D验证', itemStyle: { color: '#ec4899' } }
             ]
-        }]
+        }],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.requestDistribution.setOption(option);
@@ -84,7 +203,7 @@ function initRequestDistributionChart() {
 
 function initResponseTimeChart() {
     const container = document.getElementById('responseTimeChart');
-    if (!container) return;
+    if (!container || enhancedCharts.responseTime) return;
 
     enhancedCharts.responseTime = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.responseTime.resize());
@@ -135,7 +254,8 @@ function initResponseTimeChart() {
                     shadowColor: 'rgba(0, 0, 0, 0.3)'
                 }
             }
-        }]
+        }],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.responseTime.setOption(option);
@@ -144,7 +264,7 @@ function initResponseTimeChart() {
 
 function initUserActivityChart() {
     const container = document.getElementById('userActivityChart');
-    if (!container) return;
+    if (!container || enhancedCharts.userActivity) return;
 
     enhancedCharts.userActivity = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.userActivity.resize());
@@ -210,7 +330,8 @@ function initUserActivityChart() {
                 lineStyle: { color: '#10b981', width: 2 },
                 itemStyle: { color: '#10b981' }
             }
-        ]
+        ],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.userActivity.setOption(option);
@@ -218,7 +339,7 @@ function initUserActivityChart() {
 
 function initGeographicChart() {
     const container = document.getElementById('geographicChart');
-    if (!container) return;
+    if (!container || enhancedCharts.geographic) return;
 
     enhancedCharts.geographic = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.geographic.resize());
@@ -277,7 +398,8 @@ function initGeographicChart() {
             type: 'category',
             data: geoData.sort((a, b) => b.value - a.value).map(d => d.name),
             axisLabel: { color: '#666' }
-        }
+        },
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.geographic.setOption(option);
@@ -285,7 +407,7 @@ function initGeographicChart() {
 
 function initCaptchaSuccessRateChart() {
     const container = document.getElementById('captchaSuccessRateChart');
-    if (!container) return;
+    if (!container || enhancedCharts.captchaSuccessRate) return;
 
     enhancedCharts.captchaSuccessRate = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.captchaSuccessRate.resize());
@@ -343,7 +465,8 @@ function initCaptchaSuccessRateChart() {
                     { yAxis: 90, name: '警戒线90%' }
                 ]
             }
-        }]
+        }],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.captchaSuccessRate.setOption(option);
@@ -352,7 +475,7 @@ function initCaptchaSuccessRateChart() {
 
 function initAnomalyDetectionChart() {
     const container = document.getElementById('anomalyDetectionChart');
-    if (!container) return;
+    if (!container || enhancedCharts.anomalyDetection) return;
 
     enhancedCharts.anomalyDetection = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.anomalyDetection.resize());
@@ -402,7 +525,8 @@ function initAnomalyDetectionChart() {
                 data: [5, 8, 12, 25, 18, 15, 22, 8, 5, 8, 12, 15, 5, 8, 12, 15, 18, 15, 22, 8, 5, 8, 12, 15],
                 itemStyle: { color: '#ef4444' }
             }
-        ]
+        ],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.anomalyDetection.setOption(option);
@@ -410,7 +534,7 @@ function initAnomalyDetectionChart() {
 
 function initTrendForecastChart() {
     const container = document.getElementById('trendForecastChart');
-    if (!container) return;
+    if (!container || enhancedCharts.trendForecast) return;
 
     enhancedCharts.trendForecast = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.trendForecast.resize());
@@ -508,7 +632,8 @@ function initTrendForecastChart() {
                     ]
                 }
             }
-        ]
+        ],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.trendForecast.setOption(option);
@@ -516,7 +641,7 @@ function initTrendForecastChart() {
 
 function initSessionDurationChart() {
     const container = document.getElementById('sessionDurationChart');
-    if (!container) return;
+    if (!container || enhancedCharts.sessionDuration) return;
 
     enhancedCharts.sessionDuration = echarts.init(container);
     window.addEventListener('resize', () => enhancedCharts.sessionDuration.resize());
@@ -569,7 +694,8 @@ function initSessionDurationChart() {
                     shadowColor: 'rgba(0, 0, 0, 0.3)'
                 }
             }
-        }]
+        }],
+        animation: monitoringConfig.chartAnimationEnabled
     };
 
     enhancedCharts.sessionDuration.setOption(option);
@@ -640,9 +766,56 @@ function handleRealtimeData(data) {
     if (data.type === 'metrics') {
         updateChartWithData('responseTime', data.payload.avgResponseTime);
         updateChartWithData('captchaSuccessRate', data.payload.successRate);
+        processAlertData(data.payload);
     } else if (data.type === 'stats') {
         updateChartWithData('requestDistribution', data.payload.distribution);
+        processAlertData(data.payload);
     }
+}
+
+function processAlertData(payload) {
+    if (payload.alerts && Array.isArray(payload.alerts)) {
+        payload.alerts.forEach(alert => {
+            addAlert(alert);
+        });
+    }
+    
+    if (payload.systemMetrics) {
+        checkThresholdAlerts(payload.systemMetrics);
+    }
+}
+
+function checkThresholdAlerts(metrics) {
+    const thresholds = {
+        cpu: { warning: 70, critical: 90 },
+        memory: { warning: 75, critical: 90 },
+        disk: { warning: 80, critical: 95 },
+        errorRate: { warning: 5, critical: 10 },
+        responseTime: { warning: 500, critical: 1000 }
+    };
+    
+    Object.keys(thresholds).forEach(metric => {
+        if (metrics[metric] !== undefined) {
+            const value = metrics[metric];
+            const threshold = thresholds[metric];
+            
+            if (value >= threshold.critical) {
+                addAlert({
+                    type: 'critical',
+                    title: `${metric.toUpperCase()} 严重超标`,
+                    message: `当前值: ${value}，阈值: ${threshold.critical}`,
+                    timestamp: Date.now()
+                });
+            } else if (value >= threshold.warning) {
+                addAlert({
+                    type: 'warning',
+                    title: `${metric.toUpperCase()} 警告`,
+                    message: `当前值: ${value}，阈值: ${threshold.warning}`,
+                    timestamp: Date.now()
+                });
+            }
+        }
+    });
 }
 
 function updateChartWithData(chartName, value) {
@@ -667,20 +840,18 @@ function updateChartDisplay(chartName, data) {
     const chart = enhancedCharts[chartName];
     if (!chart) return;
 
-    const labels = data.map(d => d.time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-    const values = data.map(d => d.value);
+    const sampledData = sampleData(data);
+    const labels = sampledData.map(d => d.time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+    const values = sampledData.map(d => d.value);
 
-    if (chartName === 'responseTime') {
-        chart.setOption({
-            xAxis: { data: labels },
-            series: [{ data: values }]
-        }, false);
-    } else if (chartName === 'captchaSuccessRate') {
+    if (chartName === 'responseTime' || chartName === 'captchaSuccessRate') {
         chart.setOption({
             xAxis: { data: labels },
             series: [{ data: values }]
         }, false);
     }
+    
+    performanceMetrics.renderCount++;
 }
 
 function startRealtimeUpdates() {
@@ -835,6 +1006,137 @@ function refreshAllCharts() {
     showToast('图表已刷新', 'success');
 }
 
+function initializeAlertSystem() {
+    loadAlertHistory();
+    setupAlertFilters();
+}
+
+function loadAlertHistory() {
+    fetch('/admin/api/alerts/history')
+        .then(response => response.json())
+        .then(result => {
+            if (result.code === 0 && result.data) {
+                alertSystem.alerts = result.data.slice(0, alertSystem.maxAlerts);
+                renderAlertHistory();
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load alert history:', error);
+        });
+}
+
+function setupAlertFilters() {
+    const filterBtns = document.querySelectorAll('[data-alert-filter]');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const filter = e.target.dataset.alertFilter;
+            filterAlertHistory(filter);
+            
+            filterBtns.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+        });
+    });
+}
+
+function filterAlertHistory(filter) {
+    if (filter === 'all') {
+        renderAlertHistory();
+        return;
+    }
+    
+    const filtered = alertSystem.alerts.filter(alert => alert.type === filter);
+    renderAlertList(filtered);
+}
+
+function renderAlertHistory() {
+    renderAlertList(alertSystem.alerts);
+}
+
+function renderAlertList(alerts) {
+    const container = document.getElementById('alertHistoryContainer');
+    if (!container) return;
+    
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center py-4">暂无告警记录</div>';
+        return;
+    }
+    
+    container.innerHTML = alerts.map(alert => `
+        <div class="alert-item ${alert.type}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong>${alert.title}</strong>
+                    <div class="text-muted small">${alert.message}</div>
+                </div>
+                <small class="text-muted">${formatAlertTime(alert.timestamp)}</small>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addAlert(alert) {
+    if (alertSystem.aggregationEnabled) {
+        const existing = alertSystem.alerts.find(a => 
+            a.title === alert.title && 
+            (Date.now() - a.timestamp) < alertSystem.aggregationWindow
+        );
+        
+        if (existing) {
+            existing.count = (existing.count || 1) + 1;
+            existing.timestamp = Date.now();
+            renderAlertHistory();
+            return;
+        }
+    }
+    
+    alert.id = Date.now();
+    alert.count = 1;
+    alertSystem.alerts.unshift(alert);
+    
+    if (alertSystem.alerts.length > alertSystem.maxAlerts) {
+        alertSystem.alerts.pop();
+    }
+    
+    if (alert.type === 'critical') {
+        playAlertSound();
+    }
+    
+    renderAlertHistory();
+    sendAlertNotification(alert);
+}
+
+function sendAlertNotification(alert) {
+    if (alert.type === 'critical' || alert.type === 'warning') {
+        console.log('Alert notification:', alert);
+    }
+}
+
+function playAlertSound() {
+    try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleSIA');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+    } catch (e) {
+        console.warn('Cannot play alert sound');
+    }
+}
+
+function formatAlertTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) {
+        return '刚刚';
+    } else if (diff < 3600000) {
+        return Math.floor(diff / 60000) + '分钟前';
+    } else if (diff < 86400000) {
+        return Math.floor(diff / 3600000) + '小时前';
+    } else {
+        return date.toLocaleDateString('zh-CN');
+    }
+}
+
 function generateMockResponseTimeData() {
     return Array.from({length: 24}, () => Math.floor(Math.random() * 30) + 50);
 }
@@ -858,6 +1160,20 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.remove();
     }, 3000);
+}
+
+function getPerformanceReport() {
+    return `
+        <div class="performance-report">
+            <h5>性能报告</h5>
+            <table class="table table-sm">
+                <tr><td>渲染次数</td><td>${performanceMetrics.renderCount}</td></tr>
+                <tr><td>内存使用</td><td>${performanceMetrics.memoryUsage} MB</td></tr>
+                <tr><td>丢帧数</td><td>${performanceMetrics.droppedFrames}</td></tr>
+                <tr><td>告警数量</td><td>${alertSystem.alerts.length}</td></tr>
+            </table>
+        </div>
+    `;
 }
 
 window.addEventListener('beforeunload', () => {

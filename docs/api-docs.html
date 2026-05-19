@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>行为验证系统 API 文档</title>
+    <title>行为验证系统 API 文档 v17.1</title>
+    <link href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -19,7 +20,7 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             min-height: 100vh;
@@ -38,15 +39,19 @@
             margin-bottom: 10px;
         }
         
-        header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
+        header .version {
+            display: inline-block;
+            background: #667eea;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
         }
         
         .nav {
             background: #f8f9fa;
             padding: 20px 30px;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 2px solid #667eea;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -54,9 +59,9 @@
         
         .nav-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            max-width: 800px;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            max-width: 1200px;
             margin: 0 auto;
         }
         
@@ -67,7 +72,7 @@
             color: #667eea;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             font-weight: 500;
             transition: all 0.3s;
             border: 1px solid #e9ecef;
@@ -78,6 +83,7 @@
             background: #667eea;
             color: white;
             border-color: #667eea;
+            transform: translateY(-2px);
         }
         
         .content {
@@ -104,6 +110,24 @@
             font-size: 1.5rem;
             color: #495057;
             margin: 30px 0 15px;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
         }
         
         .api-card {
@@ -151,11 +175,6 @@
             border: 1px solid #dee2e6;
         }
         
-        .api-desc {
-            color: #6c757d;
-            margin-bottom: 15px;
-        }
-        
         table {
             width: 100%;
             border-collapse: collapse;
@@ -172,10 +191,6 @@
         th {
             background: #e9ecef;
             font-weight: 600;
-        }
-        
-        tr:hover {
-            background: #f8f9fa;
         }
         
         .code-block {
@@ -202,37 +217,8 @@
             font-size: 0.8rem;
         }
         
-        .code-block .copy-btn:hover {
-            background: #764ba2;
-        }
-        
-        .sdk-tabs {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .sdk-tab {
-            padding: 8px 16px;
-            background: #e9ecef;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .sdk-tab.active {
-            background: #667eea;
-            color: white;
-        }
-        
-        .sdk-content {
-            display: none;
-        }
-        
-        .sdk-content.active {
-            display: block;
+        .code-block pre {
+            margin: 0;
         }
         
         .badge {
@@ -247,6 +233,75 @@
         .badge-required { background: #dc3545; color: white; }
         .badge-optional { background: #6c757d; color: white; }
         
+        .endpoint-group {
+            margin-bottom: 40px;
+        }
+        
+        .playground {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 2px solid #667eea;
+        }
+        
+        .playground h4 {
+            margin-bottom: 15px;
+            color: #1a1a2e;
+        }
+        
+        .playground input,
+        .playground textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .playground textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .playground button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            margin-right: 10px;
+            transition: all 0.3s;
+        }
+        
+        .playground button:hover {
+            background: #764ba2;
+        }
+        
+        .playground button.execute {
+            background: #28a745;
+        }
+        
+        .playground button.execute:hover {
+            background: #218838;
+        }
+        
+        .playground .response {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .swagger-section {
+            margin-top: 20px;
+        }
+        
         footer {
             text-align: center;
             padding: 30px;
@@ -254,26 +309,35 @@
             color: #6c757d;
         }
         
-        .alert {
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        .captcha-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
         }
         
-        .alert-info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border-left: 4px solid #17a2b8;
+        .captcha-type-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s;
         }
         
-        .alert-warning {
-            background: #fff3cd;
-            color: #856404;
-            border-left: 4px solid #ffc107;
+        .captcha-type-card:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
         
-        .endpoint-group {
-            margin-bottom: 40px;
+        .captcha-type-card h4 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .captcha-type-card p {
+            color: #6c757d;
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -281,17 +345,21 @@
     <div class="container">
         <header>
             <h1>🔐 行为验证系统 API 文档</h1>
-            <p>版本 2.0.0 | 支持多种验证码类型和用户认证</p>
+            <p>支持多种验证码类型、用户认证、环境检测、风险分析</p>
+            <span class="version">版本 17.1.0</span>
         </header>
         
         <nav class="nav">
             <div class="nav-grid">
-                <button class="active" onclick="showSection('overview')">概览</button>
-                <button onclick="showSection('captcha')">验证码API</button>
-                <button onclick="showSection('auth')">用户认证</button>
-                <button onclick="showSection('detect')">环境检测</button>
-                <button onclick="showSection('admin')">管理后台</button>
-                <button onclick="showSection('sdk')">SDK示例</button>
+                <button class="active" onclick="showSection('overview')">📋 概览</button>
+                <button onclick="showSection('captcha')">🔢 验证码API</button>
+                <button onclick="showSection('captcha-video')">🎬 视频验证码</button>
+                <button onclick="showSection('captcha-ar')">📱 AR验证码</button>
+                <button onclick="showSection('auth')">👤 用户认证</button>
+                <button onclick="showSection('detect')">🔍 环境检测</button>
+                <button onclick="showSection('admin')">⚙️ 管理后台</button>
+                <button onclick="showSection('sdk')">📦 SDK示例</button>
+                <button onclick="showSection('swagger')">📖 Swagger UI</button>
             </div>
         </nav>
         
@@ -301,9 +369,37 @@
                 <h2>📋 概览</h2>
                 
                 <div class="alert alert-info">
-                    <strong>基础URL：</strong>
+                    <strong>基础URL：</strong><br>
                     <code>https://api.example.com/api/v1</code> (生产环境)<br>
                     <code>http://localhost:8080/api/v1</code> (开发环境)
+                </div>
+                
+                <h3>支持的验证码类型</h3>
+                <div class="captcha-types">
+                    <div class="captcha-type-card">
+                        <h4>🖱️ 滑块验证码</h4>
+                        <p>用户拖动滑块完成拼图验证</p>
+                    </div>
+                    <div class="captcha-type-card">
+                        <h4>👆 点击验证码</h4>
+                        <p>用户点击指定位置完成验证</p>
+                    </div>
+                    <div class="captcha-type-card">
+                        <h4>✋ 手势验证码</h4>
+                        <p>用户在屏幕上绘制指定手势</p>
+                    </div>
+                    <div class="captcha-type-card">
+                        <h4>🎥 视频验证码</h4>
+                        <p>识别视频中的动作或物体</p>
+                    </div>
+                    <div class="captcha-type-card">
+                        <h4>📱 AR验证码</h4>
+                        <p>增强现实3D交互式验证</p>
+                    </div>
+                    <div class="captcha-type-card">
+                        <h4>🎙️ 语音验证码</h4>
+                        <p>听音识符验证</p>
+                    </div>
                 </div>
                 
                 <h3>统一响应格式</h3>
@@ -363,22 +459,14 @@
                             </tbody>
                         </table>
                         
-                        <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
-                            <pre>{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "session_id": "slider_abc123def456",
-        "image_url": "data:image/png;base64,...",
-        "puzzle_url": "data:image/png;base64,...",
-        "hint_url": "data:image/png;base64,...",
-        "shape": 1,
-        "secret_y": 100,
-        "image_width": 320,
-        "image_height": 160
-    }
-}</pre>
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="slider-endpoint" value="http://localhost:8080/api/v1/captcha/slider" readonly>
+                            <input type="text" id="slider-width" placeholder="width (默认320)">
+                            <input type="text" id="slider-height" placeholder="height (默认160)">
+                            <button class="execute" onclick="testEndpoint('slider')">发送请求</button>
+                            <button onclick="copyEndpoint('slider')">复制URL</button>
+                            <div class="response" id="slider-response" style="display:none;"></div>
                         </div>
                     </div>
                     
@@ -400,19 +488,6 @@
                                 <tr><td>trajectory</td><td>array</td><td><span class="badge badge-optional">否</span></td><td>滑动轨迹</td></tr>
                             </tbody>
                         </table>
-                        
-                        <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
-                            <pre>{
-    "session_id": "slider_abc123def456",
-    "x": 185,
-    "y": 100,
-    "trajectory": [
-        {"x": 0, "y": 100, "t": 0},
-        {"x": 185, "y": 100, "t": 800}
-    ]
-}</pre>
-                        </div>
                     </div>
                 </div>
                 
@@ -442,6 +517,214 @@
                             <span class="api-path">/api/v1/captcha/gesture/verify</span>
                         </div>
                         <p class="api-desc">验证手势验证码</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 视频验证码 -->
+            <section id="captcha-video" class="section">
+                <h2>🎬 视频验证码API</h2>
+                
+                <div class="alert alert-info">
+                    <strong>新功能：</strong>视频验证码通过识别视频中的动作或物体来验证用户，提供更安全的验证体验。
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>生成视频验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/video/generate</span>
+                        </div>
+                        <p class="api-desc">生成视频验证码，返回视频URL和问题</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>width</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>视频宽度，默认320</td></tr>
+                                <tr><td>height</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>视频高度，默认240</td></tr>
+                                <tr><td>difficulty</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>难度等级 (1-简单, 2-中等, 3-困难)</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="video-gen-endpoint" value="http://localhost:8080/api/v1/captcha/video/generate" readonly>
+                            <textarea id="video-gen-body" placeholder="请求体 (JSON)">{
+  "width": 320,
+  "height": 240,
+  "difficulty": 1
+}</textarea>
+                            <button class="execute" onclick="testEndpoint('video-generate')">发送请求</button>
+                            <button onclick="copyEndpoint('video-generate')">复制请求</button>
+                            <div class="response" id="video-gen-response" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>验证视频验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/video/verify</span>
+                        </div>
+                        <p class="api-desc">提交视频验证码答案进行验证</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>session_id</td><td>string</td><td><span class="badge badge-required">是</span></td><td>验证码会话ID</td></tr>
+                                <tr><td>answer</td><td>string</td><td><span class="badge badge-required">是</span></td><td>用户答案</td></tr>
+                                <tr><td>behavior_data</td><td>object</td><td><span class="badge badge-optional">否</span></td><td>行为数据</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="video-verify-endpoint" value="http://localhost:8080/api/v1/captcha/video/verify" readonly>
+                            <textarea id="video-verify-body" placeholder="请求体 (JSON)">{
+  "session_id": "video_abc123def456",
+  "answer": "wave",
+  "behavior_data": {
+    "response_time": 2.5,
+    "interactions": []
+  }
+}</textarea>
+                            <button class="execute" onclick="testEndpoint('video-verify')">发送请求</button>
+                            <button onclick="copyEndpoint('video-verify')">复制请求</button>
+                            <div class="response" id="video-verify-response" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>获取配置选项</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/captcha/video/options</span>
+                        </div>
+                        <p class="api-desc">获取支持的视频验证码难度选项、视频格式等配置</p>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="video-options-endpoint" value="http://localhost:8080/api/v1/captcha/video/options" readonly>
+                            <button class="execute" onclick="testEndpoint('video-options')">发送请求</button>
+                            <button onclick="copyEndpoint('video-options')">复制URL</button>
+                            <div class="response" id="video-options-response" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- AR验证码 -->
+            <section id="captcha-ar" class="section">
+                <h2>📱 AR验证码API</h2>
+                
+                <div class="alert alert-warning">
+                    <strong>新功能：</strong>AR验证码提供增强现实的3D交互体验，通过手势和空间交互完成验证。
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>生成AR验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/ar/generate</span>
+                        </div>
+                        <p class="api-desc">生成增强现实的AR验证码，提供3D交互体验</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>scene_type</td><td>string</td><td><span class="badge badge-optional">否</span></td><td>场景类型 (object_placement, gesture_recognition, spatial_puzzle, object_tracking, depth_estimation)</td></tr>
+                                <tr><td>difficulty</td><td>string</td><td><span class="badge badge-optional">否</span></td><td>难度等级 (easy, medium, hard, expert)</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="ar-gen-endpoint" value="http://localhost:8080/api/v1/captcha/ar/generate" readonly>
+                            <textarea id="ar-gen-body" placeholder="请求体 (JSON)">{
+  "scene_type": "object_placement",
+  "difficulty": "medium"
+}</textarea>
+                            <button class="execute" onclick="testEndpoint('ar-generate')">发送请求</button>
+                            <button onclick="copyEndpoint('ar-generate')">复制请求</button>
+                            <div class="response" id="ar-gen-response" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>验证AR验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/ar/verify</span>
+                        </div>
+                        <p class="api-desc">提交AR验证码答案进行验证</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>session_id</td><td>string</td><td><span class="badge badge-required">是</span></td><td>验证码会话ID</td></tr>
+                                <tr><td>user_gesture</td><td>object</td><td><span class="badge badge-required">是</span></td><td>用户手势信息</td></tr>
+                                <tr><td>object_id</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>交互对象ID</td></tr>
+                                <tr><td>position_x</td><td>float</td><td><span class="badge badge-optional">否</span></td><td>X坐标</td></tr>
+                                <tr><td>position_y</td><td>float</td><td><span class="badge badge-optional">否</span></td><td>Y坐标</td></tr>
+                                <tr><td>position_z</td><td>float</td><td><span class="badge badge-optional">否</span></td><td>Z坐标</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="ar-verify-endpoint" value="http://localhost:8080/api/v1/captcha/ar/verify" readonly>
+                            <textarea id="ar-verify-body" placeholder="请求体 (JSON)">{
+  "session_id": "ar_abc123def456",
+  "user_gesture": {
+    "gesture_type": "tap",
+    "start_time": 1234567890000,
+    "end_time": 1234567890500,
+    "points": []
+  },
+  "object_id": 1,
+  "position_x": 0.5,
+  "position_y": 0.3,
+  "position_z": 0.0
+}</textarea>
+                            <button class="execute" onclick="testEndpoint('ar-verify')">发送请求</button>
+                            <button onclick="copyEndpoint('ar-verify')">复制请求</button>
+                            <div class="response" id="ar-verify-response" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>获取配置选项</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/captcha/ar/options</span>
+                        </div>
+                        <p class="api-desc">获取支持的AR验证码场景类型、难度选项、手势类型等配置</p>
+                        
+                        <div class="playground">
+                            <h4>🎮 API Playground</h4>
+                            <input type="text" id="ar-options-endpoint" value="http://localhost:8080/api/v1/captcha/ar/options" readonly>
+                            <button class="execute" onclick="testEndpoint('ar-options')">发送请求</button>
+                            <button onclick="copyEndpoint('ar-options')">复制URL</button>
+                            <div class="response" id="ar-options-response" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -481,7 +764,7 @@
     "password": "password123"
 }
 
-// 响应
+响应:
 {
     "code": 0,
     "message": "success",
@@ -652,18 +935,11 @@
             <section id="sdk" class="section">
                 <h2>📦 SDK示例</h2>
                 
-                <div class="sdk-tabs">
-                    <button class="sdk-tab active" onclick="showSdk('go')">Go</button>
-                    <button class="sdk-tab" onclick="showSdk('js')">JavaScript</button>
-                    <button class="sdk-tab" onclick="showSdk('python')">Python</button>
-                </div>
-                
-                <div id="sdk-go" class="sdk-content active">
-                    <div class="api-card">
-                        <h3>Go SDK 使用示例</h3>
-                        <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
-                            <pre>package main
+                <div class="api-card">
+                    <h3>Go SDK 示例</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>package main
 
 import (
     "fmt"
@@ -690,16 +966,14 @@ func main() {
     })
     fmt.Printf("Success: %v\n", result.Success)
 }</pre>
-                        </div>
                     </div>
                 </div>
                 
-                <div id="sdk-js" class="sdk-content">
-                    <div class="api-card">
-                        <h3>JavaScript SDK 使用示例</h3>
-                        <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
-                            <pre>// 创建客户端
+                <div class="api-card">
+                    <h3>JavaScript SDK 示例</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>// 创建客户端
 const client = new CaptchaClient('http://localhost:8080');
 
 // 获取滑块验证码
@@ -720,16 +994,14 @@ const result = await client.verifyCaptcha({
 });
 
 console.log('验证结果:', result);</pre>
-                        </div>
                     </div>
                 </div>
                 
-                <div id="sdk-python" class="sdk-content">
-                    <div class="api-card">
-                        <h3>Python SDK 使用示例</h3>
-                        <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
-                            <pre>from captcha import CaptchaClient, TrajectoryPoint
+                <div class="api-card">
+                    <h3>Python SDK 示例</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>from captcha import CaptchaClient, TrajectoryPoint
 
 # 创建客户端
 client = CaptchaClient('http://localhost:8080')
@@ -753,33 +1025,66 @@ result = client.verify_captcha(
 )
 
 print(f"Success: {result.success}")</pre>
-                        </div>
                     </div>
+                </div>
+            </section>
+            
+            <!-- Swagger UI -->
+            <section id="swagger" class="section">
+                <h2>📖 Swagger UI</h2>
+                
+                <div class="alert alert-info">
+                    <strong>OpenAPI 规范：</strong>使用 Swagger UI 可视化浏览和测试 API
+                </div>
+                
+                <div class="swagger-section">
+                    <div id="swagger-ui"></div>
                 </div>
             </section>
         </div>
         
         <footer>
-            <p>© 2024 行为验证系统 | API文档版本 2.0.0</p>
+            <p>© 2026 行为验证系统 | API文档版本 17.1.0</p>
             <p>如有问题，请联系技术支持：support@example.com</p>
         </footer>
     </div>
     
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
     <script>
         function showSection(sectionId) {
+            // Hide all sections
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            // Remove active class from all nav buttons
             document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
             
+            // Show selected section
             document.getElementById(sectionId).classList.add('active');
+            // Add active class to clicked button
             event.target.classList.add('active');
+            
+            // Initialize Swagger UI if selected
+            if (sectionId === 'swagger') {
+                initSwaggerUI();
+            }
         }
         
-        function showSdk(lang) {
-            document.querySelectorAll('.sdk-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.sdk-tab').forEach(t => t.classList.remove('active'));
-            
-            document.getElementById(`sdk-${lang}`).classList.add('active');
-            event.target.classList.add('active');
+        function initSwaggerUI() {
+            if (!window.swaggerUiInitialized) {
+                const ui = SwaggerUIBundle({
+                    url: "./openapi.yaml",
+                    dom_id: '#swagger-ui',
+                    deepLinking: true,
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIBundle.SwaggerUIStandalonePreset
+                    ],
+                    layout: "BaseLayout",
+                    defaultModelsExpandDepth: 1,
+                    defaultModelExpandDepth: 1
+                });
+                window.swaggerUi = ui;
+                window.swaggerUiInitialized = true;
+            }
         }
         
         function copyCode(btn) {
@@ -792,6 +1097,116 @@ print(f"Success: {result.success}")</pre>
                     btn.textContent = '复制';
                 }, 2000);
             });
+        }
+        
+        function copyEndpoint(type) {
+            let text = '';
+            switch(type) {
+                case 'slider':
+                    text = document.getElementById('slider-endpoint').value;
+                    break;
+                case 'video-generate':
+                case 'video-verify':
+                case 'video-options':
+                    text = document.getElementById(type + '-endpoint').value;
+                    break;
+                case 'ar-generate':
+                case 'ar-verify':
+                case 'ar-options':
+                    text = document.getElementById(type + '-endpoint').value;
+                    break;
+            }
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已复制到剪贴板!');
+            });
+        }
+        
+        async function testEndpoint(type) {
+            let responseDiv;
+            let endpoint, method = 'GET', body = null;
+            
+            switch(type) {
+                case 'slider':
+                    endpoint = document.getElementById('slider-endpoint').value;
+                    const width = document.getElementById('slider-width').value;
+                    const height = document.getElementById('slider-height').value;
+                    const params = new URLSearchParams();
+                    if (width) params.append('width', width);
+                    if (height) params.append('height', height);
+                    endpoint = endpoint + (params.toString() ? '?' + params.toString() : '');
+                    responseDiv = document.getElementById('slider-response');
+                    break;
+                    
+                case 'video-generate':
+                    endpoint = document.getElementById('video-gen-endpoint').value;
+                    body = document.getElementById('video-gen-body').value;
+                    method = 'POST';
+                    responseDiv = document.getElementById('video-gen-response');
+                    break;
+                    
+                case 'video-verify':
+                    endpoint = document.getElementById('video-verify-endpoint').value;
+                    body = document.getElementById('video-verify-body').value;
+                    method = 'POST';
+                    responseDiv = document.getElementById('video-verify-response');
+                    break;
+                    
+                case 'video-options':
+                    endpoint = document.getElementById('video-options-endpoint').value;
+                    responseDiv = document.getElementById('video-options-response');
+                    break;
+                    
+                case 'ar-generate':
+                    endpoint = document.getElementById('ar-gen-endpoint').value;
+                    body = document.getElementById('ar-gen-body').value;
+                    method = 'POST';
+                    responseDiv = document.getElementById('ar-gen-response');
+                    break;
+                    
+                case 'ar-verify':
+                    endpoint = document.getElementById('ar-verify-endpoint').value;
+                    body = document.getElementById('ar-verify-body').value;
+                    method = 'POST';
+                    responseDiv = document.getElementById('ar-verify-response');
+                    break;
+                    
+                case 'ar-options':
+                    endpoint = document.getElementById('ar-options-endpoint').value;
+                    responseDiv = document.getElementById('ar-options-response');
+                    break;
+            }
+            
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = '<strong>加载中...</strong>';
+            
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (body) {
+                    options.body = body;
+                }
+                
+                const response = await fetch(endpoint, options);
+                const data = await response.json();
+                
+                responseDiv.innerHTML = `
+                    <strong>响应状态：</strong>${response.status} ${response.statusText}<br><br>
+                    <strong>响应内容：</strong><br>
+                    <pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <strong style="color: red;">请求失败：</strong><br>
+                    ${error.message}<br><br>
+                    <strong>提示：</strong>确保服务器正在运行 (http://localhost:8080)
+                `;
+            }
         }
     </script>
 </body>

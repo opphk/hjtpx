@@ -4,12 +4,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/internal/service/captcha"
 )
 
 var aiModelV3Handler *handler.AIModelV3Handler
 
 func SetupRoutes(r *gin.Engine) {
 	aiModelV3Handler = handler.NewAIModelV3Handler()
+
+	arGeneratorService := captcha.NewARGeneratorServiceSimple()
+	arVerifierService := captcha.NewARVerifierService(nil, nil)
+	handler.InitARCaptchaHandler(arGeneratorService, arVerifierService)
 
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())

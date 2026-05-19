@@ -265,19 +265,6 @@ func AcknowledgeAlert(c *gin.Context) {
 	})
 }
 
-// GetSystemMetrics 获取系统指标
-func GetSystemMetrics(c *gin.Context) {
-	response.Success(c, gin.H{
-		"cpu":    []float64{42.3, 45.1, 47.8, 44.5, 46.2},
-		"memory": []float64{60.2, 62.5, 63.1, 61.8, 62.8},
-		"disk":   []float64{34.5, 34.7, 34.9, 35.0, 35.1},
-		"network": gin.H{
-			"in":  125000,
-			"out": 98000,
-		},
-	})
-}
-
 // GetRequestMetrics 获取请求指标
 func GetRequestMetrics(c *gin.Context) {
 	response.Success(c, gin.H{

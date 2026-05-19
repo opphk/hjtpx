@@ -1860,3 +1860,676 @@ func (d *EnvDetector) DetectTorExitNode(ip string) bool {
 
 	return false
 }
+
+type EnhancedEnvDetectorV3 struct {
+	*EnvDetector
+	canvasAnalyzer  *CanvasFingerprintAnalyzer
+	webglAnalyzer   *WebGLFingerprintAnalyzer
+	headlessDetector *HeadlessBrowserDetector
+}
+
+type CanvasFingerprintAnalyzer struct {
+	commonHashes map[string]float64
+	entropyMap   map[string]float64
+}
+
+type WebGLFingerprintAnalyzer struct {
+	softwareRenders map[string]float64
+	rendererDB      map[string]*RendererInfo
+}
+
+type HeadlessBrowserDetector struct {
+	signatures map[string]*HeadlessSignature
+	evasionDB  map[string]bool
+}
+
+type HeadlessSignature struct {
+	Name        string
+	Patterns    []string
+	Weight      float64
+	Description string
+}
+
+type RendererInfo struct {
+	Vendor       string
+	Renderer     string
+	IsSoftware   bool
+	IsVirtual    bool
+	RiskLevel    string
+}
+
+type CanvasAnalysisResult struct {
+	Hash               string
+	Entropy            float64
+	AnomalyScore       float64
+	AnomalyReasons     []string
+	IsSuspicious       bool
+	CommonHashMatch    bool
+	MatchPercentage    float64
+}
+
+type WebGLAnalysisResultV3 struct {
+	Vendor             string
+	Renderer           string
+	IsSoftware         bool
+	IsVirtualMachine   bool
+	RiskScore          float64
+	DetectedIndicators []string
+	Recommendations    []string
+}
+
+type HeadlessDetectionResult struct {
+	IsHeadless         bool
+	BrowserType        string
+	Confidence         float64
+	DetectedSignatures []string
+	EvasionAttempts    int
+	RiskLevel          string
+}
+
+func NewEnhancedEnvDetectorV3() *EnhancedEnvDetectorV3 {
+	detector := &EnhancedEnvDetectorV3{
+		EnvDetector:        NewEnvDetectorBackend(),
+		canvasAnalyzer:     NewCanvasFingerprintAnalyzer(),
+		webglAnalyzer:      NewWebGLFingerprintAnalyzer(),
+		headlessDetector:  NewHeadlessBrowserDetector(),
+	}
+	detector.initializeAnalyzers()
+	return detector
+}
+
+func NewCanvasFingerprintAnalyzer() *CanvasFingerprintAnalyzer {
+	return &CanvasFingerprintAnalyzer{
+		commonHashes: make(map[string]float64),
+		entropyMap:   make(map[string]float64),
+	}
+}
+
+func NewWebGLFingerprintAnalyzer() *WebGLFingerprintAnalyzer {
+	return &WebGLFingerprintAnalyzer{
+		softwareRenders: make(map[string]float64),
+		rendererDB:      make(map[string]*RendererInfo),
+	}
+}
+
+func NewHeadlessBrowserDetector() *HeadlessBrowserDetector {
+	return &HeadlessBrowserDetector{
+		signatures: make(map[string]*HeadlessSignature),
+		evasionDB:  make(map[string]bool),
+	}
+}
+
+func (d *EnhancedEnvDetectorV3) initializeAnalyzers() {
+	d.canvasAnalyzer.initializeCommonHashes()
+	d.webglAnalyzer.initializeRendererDB()
+	d.headlessDetector.initializeSignatures()
+}
+
+func (c *CanvasFingerprintAnalyzer) initializeCommonHashes() {
+	c.commonHashes = map[string]float64{
+		"a1b2c3d4e5f6": 0.8,
+		"1234567890ab": 0.7,
+		"ffffffffffff": 0.6,
+		"000000000000": 0.5,
+		"deadbeef1234": 0.6,
+		"abcd1234efgh": 0.5,
+	}
+	
+	c.entropyMap = map[string]float64{
+		"low_entropy":    0.3,
+		"medium_entropy":  0.6,
+		"high_entropy":    0.9,
+	}
+}
+
+func (w *WebGLFingerprintAnalyzer) initializeRendererDB() {
+	w.softwareRenders = map[string]float64{
+		"swiftshader": 0.9,
+		"llvmpipe":    0.85,
+		"mesa":        0.7,
+		"software":    0.8,
+		"emulated":    0.75,
+	}
+	
+	w.rendererDB = map[string]*RendererInfo{
+		"swiftshader": {
+			Vendor:      "Google",
+			Renderer:    "SwiftShader",
+			IsSoftware:  true,
+			IsVirtual:   false,
+			RiskLevel:   "high",
+		},
+		"llvmpipe": {
+			Vendor:      "LLVM",
+			Renderer:    "llvmpipe",
+			IsSoftware:  true,
+			IsVirtual:   false,
+			RiskLevel:   "high",
+		},
+		"vmware": {
+			Vendor:      "VMware",
+			Renderer:    "VMware",
+			IsSoftware:  false,
+			IsVirtual:   true,
+			RiskLevel:   "medium",
+		},
+		"virtualbox": {
+			Vendor:      "Oracle",
+			Renderer:    "VirtualBox",
+			IsSoftware:  false,
+			IsVirtual:   true,
+			RiskLevel:   "medium",
+		},
+	}
+}
+
+func (h *HeadlessBrowserDetector) initializeSignatures() {
+	h.signatures = map[string]*HeadlessSignature{
+		"navigator_webdriver": {
+			Name:        "Navigator WebDriver",
+			Patterns:    []string{"navigator.webdriver"},
+			Weight:      0.9,
+			Description: "navigator.webdriver is true",
+		},
+		"chrome_runtime": {
+			Name:        "Chrome Runtime Missing",
+			Patterns:    []string{"chrome.runtime"},
+			Weight:      0.7,
+			Description: "Chrome runtime object missing",
+		},
+		"permissions_api": {
+			Name:        "Permissions API Anomaly",
+			Patterns:    []string{"permissions.query"},
+			Weight:      0.6,
+			Description: "Permissions API behaves abnormally",
+		},
+		"user_agent": {
+			Name:        "Headless User Agent",
+			Patterns:    []string{"HeadlessChrome", "Headless"},
+			Weight:      0.8,
+			Description: "User agent contains Headless",
+		},
+		"window_outer": {
+			Name:        "Zero Window Size",
+			Patterns:    []string{"window.outer"},
+			Weight:      0.75,
+			Description: "Window outer dimensions are zero",
+		},
+		"plugins_missing": {
+			Name:        "Plugins Missing",
+			Patterns:    []string{"navigator.plugins"},
+			Weight:      0.5,
+			Description: "No plugins detected",
+		},
+		"languages_empty": {
+			Name:        "Empty Languages",
+			Patterns:    []string{"navigator.languages"},
+			Weight:      0.5,
+			Description: "Navigator languages array is empty",
+		},
+		"webgl_debug": {
+			Name:        "WebGL Debug Blocked",
+			Patterns:    []string{"WEBGL_debug_renderer_info"},
+			Weight:      0.65,
+			Description: "WebGL debug renderer info blocked",
+		},
+	}
+	
+	h.evasionDB = map[string]bool{
+		"navigator.webdriver = undefined": true,
+		"Object.defineProperty(navigator, 'webdriver', {get: () => false})": true,
+		"chrome.runtime undefined": true,
+	}
+}
+
+func (d *EnhancedEnvDetectorV3) AnalyzeCanvasFingerprintV3(canvasHash string) *CanvasAnalysisResult {
+	result := &CanvasAnalysisResult{
+		Hash:               canvasHash,
+		AnomalyReasons:     []string{},
+	}
+	
+	if canvasHash == "" {
+		result.AnomalyScore = 0.5
+		result.AnomalyReasons = append(result.AnomalyReasons, "Empty canvas fingerprint")
+		result.IsSuspicious = true
+		return result
+	}
+	
+	result.Entropy = d.calculateCanvasEntropy(canvasHash)
+	
+	if result.Entropy < 2.0 {
+		result.AnomalyScore += 0.3
+		result.AnomalyReasons = append(result.AnomalyReasons, "Low entropy fingerprint")
+	}
+	
+	for commonHash, confidence := range d.canvasAnalyzer.commonHashes {
+		similarity := d.calculateHashSimilarity(canvasHash, commonHash)
+		if similarity > 0.8 {
+			result.CommonHashMatch = true
+			result.MatchPercentage = similarity
+			result.AnomalyScore += confidence * 0.5
+			result.AnomalyReasons = append(result.AnomalyReasons, fmt.Sprintf("Matches common hash (%.0f%%)", similarity*100))
+		}
+	}
+	
+	if len(canvasHash) < 32 {
+		result.AnomalyScore += 0.2
+		result.AnomalyReasons = append(result.AnomalyReasons, "Suspiciously short hash")
+	}
+	
+	if d.hasRepeatingPattern(canvasHash) {
+		result.AnomalyScore += 0.25
+		result.AnomalyReasons = append(result.AnomalyReasons, "Repeating pattern detected")
+	}
+	
+	result.IsSuspicious = result.AnomalyScore > 0.5
+	result.AnomalyScore = math.Min(result.AnomalyScore, 1.0)
+	
+	return result
+}
+
+func (d *EnhancedEnvDetectorV3) calculateCanvasEntropy(hash string) float64 {
+	if len(hash) == 0 {
+		return 0.0
+	}
+	
+	freq := make(map[rune]int)
+	for _, char := range hash {
+		freq[char]++
+	}
+	
+	entropy := 0.0
+	for _, count := range freq {
+		p := float64(count) / float64(len(hash))
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+	
+	maxEntropy := math.Log2(float64(len(hash)))
+	if maxEntropy > 0 {
+		return entropy / maxEntropy
+	}
+	return 0.0
+}
+
+func (d *EnhancedEnvDetectorV3) calculateHashSimilarity(hash1, hash2 string) float64 {
+	if len(hash1) != len(hash2) {
+		return 0.0
+	}
+	
+	matches := 0
+	for i := 0; i < len(hash1); i++ {
+		if hash1[i] == hash2[i] {
+			matches++
+		}
+	}
+	
+	return float64(matches) / float64(len(hash1))
+}
+
+func (d *EnhancedEnvDetectorV3) hasRepeatingPattern(hash string) bool {
+	if len(hash) < 4 {
+		return false
+	}
+	
+	for patternLen := 1; patternLen <= len(hash)/2; patternLen++ {
+		pattern := hash[:patternLen]
+		allSame := true
+		for i := patternLen; i < len(hash); i += patternLen {
+			end := i + patternLen
+			if end > len(hash) {
+				end = len(hash)
+			}
+			if hash[i:end] != pattern {
+				allSame = false
+				break
+			}
+		}
+		if allSame && len(hash)/patternLen > 2 {
+			return true
+		}
+	}
+	
+	return false
+}
+
+func (d *EnhancedEnvDetectorV3) AnalyzeWebGLFingerprintV3(renderer, vendor string) *WebGLAnalysisResultV3 {
+	result := &WebGLAnalysisResultV3{
+		Vendor:             vendor,
+		Renderer:           renderer,
+		DetectedIndicators: []string{},
+		Recommendations:    []string{},
+	}
+	
+	if renderer == "" || vendor == "" {
+		result.RiskScore = 0.5
+		result.DetectedIndicators = append(result.DetectedIndicators, "Missing WebGL information")
+		return result
+	}
+	
+	rendererLower := strings.ToLower(renderer)
+	vendorLower := strings.ToLower(vendor)
+	
+	for softwareRender, risk := range d.webglAnalyzer.softwareRenders {
+		if strings.Contains(rendererLower, softwareRender) {
+			result.IsSoftware = true
+			result.RiskScore = math.Max(result.RiskScore, risk)
+			result.DetectedIndicators = append(result.DetectedIndicators, fmt.Sprintf("Software renderer: %s", softwareRender))
+			result.Recommendations = append(result.Recommendations, "Consider blocking or requiring additional verification")
+		}
+	}
+	
+	vmPatterns := []string{"vmware", "virtualbox", "parallels", "hyperv", "qemu", "kvm"}
+	for _, pattern := range vmPatterns {
+		if strings.Contains(rendererLower, pattern) || strings.Contains(vendorLower, pattern) {
+			result.IsVirtualMachine = true
+			result.RiskScore = math.Max(result.RiskScore, 0.7)
+			result.DetectedIndicators = append(result.DetectedIndicators, fmt.Sprintf("Virtual machine: %s", pattern))
+		}
+	}
+	
+	anonymizedPatterns := []string{"generic", "unknown", "default", "standard"}
+	anonymizedCount := 0
+	for _, pattern := range anonymizedPatterns {
+		if strings.Contains(rendererLower, pattern) || strings.Contains(vendorLower, pattern) {
+			anonymizedCount++
+		}
+	}
+	if anonymizedCount >= 2 {
+		result.RiskScore = math.Max(result.RiskScore, 0.6)
+		result.DetectedIndicators = append(result.DetectedIndicators, "Anonymized WebGL information")
+	}
+	
+	headlessPatterns := []string{"headless", "bot", "automation", "test"}
+	for _, pattern := range headlessPatterns {
+		if strings.Contains(rendererLower, pattern) || strings.Contains(vendorLower, pattern) {
+			result.RiskScore = math.Max(result.RiskScore, 0.85)
+			result.DetectedIndicators = append(result.DetectedIndicators, fmt.Sprintf("Headless indicator: %s", pattern))
+		}
+	}
+	
+	if result.RiskScore < 0.3 {
+		result.Recommendations = append(result.Recommendations, "Normal WebGL fingerprint")
+	}
+	
+	return result
+}
+
+func (d *EnhancedEnvDetectorV3) DetectHeadlessBrowserV3(info *EnvInfo, frontendData map[string]interface{}) *HeadlessDetectionResult {
+	result := &HeadlessDetectionResult{
+		DetectedSignatures: []string{},
+	}
+	
+	totalWeight := 0.0
+	detectedWeight := 0.0
+	
+	uaLower := strings.ToLower(info.UserAgent)
+	for sigName, sig := range d.headlessDetector.signatures {
+		weight := sig.Weight
+		totalWeight += weight
+		
+		switch sigName {
+		case "user_agent":
+			for _, pattern := range sig.Patterns {
+				if strings.Contains(uaLower, strings.ToLower(pattern)) {
+					detectedWeight += weight
+					result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+					break
+				}
+			}
+		
+		case "navigator_webdriver":
+			if frontendData != nil {
+				if webdriver, ok := frontendData["navigator_webdriver"].(bool); ok && webdriver {
+					detectedWeight += weight
+					result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+				}
+			}
+		
+		case "plugins_missing":
+			if len(info.Plugins) == 0 {
+				detectedWeight += weight * 0.5
+				result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+			}
+		
+		case "languages_empty":
+			if len(info.Languages) == 0 {
+				detectedWeight += weight * 0.5
+				result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+			}
+		
+		case "window_outer":
+			if frontendData != nil {
+				if outerWidth, ok := frontendData["outer_width"].(float64); ok && outerWidth == 0 {
+					detectedWeight += weight
+					result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+				}
+				if outerHeight, ok := frontendData["outer_height"].(float64); ok && outerHeight == 0 {
+					detectedWeight += weight
+					result.DetectedSignatures = append(result.DetectedSignatures, "Zero window height")
+				}
+			}
+		
+		case "webgl_debug":
+			if info.WebGLRenderer == "" || info.WebGLVendor == "" {
+				detectedWeight += weight * 0.5
+				result.DetectedSignatures = append(result.DetectedSignatures, sig.Description)
+			}
+		}
+	}
+	
+	if totalWeight > 0 {
+		result.Confidence = detectedWeight / totalWeight
+	}
+	
+	result.IsHeadless = result.Confidence > 0.6
+	
+	if result.Confidence > 0.8 {
+		result.RiskLevel = "high"
+		result.BrowserType = "definite_headless"
+	} else if result.Confidence > 0.6 {
+		result.RiskLevel = "medium"
+		result.BrowserType = "probable_headless"
+	} else if result.Confidence > 0.3 {
+		result.RiskLevel = "low"
+		result.BrowserType = "possible_headless"
+	} else {
+		result.RiskLevel = "none"
+		result.BrowserType = "normal_browser"
+	}
+	
+	if result.IsHeadless {
+		if strings.Contains(uaLower, "headlesschrome") || strings.Contains(uaLower, "chrome-headless") {
+			result.BrowserType = "chrome_headless"
+		} else if strings.Contains(uaLower, "phantom") {
+			result.BrowserType = "phantomjs"
+		} else if strings.Contains(uaLower, "firefox-headless") {
+			result.BrowserType = "firefox_headless"
+		}
+	}
+	
+	if frontendData != nil {
+		result.EvasionAttempts = d.detectEvasionAttempts(frontendData)
+		if result.EvasionAttempts > 0 {
+			result.Confidence = math.Min(result.Confidence+0.2, 1.0)
+		}
+	}
+	
+	return result
+}
+
+func (d *EnhancedEnvDetectorV3) detectEvasionAttempts(frontendData map[string]interface{}) int {
+	count := 0
+	
+	for key := range frontendData {
+		keyLower := strings.ToLower(key)
+		if strings.Contains(keyLower, "evasion") || strings.Contains(keyLower, "stealth") {
+			count++
+		}
+	}
+	
+	if overrideCount, ok := frontendData["property_overrides"].(int); ok {
+		count += overrideCount
+	}
+	
+	return count
+}
+
+func (d *EnhancedEnvDetectorV3) RunEnhancedEnvCheckV3(info *EnvInfo, frontendData map[string]interface{}) *EnvDetectionReport {
+	report := d.EnvDetector.EnhancedEnvCheck(info)
+	
+	if info.CanvasFingerprint != "" {
+		canvasResult := d.AnalyzeCanvasFingerprintV3(info.CanvasFingerprint)
+		if canvasResult.IsSuspicious {
+			report.EnvScore -= canvasResult.AnomalyScore * 20
+			report.Checks = append(report.Checks, RiskCheckResult{
+				Name:     "canvas_v3_anomaly",
+				Risk:     "medium",
+				Detected: true,
+				Score:    int(canvasResult.AnomalyScore * 100),
+				Reason:   strings.Join(canvasResult.AnomalyReasons, "; "),
+			})
+		}
+	}
+	
+	webglResult := d.AnalyzeWebGLFingerprintV3(info.WebGLRenderer, info.WebGLVendor)
+	if webglResult.RiskScore > 0.5 {
+		report.EnvScore -= webglResult.RiskScore * 15
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "webgl_v3_anomaly",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(webglResult.RiskScore * 100),
+			Reason:   strings.Join(webglResult.DetectedIndicators, "; "),
+		})
+	}
+	
+	headlessResult := d.DetectHeadlessBrowserV3(info, frontendData)
+	if headlessResult.IsHeadless {
+		report.EnvScore -= headlessResult.Confidence * 25
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "headless_browser_v3",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(headlessResult.Confidence * 100),
+			Reason:   fmt.Sprintf("%s (%.0f%% confidence)", headlessResult.BrowserType, headlessResult.Confidence*100),
+		})
+	}
+	
+	if report.EnvScore < 0 {
+		report.EnvScore = 0
+	}
+	
+	if report.EnvScore < 60 {
+		report.RiskLevel = "high"
+		report.IsRisky = true
+		report.Action = "block"
+	} else if report.EnvScore < 80 {
+		report.RiskLevel = "medium"
+		if report.IsRisky {
+			report.Action = "review"
+		}
+	}
+	
+	return report
+}
+
+func (d *EnhancedEnvDetectorV3) AnalyzeCanvasFingerprintAdvanced(canvasData string, additionalInfo map[string]interface{}) *CanvasAnalysisResult {
+	result := &CanvasAnalysisResult{
+		Hash:               canvasData,
+		AnomalyReasons:     []string{},
+	}
+	
+	if canvasData == "" {
+		result.AnomalyScore = 0.7
+		result.AnomalyReasons = append(result.AnomalyReasons, "Empty canvas fingerprint")
+		result.IsSuspicious = true
+		return result
+	}
+	
+	result.Entropy = d.calculateCanvasEntropy(canvasData)
+	
+	if result.Entropy < 0.5 {
+		result.AnomalyScore += 0.2
+		result.AnomalyReasons = append(result.AnomalyReasons, "Very low entropy")
+	}
+	
+	if len(canvasData) < 64 {
+		result.AnomalyScore += 0.15
+		result.AnomalyReasons = append(result.AnomalyReasons, "Unusually short fingerprint")
+	}
+	
+	if additionalInfo != nil {
+		if pixelData, ok := additionalInfo["pixel_variance"].(float64); ok && pixelData < 0.1 {
+			result.AnomalyScore += 0.25
+			result.AnomalyReasons = append(result.AnomalyReasons, "Low pixel variance")
+		}
+		
+		if consistency, ok := additionalInfo["cross_session_consistency"].(float64); ok && consistency > 0.95 {
+			result.AnomalyScore += 0.2
+			result.AnomalyReasons = append(result.AnomalyReasons, "Suspiciously consistent across sessions")
+		}
+		
+		if colorDepth, ok := additionalInfo["color_depth"].(int); ok && colorDepth < 24 {
+			result.AnomalyScore += 0.15
+			result.AnomalyReasons = append(result.AnomalyReasons, "Low color depth")
+		}
+	}
+	
+	result.IsSuspicious = result.AnomalyScore > 0.5
+	result.AnomalyScore = math.Min(result.AnomalyScore, 1.0)
+	
+	return result
+}
+
+func (d *EnhancedEnvDetectorV3) AnalyzeWebGLFingerprintAdvanced(glInfo map[string]interface{}) *WebGLAnalysisResultV3 {
+	result := &WebGLAnalysisResultV3{
+		DetectedIndicators: []string{},
+		Recommendations:    []string{},
+	}
+	
+	if glInfo == nil {
+		result.RiskScore = 0.6
+		result.DetectedIndicators = append(result.DetectedIndicators, "Missing WebGL info")
+		return result
+	}
+	
+	if renderer, ok := glInfo["renderer"].(string); ok {
+		result.Renderer = renderer
+		rendererLower := strings.ToLower(renderer)
+		
+		for softwareRender, risk := range d.webglAnalyzer.softwareRenders {
+			if strings.Contains(rendererLower, softwareRender) {
+				result.IsSoftware = true
+				result.RiskScore = math.Max(result.RiskScore, risk)
+				result.DetectedIndicators = append(result.DetectedIndicators, "Software renderer: "+softwareRender)
+			}
+		}
+	}
+	
+	if vendor, ok := glInfo["vendor"].(string); ok {
+		result.Vendor = vendor
+	}
+	
+	if extensions, ok := glInfo["extensions"].([]string); ok {
+		if len(extensions) < 5 {
+			result.RiskScore = math.Max(result.RiskScore, 0.4)
+			result.DetectedIndicators = append(result.DetectedIndicators, fmt.Sprintf("Low extension count: %d", len(extensions)))
+		}
+	}
+	
+	if maxTexSize, ok := glInfo["max_texture_size"].(int); ok {
+		if maxTexSize < 2048 {
+			result.RiskScore = math.Max(result.RiskScore, 0.5)
+			result.DetectedIndicators = append(result.DetectedIndicators, fmt.Sprintf("Low max texture size: %d", maxTexSize))
+		}
+	}
+	
+	if debugInfoAvailable, ok := glInfo["debug_info_available"].(bool); ok && !debugInfoAvailable {
+		result.RiskScore = math.Max(result.RiskScore, 0.35)
+		result.DetectedIndicators = append(result.DetectedIndicators, "WebGL debug info blocked")
+	}
+	
+	return result
+}

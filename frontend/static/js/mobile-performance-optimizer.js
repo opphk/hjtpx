@@ -1,6 +1,198 @@
 const MobilePerformanceOptimizer = (function() {
     'use strict';
 
+    class PerformanceMonitor {
+        constructor() {
+            this.metrics = {
+                firstPaint: 0,
+                firstContentfulPaint: 0,
+                domContentLoaded: 0,
+                loadComplete: 0,
+                firstInputDelay: 0,
+                largestContentfulPaint: 0,
+                cumulativeLayoutShift: 0,
+                timeToInteractive: 0
+            };
+            this.observers = [];
+            this.init();
+        }
+
+        init() {
+            this.setupPaintObserver();
+            this.setupNavigationObserver();
+            this.setupInputDelayObserver();
+            this.setupLCPObserver();
+            this.setupCLObserver();
+            this.recordInitialMetrics();
+            this.setupPerformanceReporting();
+        }
+
+        setupPaintObserver() {
+            if ('PerformanceObserver' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        for (const entry of list.getEntries()) {
+                            if (entry.name === 'first-paint') {
+                                this.metrics.firstPaint = entry.startTime;
+                            } else if (entry.name === 'first-contentful-paint') {
+                                this.metrics.firstContentfulPaint = entry.startTime;
+                            }
+                        }
+                    });
+                    observer.observe({ entryTypes: ['paint'] });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('Paint observer not supported:', e);
+                }
+            }
+        }
+
+        setupNavigationObserver() {
+            if ('PerformanceObserver' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        const entries = list.getEntries();
+                        if (entries.length > 0) {
+                            const navEntry = entries[0];
+                            this.metrics.domContentLoaded = navEntry.domContentLoadedEventStart;
+                            this.metrics.loadComplete = navEntry.loadEventEnd;
+                            this.metrics.timeToInteractive = navEntry.domInteractive;
+                        }
+                    });
+                    observer.observe({ entryTypes: ['navigation'] });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('Navigation observer not supported:', e);
+                }
+            }
+        }
+
+        setupInputDelayObserver() {
+            if ('PerformanceObserver' in window && 'EventCounts' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        for (const entry of list.getEntries()) {
+                            if (entry.processingStart > entry.startTime) {
+                                this.metrics.firstInputDelay = entry.processingStart - entry.startTime;
+                            }
+                        }
+                    });
+                    observer.observe({ entryTypes: ['first-input'], buffered: true });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('First input observer not supported:', e);
+                }
+            }
+        }
+
+        setupLCPObserver() {
+            if ('PerformanceObserver' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        const entries = list.getEntries();
+                        if (entries.length > 0) {
+                            this.metrics.largestContentfulPaint = entries[entries.length - 1].startTime;
+                        }
+                    });
+                    observer.observe({ entryTypes: ['largest-contentful-paint'], buffered: true });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('LCP observer not supported:', e);
+                }
+            }
+        }
+
+        setupCLObserver() {
+            if ('PerformanceObserver' in window) {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        for (const entry of list.getEntries()) {
+                            if (!entry.hadRecentInput) {
+                                this.metrics.cumulativeLayoutShift += entry.value;
+                            }
+                        }
+                    });
+                    observer.observe({ entryTypes: ['layout-shift'], buffered: true });
+                    this.observers.push(observer);
+                } catch (e) {
+                    console.warn('CLS observer not supported:', e);
+                }
+            }
+        }
+
+        recordInitialMetrics() {
+            if ('getEntriesByType' in performance) {
+                const paintEntries = performance.getEntriesByType('paint');
+                paintEntries.forEach(entry => {
+                    if (entry.name === 'first-paint') {
+                        this.metrics.firstPaint = entry.startTime;
+                    } else if (entry.name === 'first-contentful-paint') {
+                        this.metrics.firstContentfulPaint = entry.startTime;
+                    }
+                });
+
+                const navEntries = performance.getEntriesByType('navigation');
+                if (navEntries.length > 0) {
+                    const navEntry = navEntries[0];
+                    this.metrics.domContentLoaded = navEntry.domContentLoadedEventStart;
+                    this.metrics.loadComplete = navEntry.loadEventEnd;
+                }
+            }
+        }
+
+        setupPerformanceReporting() {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.metrics.domContentLoaded = performance.now();
+            });
+
+            window.addEventListener('load', () => {
+                this.metrics.loadComplete = performance.now();
+                this.reportMetrics();
+            });
+        }
+
+        reportMetrics() {
+            console.group('📊 Performance Metrics');
+            console.log('First Paint:', this.metrics.firstPaint.toFixed(2) + 'ms');
+            console.log('First Contentful Paint:', this.metrics.firstContentfulPaint.toFixed(2) + 'ms');
+            console.log('DOM Content Loaded:', this.metrics.domContentLoaded.toFixed(2) + 'ms');
+            console.log('Load Complete:', this.metrics.loadComplete.toFixed(2) + 'ms');
+            console.log('First Input Delay:', this.metrics.firstInputDelay.toFixed(2) + 'ms');
+            console.log('Largest Contentful Paint:', this.metrics.largestContentfulPaint.toFixed(2) + 'ms');
+            console.log('Cumulative Layout Shift:', this.metrics.cumulativeLayoutShift.toFixed(4));
+            console.log('Time to Interactive:', this.metrics.timeToInteractive.toFixed(2) + 'ms');
+            console.groupEnd();
+
+            this.sendMetricsToServer();
+        }
+
+        sendMetricsToServer() {
+            if (typeof fetch !== 'undefined') {
+                fetch('/api/performance-metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        metrics: this.metrics,
+                        timestamp: Date.now(),
+                        url: window.location.href,
+                        userAgent: navigator.userAgent
+                    })
+                }).catch(() => {});
+            }
+        }
+
+        getMetrics() {
+            return { ...this.metrics };
+        }
+
+        destroy() {
+            this.observers.forEach(observer => {
+                observer.disconnect();
+            });
+            this.observers = [];
+        }
+    }
+
     class ImageOptimizer {
         constructor() {
             this.quality = 0.8;
@@ -620,19 +812,221 @@ const MobilePerformanceOptimizer = (function() {
         }
     }
 
+    class InteractionOptimizer {
+        constructor() {
+            this.interactionMetrics = {
+                totalInteractions: 0,
+                averageResponseTime: 0,
+                longestResponseTime: 0,
+                interactionHistory: []
+            };
+            this.responseTimeThreshold = 100;
+            this.observers = [];
+            this.init();
+        }
+
+        init() {
+            this.setupInteractionTracking();
+            this.setupTouchOptimization();
+            this.setupClickOptimization();
+            this.setupScrollOptimization();
+            this.setupAnimationOptimization();
+        }
+
+        setupInteractionTracking() {
+            const interactionTypes = ['click', 'touchstart', 'touchend', 'keypress'];
+
+            interactionTypes.forEach(type => {
+                document.addEventListener(type, (event) => {
+                    const startTime = performance.now();
+
+                    const measureResponse = () => {
+                        const endTime = performance.now();
+                        const responseTime = endTime - startTime;
+
+                        this.interactionMetrics.totalInteractions++;
+                        this.interactionMetrics.interactionHistory.push({
+                            type,
+                            responseTime,
+                            timestamp: endTime
+                        });
+
+                        if (this.interactionMetrics.interactionHistory.length > 100) {
+                            this.interactionMetrics.interactionHistory.shift();
+                        }
+
+                        this.updateAverageResponseTime();
+
+                        if (responseTime > this.interactionMetrics.longestResponseTime) {
+                            this.interactionMetrics.longestResponseTime = responseTime;
+                        }
+                    };
+
+                    requestAnimationFrame(measureResponse);
+                }, { passive: true });
+            });
+        }
+
+        setupTouchOptimization() {
+            if ('ontouchstart' in window) {
+                document.addEventListener('touchstart', () => {
+                    document.body.classList.add('touch-enabled');
+                }, { passive: true });
+
+                document.addEventListener('touchend', () => {
+                    document.body.classList.remove('touch-active');
+                }, { passive: true });
+            }
+        }
+
+        setupClickOptimization() {
+            const clickableElements = document.querySelectorAll('button, a, [role="button"]');
+
+            clickableElements.forEach(element => {
+                if (!element.hasAttribute('data-optimized')) {
+                    element.setAttribute('data-optimized', 'true');
+
+                    element.addEventListener('click', (e) => {
+                        this.handleClickFeedback(e.target);
+                    }, { passive: true });
+                }
+            });
+        }
+
+        handleClickFeedback(element) {
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+
+            const ripple = document.createElement('span');
+            ripple.className = 'click-ripple';
+            ripple.style.cssText = `
+                position: fixed;
+                left: ${x}px;
+                top: ${y}px;
+                width: 0;
+                height: 0;
+                border-radius: 50%;
+                background: rgba(13, 110, 253, 0.3);
+                pointer-events: none;
+                transform: translate(-50%, -50%);
+                transition: width 0.3s ease-out, height 0.3s ease-out, opacity 0.3s ease-out;
+            `;
+
+            document.body.appendChild(ripple);
+
+            requestAnimationFrame(() => {
+                ripple.style.width = '100px';
+                ripple.style.height = '100px';
+                ripple.style.opacity = '0';
+            });
+
+            setTimeout(() => {
+                ripple.remove();
+            }, 300);
+        }
+
+        setupScrollOptimization() {
+            let ticking = false;
+
+            window.addEventListener('scroll', () => {
+                if (!ticking) {
+                    requestAnimationFrame(() => {
+                        this.handleScrollOptimization();
+                        ticking = false;
+                    });
+                    ticking = true;
+                }
+            }, { passive: true });
+        }
+
+        handleScrollOptimization() {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const scrollPercentage = (scrollTop / scrollHeight) * 100;
+
+            document.body.dataset.scrollProgress = scrollPercentage;
+        }
+
+        setupAnimationOptimization() {
+            if ('matchMedia' in window) {
+                const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+                if (prefersReducedMotion.matches) {
+                    this.disableAnimations();
+                }
+
+                prefersReducedMotion.addEventListener('change', (e) => {
+                    if (e.matches) {
+                        this.disableAnimations();
+                    } else {
+                        this.enableAnimations();
+                    }
+                });
+            }
+        }
+
+        disableAnimations() {
+            document.documentElement.style.setProperty('--animation-duration', '0.01ms');
+            document.documentElement.style.setProperty('--transition-duration', '0.01ms');
+            document.body.classList.add('reduced-motion');
+        }
+
+        enableAnimations() {
+            document.documentElement.style.removeProperty('--animation-duration');
+            document.documentElement.style.removeProperty('--transition-duration');
+            document.body.classList.remove('reduced-motion');
+        }
+
+        updateAverageResponseTime() {
+            const history = this.interactionMetrics.interactionHistory;
+            if (history.length === 0) return;
+
+            const total = history.reduce((sum, interaction) => sum + interaction.responseTime, 0);
+            this.interactionMetrics.averageResponseTime = total / history.length;
+        }
+
+        getMetrics() {
+            return { ...this.interactionMetrics };
+        }
+
+        isResponsive() {
+            return this.interactionMetrics.averageResponseTime < this.responseTimeThreshold;
+        }
+
+        destroy() {
+            this.observers.forEach(observer => {
+                observer.disconnect();
+            });
+            this.observers = [];
+        }
+    }
+
     let instance = null;
 
     return {
-        init: function() {
+        init: function(options = {}) {
             if (!instance) {
                 instance = {
+                    performanceMonitor: new PerformanceMonitor(),
                     imageOptimizer: new ImageOptimizer(),
                     networkOptimizer: new NetworkOptimizer(),
                     renderOptimizer: new RenderOptimizer(),
                     memoryOptimizer: new MemoryOptimizer(),
                     batteryOptimizer: new BatteryOptimizer(),
+                    interactionOptimizer: new InteractionOptimizer(),
                 };
             }
+
+            if (options.autoReport) {
+                window.addEventListener('load', () => {
+                    setTimeout(() => {
+                        const metrics = instance.performanceMonitor.getMetrics();
+                        instance.performanceMonitor.reportMetrics();
+                    }, 2000);
+                });
+            }
+
             return instance;
         },
 
@@ -649,6 +1043,13 @@ const MobilePerformanceOptimizer = (function() {
             }
             return instance;
         },
+
+        getMetrics: function() {
+            if (!instance) {
+                this.init();
+            }
+            return instance.performanceMonitor.getMetrics();
+        }
     };
 })();
 

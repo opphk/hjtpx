@@ -329,8 +329,17 @@ func (a *QueryAnalyzer) GetIndexRecommendations(tableName string) ([]*IndexRecom
 }
 
 func (a *QueryAnalyzer) GenerateIndexDDL(rec IndexRecommendation) string {
-	return fmt.Sprintf("CREATE INDEX CONCURRENTLY %s ON %s %s;",
-		rec.IndexName, rec.TableName, rec.Columns)
+	if len(rec.Columns) == 0 {
+		return ""
+	}
+	
+	columnsStr := rec.Columns[0]
+	for i := 1; i < len(rec.Columns); i++ {
+		columnsStr += ", " + rec.Columns[i]
+	}
+	
+	return fmt.Sprintf("CREATE INDEX CONCURRENTLY %s ON %s (%s);",
+		rec.IndexName, rec.TableName, columnsStr)
 }
 
 func (a *QueryAnalyzer) RunFullAnalysis(ctx context.Context) (*FullAnalysisReport, error) {

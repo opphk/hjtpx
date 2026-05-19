@@ -822,4 +822,245 @@ func (cv *CodeVirtualizer) obfuscateMaximum(code string) (string, error) {
 	return cv.GenerateObfuscatedCode(code, 3)
 }
 
-// GenerateRandomKey and HashCode are defined in javascript_obfuscator.go
+func (cv *CodeVirtualizer) VirtualizeAdvanced(code string, complexity int) (*VirtualizedCode, error) {
+	instructions := []byte{}
+
+	obfuscatedCode := cv.generateAdvancedObfuscation(code, complexity)
+
+	constantPool := make([]interface{}, 0)
+	for _, char := range obfuscatedCode {
+		constantPool = append(constantPool, int(char))
+	}
+
+	encryptedInstructions := make([]byte, len(instructions))
+	for i, b := range instructions {
+		encryptedInstructions[i] = b ^ cv.key[i%len(cv.key)]
+	}
+
+	metadata := &CodeMetadata{
+		OriginalSize:    len(code),
+		VirtualizedAt:    time.Now(),
+		Version:         "2.0",
+		ProtectionLevel: complexity,
+		ObfuscationSeed: time.Now().UnixNano(),
+	}
+
+	return &VirtualizedCode{
+		Instructions: encryptedInstructions,
+		Constants:    constantPool,
+		Functions:    make(map[string]*VMFunction),
+		Metadata:    metadata,
+	}, nil
+}
+
+func (cv *CodeVirtualizer) generateAdvancedObfuscation(code string, complexity int) string {
+	var result strings.Builder
+
+	for i := 0; i < len(code); i++ {
+		char := code[i]
+		obfuscated := int(char) ^ int(cv.key[i%len(cv.key)])
+		result.WriteString(fmt.Sprintf("\\x%02x", obfuscated))
+	}
+
+	if complexity >= 2 {
+		result.WriteString(cv.addPolymorphicWrapper())
+	}
+
+	if complexity >= 3 {
+		result.WriteString(cv.addSelfChecking())
+	}
+
+	return result.String()
+}
+
+func (cv *CodeVirtualizer) addPolymorphicWrapper() string {
+	return `
+(function(_0xK){
+var _0xR=[];
+for(var _0xI=0;_0xI<_0xK.length;_0xI++){
+_0xR.push(String.fromCharCode(_0xK.charCodeAt(_0xI)^(_0xI%255)));
+}
+return _0xR.join('');
+})
+`
+}
+
+func (cv *CodeVirtualizer) addSelfChecking() string {
+	timestamp := time.Now().UnixNano()
+	return fmt.Sprintf(`
+(function(){
+var _0xT=%d;
+var _0xC=Date.now();
+if(Math.abs(_0xC-_0xT)>3600000){
+document.documentElement.style.display='none';
+}
+})();
+`, timestamp)
+}
+
+func (cv *CodeVirtualizer) GenerateRandomKey(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+	}
+	return string(result)
+}
+
+func (cv *CodeVirtualizer) HashCode(s string) int64 {
+	h := int64(0)
+	for i := 0; i < len(s); i++ {
+		h = 31*h + int64(s[i])
+	}
+	return h
+}
+
+func (cv *CodeVirtualizer) EncryptCode(code string, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, []byte(code), nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (cv *CodeVirtualizer) DecryptCode(encrypted string, key []byte) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
+
+func (cv *CodeVirtualizer) GenerateVMCode(code string) (string, error) {
+	vm := NewCodeVirtualizer()
+	vmCode, err := vm.Virtualize(code)
+	if err != nil {
+		return "", err
+	}
+
+	encrypted, err := vm.EncryptVMCode(vmCode)
+	if err != nil {
+		return "", err
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(encrypted)
+
+	jsCode := fmt.Sprintf(`
+(function(){
+var _0xE="%s";
+var _0xK="%s";
+var _0xD=atob(_0xE);
+var _0xVM=new Function(_0xD);
+return _0xVM();
+})();
+`, encoded, string(cv.key))
+
+	return jsCode, nil
+}
+
+func (cv *CodeVirtualizer) ProtectWithAdvancedObfuscation(code string, level int) (string, error) {
+	var result string
+	var err error
+
+	switch level {
+	case 1:
+		result, err = cv.obfuscateBasic(code)
+	case 2:
+		result, err = cv.obfuscateStandard(code)
+	case 3:
+		result, err = cv.obfuscateEnhanced(code)
+	case 4:
+		result, err = cv.obfuscateMaximum(code)
+	default:
+		result, err = cv.obfuscateBasic(code)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	if level >= 2 {
+		result = cv.addRuntimeChecks(result)
+	}
+
+	if level >= 3 {
+		result = cv.addDynamicDecryption(result)
+	}
+
+	return result, nil
+}
+
+func (cv *CodeVirtualizer) addRuntimeChecks(code string) string {
+	checksum := cv.HashCode(code)
+	checks := fmt.Sprintf(`
+(function(){
+var _0xH=%d;
+var _0xC=0;
+for(var _0xI=0;_0xI<document.scripts.length;_0xI++){
+var _0xS=document.scripts[_0xI];
+if(_0xS.src&&_0xS.src.indexOf('hjtpx')>-1){
+_0xC++;
+}
+}
+if(_0xC===0){
+document.documentElement.style.display='none';
+}
+})();
+`, checksum)
+
+	return checks + code
+}
+
+func (cv *CodeVirtualizer) addDynamicDecryption(code string) string {
+	encrypted, err := cv.EncryptCode(code, cv.key)
+	if err != nil {
+		encrypted = code
+	}
+	return fmt.Sprintf(`
+(function(){
+var _0xE="%s";
+var _0xK="%s";
+try{
+var _0xD=atob(_0xE);
+var _0xVM=new Function(_0xD);
+_0xVM();
+}catch(_0xErr){
+document.documentElement.style.display='none';
+}
+})();
+`, encrypted, string(cv.key))
+}

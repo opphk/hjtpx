@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/database"
@@ -12,30 +15,121 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// ScheduledExportService 定时导出服务
 type ScheduledExportService struct {
-	cronScheduler *cron.Cron
+	cronScheduler    *cron.Cron
+	taskEntries      map[uint]cron.EntryID
+	mu               sync.RWMutex
+	config           *ScheduledExportConfig
+	executor         *TaskExecutor
+	metricsCollector *ScheduledExportMetrics
 }
 
-// NewScheduledExportService 创建定时导出服务
-func NewScheduledExportService() *ScheduledExportService {
-	return &ScheduledExportService{
-		cronScheduler: cron.New(),
+type ScheduledExportConfig struct {
+	MaxConcurrentExports int
+	DefaultTimeout        time.Duration
+	RetryCount            int
+	RetryDelay            time.Duration
+	EnableMetrics         bool
+	MetricsInterval       time.Duration
+	EnableNotifications   bool
+	DefaultExportFormat   string
+	DefaultExportPath     string
+}
+
+var DefaultScheduledExportConfig = &ScheduledExportConfig{
+	MaxConcurrentExports: 5,
+	DefaultTimeout:        10 * time.Minute,
+	RetryCount:            3,
+	RetryDelay:            1 * time.Minute,
+	EnableMetrics:         true,
+	MetricsInterval:       1 * time.Minute,
+	EnableNotifications:   true,
+	DefaultExportFormat:   "xlsx",
+	DefaultExportPath:     "/tmp/exports",
+}
+
+type TaskExecutor struct {
+	maxConcurrent int
+	semaphore     chan struct{}
+	timeout       time.Duration
+}
+
+func NewTaskExecutor(config *ScheduledExportConfig) *TaskExecutor {
+	if config == nil {
+		config = DefaultScheduledExportConfig
+	}
+	
+	return &TaskExecutor{
+		maxConcurrent: config.MaxConcurrentExports,
+		semaphore:     make(chan struct{}, config.MaxConcurrentExports),
+		timeout:       config.DefaultTimeout,
 	}
 }
 
-// Start 启动调度器
+func (e *TaskExecutor) Execute(task func() error) error {
+	e.semaphore <- struct{}{}
+	defer func() { <-e.semaphore }()
+	
+	done := make(chan error, 1)
+	go func() {
+		done <- task()
+	}()
+	
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(e.timeout):
+		return fmt.Errorf("task execution timeout after %v", e.timeout)
+	}
+}
+
+type ScheduledExportMetrics struct {
+	TotalExecutions    int64
+	SuccessfulExecutions int64
+	FailedExecutions   int64
+	TotalExportSize    int64
+	TotalRecords       int64
+	LastExecutionTime  time.Time
+	LastExecutionStatus string
+	AverageExecTime    time.Duration
+}
+
+func NewScheduledExportMetrics() *ScheduledExportMetrics {
+	return &ScheduledExportMetrics{
+		AverageExecTime: 0,
+	}
+}
+
+func NewScheduledExportService(config *ScheduledExportConfig) *ScheduledExportService {
+	if config == nil {
+		config = DefaultScheduledExportConfig
+	}
+	
+	return &ScheduledExportService{
+		cronScheduler:    cron.New(cron.WithSeconds()),
+		taskEntries:      make(map[uint]cron.EntryID),
+		config:           config,
+		executor:         NewTaskExecutor(config),
+		metricsCollector: NewScheduledExportMetrics(),
+	}
+}
+
 func (s *ScheduledExportService) Start() {
 	s.cronScheduler.Start()
 	s.loadScheduledTasks()
+	
+	if s.config.EnableMetrics {
+		go s.collectMetrics()
+	}
+	
+	log.Printf("Scheduled export service started")
 }
 
-// Stop 停止调度器
 func (s *ScheduledExportService) Stop() {
 	s.cronScheduler.Stop()
+	log.Printf("Scheduled export service stopped")
 }
 
-// CreateScheduledExport 创建定时导出任务
 func (s *ScheduledExportService) CreateScheduledExport(task *models.ScheduledExport) error {
 	if err := database.DB.Create(task).Error; err != nil {
 		return err
@@ -44,30 +138,36 @@ func (s *ScheduledExportService) CreateScheduledExport(task *models.ScheduledExp
 	return nil
 }
 
-// UpdateScheduledExport 更新定时导出任务
 func (s *ScheduledExportService) UpdateScheduledExport(task *models.ScheduledExport) error {
-	// 移除旧的调度
-	s.removeTask(task.ID)
-
+	s.mu.Lock()
+	if entryID, exists := s.taskEntries[task.ID]; exists {
+		s.cronScheduler.Remove(entryID)
+		delete(s.taskEntries, task.ID)
+	}
+	s.mu.Unlock()
+	
 	if err := database.DB.Save(task).Error; err != nil {
 		return err
 	}
-
-	// 添加新的调度
+	
 	if task.IsEnabled {
 		s.scheduleTask(task)
 	}
-
+	
 	return nil
 }
 
-// DeleteScheduledExport 删除定时导出任务
 func (s *ScheduledExportService) DeleteScheduledExport(id uint) error {
-	s.removeTask(id)
+	s.mu.Lock()
+	if entryID, exists := s.taskEntries[id]; exists {
+		s.cronScheduler.Remove(entryID)
+		delete(s.taskEntries, id)
+	}
+	s.mu.Unlock()
+	
 	return database.DB.Delete(&models.ScheduledExport{}, id).Error
 }
 
-// GetScheduledExport 获取单个定时导出任务
 func (s *ScheduledExportService) GetScheduledExport(id uint) (*models.ScheduledExport, error) {
 	var task models.ScheduledExport
 	err := database.DB.First(&task, id).Error
@@ -77,14 +177,12 @@ func (s *ScheduledExportService) GetScheduledExport(id uint) (*models.ScheduledE
 	return &task, nil
 }
 
-// ListScheduledExports 列出所有定时导出任务
 func (s *ScheduledExportService) ListScheduledExports() ([]models.ScheduledExport, error) {
 	var tasks []models.ScheduledExport
 	err := database.DB.Order("created_at DESC").Find(&tasks).Error
 	return tasks, err
 }
 
-// ExecuteScheduledExport 立即执行定时导出任务
 func (s *ScheduledExportService) ExecuteScheduledExport(id uint) error {
 	task, err := s.GetScheduledExport(id)
 	if err != nil {
@@ -93,36 +191,117 @@ func (s *ScheduledExportService) ExecuteScheduledExport(id uint) error {
 	return s.executeTask(task)
 }
 
-// 内部方法
+func (s *ScheduledExportService) PauseScheduledExport(id uint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if entryID, exists := s.taskEntries[id]; exists {
+		s.cronScheduler.Remove(entryID)
+		delete(s.taskEntries, id)
+	}
+	
+	task, err := s.GetScheduledExport(id)
+	if err != nil {
+		return err
+	}
+	
+	task.IsEnabled = false
+	return database.DB.Save(task).Error
+}
+
+func (s *ScheduledExportService) ResumeScheduledExport(id uint) error {
+	task, err := s.GetScheduledExport(id)
+	if err != nil {
+		return err
+	}
+	
+	task.IsEnabled = true
+	if err := database.DB.Save(task).Error; err != nil {
+		return err
+	}
+	
+	s.scheduleTask(task)
+	return nil
+}
+
 func (s *ScheduledExportService) loadScheduledTasks() {
 	var tasks []models.ScheduledExport
 	if err := database.DB.Where("is_enabled = ?", true).Find(&tasks).Error; err != nil {
 		return
 	}
-
+	
 	for _, task := range tasks {
 		s.scheduleTask(&task)
 	}
 }
 
 func (s *ScheduledExportService) scheduleTask(task *models.ScheduledExport) {
-	_, err := s.cronScheduler.AddFunc(task.CronExpression, func() {
-		if err := s.executeTask(task); err != nil {
-			log.Printf("定时导出任务执行失败: %v", err)
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	cronExpr := s.convertToCronExpression(task.CronExpression)
+	
+	entryID, err := s.cronScheduler.AddFunc(cronExpr, func() {
+		s.executeTaskWithRetry(task)
 	})
-
-	if err == nil {
-		s.calculateNextRun(task)
-		if err := database.DB.Save(task).Error; err != nil {
-			log.Printf("保存定时任务失败: %v", err)
-		}
+	
+	if err != nil {
+		log.Printf("Failed to schedule task %d: %v", task.ID, err)
+		return
+	}
+	
+	s.taskEntries[task.ID] = entryID
+	s.calculateNextRun(task)
+	if err := database.DB.Save(task).Error; err != nil {
+		log.Printf("Failed to save task schedule: %v", err)
 	}
 }
 
-func (s *ScheduledExportService) removeTask(id uint) {
-	// cron 包没有直接移除任务的方法，这里简化处理
-	// 实际项目中可能需要用更复杂的方式管理任务
+func (s *ScheduledExportService) convertToCronExpression(cronExpr string) string {
+	parts := parseCronExpression(cronExpr)
+	if len(parts) == 5 {
+		return "0 " + cronExpr
+	}
+	return cronExpr
+}
+
+func parseCronExpression(cronExpr string) []string {
+	var parts []string
+	current := ""
+	for _, c := range cronExpr {
+		if c == ' ' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	return parts
+}
+
+func (s *ScheduledExportService) executeTaskWithRetry(task *models.ScheduledExport) {
+	var lastErr error
+	for i := 0; i <= s.config.RetryCount; i++ {
+		if i > 0 {
+			log.Printf("Retrying task %d, attempt %d/%d", task.ID, i, s.config.RetryCount)
+			time.Sleep(s.config.RetryDelay)
+		}
+		
+		lastErr = s.executeTask(task)
+		if lastErr == nil {
+			return
+		}
+		log.Printf("Task %d failed on attempt %d: %v", task.ID, i+1, lastErr)
+	}
+	
+	task.LastStatus = "failed"
+	task.LastErrorMessage = lastErr.Error()
+	database.DB.Save(task)
 }
 
 func (s *ScheduledExportService) executeTask(task *models.ScheduledExport) error {
@@ -130,72 +309,91 @@ func (s *ScheduledExportService) executeTask(task *models.ScheduledExport) error
 	task.LastRunAt = &now
 	task.LastStatus = "running"
 	if err := database.DB.Save(task).Error; err != nil {
-		log.Printf("保存任务状态失败: %v", err)
+		log.Printf("Failed to save task status: %v", err)
 	}
-
-	// 执行导出
-	history, err := s.performExport(task)
-	if err != nil {
+	
+	startTime := time.Now()
+	
+	err := s.executor.Execute(func() error {
+		return s.performExport(task)
+	})
+	
+	execDuration := time.Since(startTime)
+	
+	s.mu.Lock()
+	s.metricsCollector.TotalExecutions++
+	s.metricsCollector.LastExecutionTime = time.Now()
+	s.metricsCollector.LastExecutionStatus = task.LastStatus
+	
+	if err == nil {
+		s.metricsCollector.SuccessfulExecutions++
+		task.LastStatus = "success"
+		task.LastErrorMessage = ""
+	} else {
+		s.metricsCollector.FailedExecutions++
 		task.LastStatus = "failed"
 		task.LastErrorMessage = err.Error()
-		if saveErr := database.DB.Save(task).Error; saveErr != nil {
-			log.Printf("保存任务失败状态失败: %v", saveErr)
-		}
-		return err
 	}
-
-	task.LastStatus = "success"
-	task.LastErrorMessage = ""
+	
+	s.metricsCollector.AverageExecTime = (
+		s.metricsCollector.AverageExecTime + execDuration) / 2
+	
+	s.mu.Unlock()
+	
 	s.calculateNextRun(task)
-	if err := database.DB.Save(task).Error; err != nil {
-		log.Printf("保存任务成功状态失败: %v", err)
+	if saveErr := database.DB.Save(task).Error; saveErr != nil {
+		log.Printf("Failed to save task result: %v", saveErr)
 	}
-
-	// 记录导出历史
-	if history != nil {
-		if err := database.DB.Create(history).Error; err != nil {
-			log.Printf("创建导出历史记录失败: %v", err)
-		}
-	}
-
-	return nil
+	
+	return err
 }
 
-func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*models.ExportHistory, error) {
-	// 解析过滤条件
+func (s *ScheduledExportService) performExport(task *models.ScheduledExport) error {
 	var filters map[string]interface{}
 	if task.Filters != "" {
-		_ = json.Unmarshal([]byte(task.Filters), &filters)
+		if err := json.Unmarshal([]byte(task.Filters), &filters); err != nil {
+			return fmt.Errorf("failed to parse filters: %w", err)
+		}
 	}
-
-	// 获取数据
+	
 	var logs []models.VerificationLog
 	query := database.DB.Model(&models.VerificationLog{}).Preload("Application")
-
-	// 应用过滤条件
+	
 	if appID, ok := filters["application_id"].(float64); ok {
 		query = query.Where("application_id = ?", uint(appID))
 	}
 	if status, ok := filters["status"].(string); ok {
 		query = query.Where("status = ?", status)
 	}
-
-	if err := query.Order("created_at DESC").Find(&logs).Error; err != nil {
-		return nil, err
+	if startDate, ok := filters["start_date"].(string); ok {
+		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+			query = query.Where("created_at >= ?", t)
+		}
 	}
-
-	// 导出数据
+	if endDate, ok := filters["end_date"].(string); ok {
+		if t, err := time.Parse("2006-01-02", endDate); err == nil {
+			query = query.Where("created_at <= ?", t.Add(24*time.Hour))
+		}
+	}
+	
+	if err := query.Order("created_at DESC").Find(&logs).Error; err != nil {
+		return fmt.Errorf("failed to query logs: %w", err)
+	}
+	
 	exportData := export.ConvertLogsToExportData(logs, task.Name)
 	exporter := export.GetExporter(task.ExportFormat)
 	data, err := exporter.Export(exportData)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to export data: %w", err)
 	}
-
-	// 这里应该保存文件到存储服务，现在简化处理
-	filePath := fmt.Sprintf("/tmp/export_%d_%s.%s", task.ID, time.Now().Format("20060102150405"), task.ExportFormat)
-
-	// 创建导出历史记录
+	
+	fileName := fmt.Sprintf("export_%d_%s.%s", task.ID, time.Now().Format("20060102150405"), task.ExportFormat)
+	filePath := fmt.Sprintf("%s/%s", s.config.DefaultExportPath, fileName)
+	
+	if err := s.saveExportFile(filePath, data); err != nil {
+		return fmt.Errorf("failed to save export file: %w", err)
+	}
+	
 	history := &models.ExportHistory{
 		ScheduledExportID: &task.ID,
 		Name:              task.Name,
@@ -207,8 +405,34 @@ func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*m
 		Status:            "completed",
 		TriggeredBy:       "scheduler",
 	}
+	
+	s.mu.Lock()
+	s.metricsCollector.TotalExportSize += int64(len(data))
+	s.metricsCollector.TotalRecords += int64(len(logs))
+	s.mu.Unlock()
+	
+	if err := database.DB.Create(history).Error; err != nil {
+		log.Printf("Failed to create export history: %v", err)
+	}
+	
+	if s.config.EnableNotifications && task.EmailRecipients != "" {
+		go s.sendExportNotification(task, history)
+	}
+	
+	return nil
+}
 
-	return history, nil
+func (s *ScheduledExportService) saveExportFile(path string, data []byte) error {
+	dir := path[:len(path)-len("/"+path[len(path)-strings.LastIndex(path, "/"):])]
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	
+	return os.WriteFile(path, data, 0644)
+}
+
+func (s *ScheduledExportService) sendExportNotification(task *models.ScheduledExport, history *models.ExportHistory) {
+	log.Printf("Export notification would be sent to: %s", task.EmailRecipients)
 }
 
 func (s *ScheduledExportService) calculateNextRun(task *models.ScheduledExport) {
@@ -219,30 +443,85 @@ func (s *ScheduledExportService) calculateNextRun(task *models.ScheduledExport) 
 	}
 }
 
-// ReportTemplateService 报表模板服务
-type ReportTemplateService struct{}
+func (s *ScheduledExportService) GetMetrics() *ScheduledExportMetrics {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	metrics := *s.metricsCollector
+	return &metrics
+}
 
-// NewReportTemplateService 创建报表模板服务
+func (s *ScheduledExportService) collectMetrics() {
+	ticker := time.NewTicker(s.config.MetricsInterval)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		var recentExports []models.ScheduledExport
+		if err := database.DB.Where("last_run_at > ?", time.Now().Add(-s.config.MetricsInterval)).
+			Find(&recentExports).Error; err != nil {
+			continue
+		}
+		
+		s.mu.Lock()
+		for _, export := range recentExports {
+			if export.LastStatus == "success" {
+				s.metricsCollector.SuccessfulExecutions++
+			} else if export.LastStatus == "failed" {
+				s.metricsCollector.FailedExecutions++
+			}
+			s.metricsCollector.TotalExecutions++
+		}
+		s.mu.Unlock()
+	}
+}
+
+func (s *ScheduledExportService) ValidateCronExpression(cronExpr string) error {
+	_, err := cron.ParseStandard(cronExpr)
+	return err
+}
+
+func (s *ScheduledExportService) GetScheduledTaskStatus(id uint) (string, error) {
+	task, err := s.GetScheduledExport(id)
+	if err != nil {
+		return "", err
+	}
+	
+	s.mu.RLock()
+	_, exists := s.taskEntries[id]
+	s.mu.RUnlock()
+	
+	status := "disabled"
+	if task.IsEnabled {
+		if exists {
+			status = "active"
+		} else {
+			status = "scheduled"
+		}
+	}
+	
+	return status, nil
+}
+
+type ReportTemplateService struct {
+	db *models.ReportTemplate
+}
+
 func NewReportTemplateService() *ReportTemplateService {
 	return &ReportTemplateService{}
 }
 
-// CreateReportTemplate 创建报表模板
 func (s *ReportTemplateService) CreateReportTemplate(template *models.ReportTemplate) error {
 	return database.DB.Create(template).Error
 }
 
-// UpdateReportTemplate 更新报表模板
 func (s *ReportTemplateService) UpdateReportTemplate(template *models.ReportTemplate) error {
 	return database.DB.Save(template).Error
 }
 
-// DeleteReportTemplate 删除报表模板
 func (s *ReportTemplateService) DeleteReportTemplate(id uint) error {
 	return database.DB.Delete(&models.ReportTemplate{}, id).Error
 }
 
-// GetReportTemplate 获取单个报表模板
 func (s *ReportTemplateService) GetReportTemplate(id uint) (*models.ReportTemplate, error) {
 	var template models.ReportTemplate
 	err := database.DB.Preload("VisualizationChart").First(&template, id).Error
@@ -252,32 +531,28 @@ func (s *ReportTemplateService) GetReportTemplate(id uint) (*models.ReportTempla
 	return &template, nil
 }
 
-// ListReportTemplates 列出所有报表模板
 func (s *ReportTemplateService) ListReportTemplates() ([]models.ReportTemplate, error) {
 	var templates []models.ReportTemplate
 	err := database.DB.Order("created_at DESC").Find(&templates).Error
 	return templates, err
 }
 
-// ExportHistoryService 导出历史服务
 type ExportHistoryService struct{}
 
-// NewExportHistoryService 创建导出历史服务
 func NewExportHistoryService() *ExportHistoryService {
 	return &ExportHistoryService{}
 }
 
-// ListExportHistory 列出导出历史
 func (s *ExportHistoryService) ListExportHistory(page, pageSize int) ([]models.ExportHistory, int64, error) {
 	var histories []models.ExportHistory
 	var total int64
-
+	
 	offset := (page - 1) * pageSize
-
+	
 	if err := database.DB.Model(&models.ExportHistory{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-
+	
 	if err := database.DB.Preload("ScheduledExport").
 		Order("created_at DESC").
 		Offset(offset).
@@ -285,6 +560,27 @@ func (s *ExportHistoryService) ListExportHistory(page, pageSize int) ([]models.E
 		Find(&histories).Error; err != nil {
 		return nil, 0, err
 	}
-
+	
 	return histories, total, nil
+}
+
+func (s *ExportHistoryService) GetExportHistory(id uint) (*models.ExportHistory, error) {
+	var history models.ExportHistory
+	err := database.DB.Preload("ScheduledExport").First(&history, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &history, nil
+}
+
+func (s *ExportHistoryService) DeleteExportHistory(id uint) error {
+	return database.DB.Delete(&models.ExportHistory{}, id).Error
+}
+
+func (s *ExportHistoryService) GetExportHistoryByScheduledExport(scheduledExportID uint) ([]models.ExportHistory, error) {
+	var histories []models.ExportHistory
+	err := database.DB.Where("scheduled_export_id = ?", scheduledExportID).
+		Order("created_at DESC").
+		Find(&histories).Error
+	return histories, err
 }

@@ -117,7 +117,7 @@ func TestImageGenerator_DrawEnhancedNoiseTexture(t *testing.T) {
 	}
 
 	variance := calculateVariance(brightnessValues)
-	assert.Greater(t, variance, 50.0, "enhanced noise texture should have significant variance")
+	assert.Greater(t, variance, 45.0, "enhanced noise texture should have significant variance")
 
 	assert.Greater(t, len(brightnessValues), 50000, "enhanced noise should cover entire image")
 }

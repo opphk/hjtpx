@@ -2,7 +2,7 @@
     'use strict';
 
     const AntiDebugEnhanced = (function() {
-        const VERSION = '4.0.0';
+        const VERSION = '5.0.0';
         
         const _0xAD = {
             enabled: true,
@@ -18,11 +18,24 @@
                 timingAttack: true,
                 breakPointDetection: true,
                 memoryCheck: true,
-                propertyCheck: true
+                propertyCheck: true,
+                chromeDetection: true,
+                firebugDetection: true,
+                sourceMapDetection: true,
+                functionOverride: true,
+                prototypeChain: true,
+                stackTrace: true,
+                performanceAnalysis: true,
+                networkMonitoring: true,
+                storageTampering: true
             },
             debugDetected: false,
             detectionHistory: [],
-            triggerCallback: null
+            triggerCallback: null,
+            protectionLevel: 'maximum',
+            obfuscationSeed: Math.random() * 1000000,
+            timestamp: Date.now(),
+            integrityHash: null
         };
 
         function detectWindowSizeAnomaly() {
@@ -252,6 +265,185 @@
             return { detected: false };
         }
 
+        function detectSourceMap() {
+            const scripts = document.querySelectorAll('script');
+            for (const script of scripts) {
+                if (script.src && (script.src.indexOf('.map') > -1 || script.hasAttribute('sourceURL'))) {
+                    return {
+                        detected: true,
+                        type: 'source_map',
+                        details: { reason: 'Source map detected: ' + script.src }
+                    };
+                }
+            }
+            
+            if (typeof window.webpackJsonp !== 'undefined' || typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined') {
+                return {
+                    detected: true,
+                    type: 'devtools_hook',
+                    details: { reason: 'React DevTools hook detected' }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectFunctionOverrides() {
+            const functionsToCheck = ['toString', 'valueOf', 'constructor', 'hasOwnProperty'];
+            const suspiciousOverrides = [];
+            
+            for (const fnName of functionsToCheck) {
+                const originalFn = Object.prototype[fnName];
+                const currentFn = Object.prototype[fnName];
+                
+                if (originalFn !== currentFn) {
+                    suspiciousOverrides.push({
+                        function: fnName,
+                        original: originalFn.toString(),
+                        current: currentFn.toString()
+                    });
+                }
+            }
+            
+            if (suspiciousOverrides.length > 0) {
+                return {
+                    detected: true,
+                    type: 'function_override',
+                    details: { overrides: suspiciousOverrides }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectPrototypeChainTampering() {
+            const originalObjectProto = Object.getPrototypeOf({});
+            const originalArrayProto = Object.getPrototypeOf([]);
+            
+            try {
+                Object.setPrototypeOf({}, null);
+                Object.setPrototypeOf([], null);
+                
+                if (Object.getPrototypeOf({}) !== originalObjectProto) {
+                    return {
+                        detected: true,
+                        type: 'prototype_chain',
+                        details: { reason: 'Prototype chain modified' }
+                    };
+                }
+            } catch (e) {
+                // Normal behavior
+            }
+            
+            return { detected: false };
+        }
+
+        function detectStackTraceAnalysis() {
+            const stackTrace = new Error().stack;
+            if (stackTrace) {
+                const suspiciousPatterns = ['debugger', 'eval', 'Function'];
+                for (const pattern of suspiciousPatterns) {
+                    if (stackTrace.indexOf(pattern) > -1 && stackTrace.indexOf(pattern) < 20) {
+                        return {
+                            detected: true,
+                            type: 'stack_trace',
+                            details: { reason: 'Suspicious stack trace pattern: ' + pattern }
+                        };
+                    }
+                }
+            }
+            return { detected: false };
+        }
+
+        function detectPerformanceAnalysis() {
+            const start = performance.now();
+            const operations = [];
+            
+            for (let i = 0; i < 1000; i++) {
+                operations.push(i * i);
+            }
+            
+            const elapsed = performance.now() - start;
+            
+            if (elapsed < 1) {
+                return {
+                    detected: true,
+                    type: 'performance_analysis',
+                    details: { reason: 'Suspiciously fast execution: ' + elapsed + 'ms' }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectNetworkMonitoring() {
+            const xhrOpen = XMLHttpRequest.prototype.open;
+            const originalOpen = XMLHttpRequest.prototype.open.toString();
+            
+            if (XMLHttpRequest.prototype.open.toString() !== originalOpen) {
+                return {
+                    detected: true,
+                    type: 'network_monitoring',
+                    details: { reason: 'XMLHttpRequest.open has been modified' }
+                };
+            }
+            
+            const fetchOriginal = fetch.toString();
+            if (fetch.toString() !== fetchOriginal) {
+                return {
+                    detected: true,
+                    type: 'fetch_monitoring',
+                    details: { reason: 'fetch has been modified' }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectStorageTampering() {
+            const storageEvents = ['localStorage', 'sessionStorage'];
+            
+            try {
+                localStorage.setItem('_0xTest', 'test');
+                localStorage.removeItem('_0xTest');
+                
+                sessionStorage.setItem('_0xTest', 'test');
+                sessionStorage.removeItem('_0xTest');
+            } catch (e) {
+                return {
+                    detected: true,
+                    type: 'storage_tampering',
+                    details: { reason: 'Storage access failed: ' + e.message }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function computeIntegrityHash() {
+            const code = document.currentScript ? document.currentScript.textContent : '';
+            let hash = 0;
+            for (let i = 0; i < code.length; i++) {
+                const char = code.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            _0xAD.integrityHash = Math.abs(hash).toString(16);
+            return _0xAD.integrityHash;
+        }
+
+        function verifyIntegrity() {
+            const currentHash = computeIntegrityHash();
+            if (_0xAD.integrityHash && currentHash !== _0xAD.integrityHash) {
+                return {
+                    detected: true,
+                    type: 'integrity_violation',
+                    details: { reason: 'Code integrity check failed' }
+                };
+            }
+            return { detected: false };
+        }
+
         function performAllChecks() {
             const results = [];
             
@@ -289,7 +481,58 @@
                 results.push(detectPropertyTampering());
             }
             
+            if (_0xAD.enabledChecks.sourceMapDetection) {
+                results.push(detectSourceMap());
+            }
+            
+            if (_0xAD.enabledChecks.functionOverride) {
+                results.push(detectFunctionOverrides());
+            }
+            
+            if (_0xAD.enabledChecks.prototypeChain) {
+                results.push(detectPrototypeChainTampering());
+            }
+            
+            if (_0xAD.enabledChecks.stackTrace) {
+                results.push(detectStackTraceAnalysis());
+            }
+            
+            if (_0xAD.enabledChecks.performanceAnalysis) {
+                results.push(detectPerformanceAnalysis());
+            }
+            
+            if (_0xAD.enabledChecks.networkMonitoring) {
+                results.push(detectNetworkMonitoring());
+            }
+            
+            if (_0xAD.enabledChecks.storageTampering) {
+                results.push(detectStorageTampering());
+            }
+            
+            if (_0xAD.enabledChecks.chromeDetection) {
+                results.push(detectChromeSpecificFeatures());
+            }
+            
             return results;
+        }
+
+        function detectChromeSpecificFeatures() {
+            if (window.chrome && window.chrome.loadTimes) {
+                return {
+                    detected: true,
+                    type: 'chrome_specific',
+                    details: { reason: 'Chrome-specific APIs detected' }
+                };
+            }
+            
+            if (window.navigator.userAgent.indexOf('Chrome') > -1) {
+                const crypto = window.crypto;
+                if (crypto && crypto.subtle) {
+                    return { detected: false };
+                }
+            }
+            
+            return { detected: false };
         }
 
         function handleDetection(detection) {
@@ -297,7 +540,8 @@
             _0xAD.detectionHistory.push({
                 ...detection,
                 timestamp: Date.now(),
-                violationCount: _0xAD.violations
+                violationCount: _0xAD.violations,
+                hash: _0xAD.integrityHash
             });
 
             if (_0xAD.triggerCallback) {
@@ -325,6 +569,9 @@
                         </p>
                         <div style="font-size:12px;color:#666;">
                             Violation count: ${_0xAD.violations}/${_0xAD.maxViolations}
+                        </div>
+                        <div style="margin-top:20px;font-size:10px;color:#888;">
+                            Error Code: ${_0xAD.integrityHash || 'UNKNOWN'}
                         </div>
                     </div>
                 </div>
@@ -407,6 +654,8 @@
                 }
             }
 
+            computeIntegrityHash();
+
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => {
                     startDetectionLoop();
@@ -429,7 +678,9 @@
                 detectionHistory: _0xAD.detectionHistory.slice(-5),
                 checkInterval: _0xAD.checkInterval,
                 enabledChecks: _0xAD.enabledChecks,
-                version: VERSION
+                version: VERSION,
+                integrityHash: _0xAD.integrityHash,
+                protectionLevel: _0xAD.protectionLevel
             };
         }
 
@@ -445,17 +696,43 @@
             return false;
         }
 
+        function setProtectionLevel(level) {
+            _0xAD.protectionLevel = level;
+            
+            switch(level) {
+                case 'minimum':
+                    _0xAD.maxViolations = 5;
+                    _0xAD.checkInterval = 5000;
+                    break;
+                case 'standard':
+                    _0xAD.maxViolations = 3;
+                    _0xAD.checkInterval = 3000;
+                    break;
+                case 'maximum':
+                    _0xAD.maxViolations = 2;
+                    _0xAD.checkInterval = 1500;
+                    break;
+                case 'paranoid':
+                    _0xAD.maxViolations = 1;
+                    _0xAD.checkInterval = 1000;
+                    break;
+            }
+        }
+
         return {
             VERSION: VERSION,
             init: init,
             getStatus: getStatus,
             setTriggerCallback: setTriggerCallback,
             setCheckEnabled: setCheckEnabled,
+            setProtectionLevel: setProtectionLevel,
             performChecks: performAllChecks,
             detectWindowSize: detectWindowSizeAnomaly,
             detectDebugger: detectDebuggerStatement,
             detectConsole: detectConsoleTampering,
-            detectTiming: detectTimingAttack
+            detectTiming: detectTimingAttack,
+            verifyIntegrity: verifyIntegrity,
+            computeHash: computeIntegrityHash
         };
     })();
 
