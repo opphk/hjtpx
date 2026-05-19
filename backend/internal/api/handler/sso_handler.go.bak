@@ -1,0 +1,230 @@
+package handler
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/pkg/response"
+)
+
+type SSOHandler struct {
+	manager *middleware.SSOManager
+}
+
+func NewSSOHandler() *SSOHandler {
+	return &SSOHandler{
+		manager: middleware.GetSSOManager(),
+	}
+}
+
+func (h *SSOHandler) GetProviders(c *gin.Context) {
+	samlProviders := h.manager.ListSAMLProviders()
+	casProviders := h.manager.ListCASProviders()
+
+	response.Success(c, gin.H{
+		"saml_providers": samlProviders,
+		"cas_providers":  casProviders,
+	})
+}
+
+func (h *SSOHandler) InitiateSAMLLogin(c *gin.Context) {
+	providerName := c.Param("provider")
+	if providerName == "" {
+		response.BadRequest(c, "provider parameter is required")
+		return
+	}
+
+	provider, err := h.manager.GetSAMLProvider(providerName)
+	if err != nil {
+		response.BadRequest(c, "SAML provider not found")
+		return
+	}
+
+	requestID, encoded, err := provider.BuildAuthnRequest()
+	if err != nil {
+		response.InternalServerError(c, "failed to build authn request")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"provider":        providerName,
+		"request_id":     requestID,
+		"auth_url":       provider.Config().SSOURL,
+		"encoded_request": encoded,
+	})
+}
+
+func (h *SSOHandler) HandleSAMLCallback(c *gin.Context) {
+	providerName := c.PostForm("provider")
+	if providerName == "" {
+		providerName = c.Query("provider")
+	}
+
+	if providerName == "" {
+		response.BadRequest(c, "provider parameter is required")
+		return
+	}
+
+	provider, err := h.manager.GetSAMLProvider(providerName)
+	if err != nil {
+		response.BadRequest(c, "SAML provider not found")
+		return
+	}
+
+	samlResponse := c.PostForm("SAMLResponse")
+	if samlResponse == "" {
+		response.BadRequest(c, "SAMLResponse is required")
+		return
+	}
+
+	assertion, err := provider.ValidateResponse(samlResponse)
+	if err != nil {
+		response.Unauthorized(c, "SAML assertion validation failed: "+err.Error())
+		return
+	}
+
+	userInfo := provider.ExtractUserInfo(assertion)
+
+	response.Success(c, gin.H{
+		"provider":    userInfo.Provider,
+		"provider_id": userInfo.ProviderID,
+		"username":   userInfo.Username,
+		"email":      userInfo.Email,
+		"attributes": userInfo.Attributes,
+	})
+}
+
+func (h *SSOHandler) InitiateCASLogin(c *gin.Context) {
+	providerName := c.Param("provider")
+	if providerName == "" {
+		response.BadRequest(c, "provider parameter is required")
+		return
+	}
+
+	provider, err := h.manager.GetCASProvider(providerName)
+	if err != nil {
+		response.BadRequest(c, "CAS provider not found")
+		return
+	}
+
+	loginURL := provider.BuildLoginURL("")
+
+	response.Success(c, gin.H{
+		"provider":  providerName,
+		"login_url": loginURL,
+	})
+}
+
+func (h *SSOHandler) HandleCASCallback(c *gin.Context) {
+	providerName := c.Query("provider")
+	ticket := c.Query("ticket")
+
+	if providerName == "" || ticket == "" {
+		response.BadRequest(c, "provider and ticket parameters are required")
+		return
+	}
+
+	provider, err := h.manager.GetCASProvider(providerName)
+	if err != nil {
+		response.BadRequest(c, "CAS provider not found")
+		return
+	}
+
+	validationResp, err := provider.ValidateTicket(ticket)
+	if err != nil {
+		response.Unauthorized(c, "CAS ticket validation failed: "+err.Error())
+		return
+	}
+
+	userInfo := provider.ExtractUserInfo(validationResp)
+	userInfo.SessionID = fmt.Sprintf("cas_%s_%d", userInfo.Username, time.Now().UnixNano())
+
+	response.Success(c, gin.H{
+		"provider":    userInfo.Provider,
+		"provider_id": userInfo.ProviderID,
+		"username":   userInfo.Username,
+		"email":      userInfo.Email,
+		"attributes": userInfo.Attributes,
+		"session_id": userInfo.SessionID,
+	})
+}
+
+func (h *SSOHandler) Logout(c *gin.Context) {
+	ssoUser := middleware.GetSSOUser(c)
+	if ssoUser == nil {
+		response.BadRequest(c, "no active SSO session")
+		return
+	}
+
+	provider := ssoUser.Provider
+
+	switch provider {
+	case "saml":
+		providerName := c.Query("provider")
+		if providerName != "" {
+			samlProvider, err := h.manager.GetSAMLProvider(providerName)
+			if err == nil && samlProvider.Config().SLOURL != "" {
+				logoutURL := samlProvider.Config().SLOURL
+				c.SetCookie("sso_session", "", -1, "/", "", false, true)
+				c.Redirect(http.StatusFound, logoutURL)
+				return
+			}
+		}
+
+	case "cas":
+		providerName := c.Query("provider")
+		if providerName != "" {
+			casProvider, err := h.manager.GetCASProvider(providerName)
+			if err == nil {
+				logoutURL := casProvider.BuildLogoutURL("")
+				c.SetCookie("sso_session", "", -1, "/", "", false, true)
+				c.Redirect(http.StatusFound, logoutURL)
+				return
+			}
+		}
+	}
+
+	c.SetCookie("sso_session", "", -1, "/", "", false, true)
+	response.Success(c, "logged out successfully")
+}
+
+func (h *SSOHandler) GetSSOStatus(c *gin.Context) {
+	ssoUser := middleware.GetSSOUser(c)
+	if ssoUser == nil {
+		response.Success(c, gin.H{
+			"authenticated": false,
+		})
+		return
+	}
+
+	response.Success(c, gin.H{
+		"authenticated": true,
+		"provider":      ssoUser.Provider,
+		"username":      ssoUser.Username,
+		"email":         ssoUser.Email,
+		"session_id":    ssoUser.SessionID,
+	})
+}
+
+func RegisterSSORoutes(r *gin.RouterGroup) {
+	handler := NewSSOHandler()
+
+	sso := r.Group("/sso")
+	{
+		sso.GET("/providers", handler.GetProviders)
+
+		sso.GET("/saml/login/:provider", handler.InitiateSAMLLogin)
+		sso.POST("/saml/callback", handler.HandleSAMLCallback)
+		sso.GET("/saml/callback", handler.HandleSAMLCallback)
+
+		sso.GET("/cas/login/:provider", handler.InitiateCASLogin)
+		sso.GET("/cas/callback", handler.HandleCASCallback)
+
+		sso.GET("/status", handler.GetSSOStatus)
+		sso.POST("/logout", handler.Logout)
+		sso.GET("/logout", handler.Logout)
+	}
+}

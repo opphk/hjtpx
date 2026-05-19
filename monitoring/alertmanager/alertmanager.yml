@@ -2,182 +2,75 @@ global:
   resolve_timeout: 5m
   smtp_smarthost: 'smtp.example.com:587'
   smtp_from: 'alertmanager@example.com'
-  smtp_auth_username: 'alertmanager'
-  smtp_auth_password: 'changeme'
-  slack_api_url: 'https://hooks.slack.com/services/XXXXX/XXXXX/XXXXX'
-  victorops_api_key: 'your-victorops-api-key'
-  victorops_api_url: 'https://alert.victorops.com/integrations/generic/20140514/alert'
+  smtp_auth_username: 'alertmanager@example.com'
+  smtp_auth_password: 'CHANGEME'
+  smtp_require_tls: true
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+  opsgenie_api_key: 'CHANGEME'
+  opsgenie_api_url: 'https://api.opsgenie.com/v2/alerts'
+  webhook_url: 'http://alertmanager-webhook:5001/webhook'
+  victorops_api_key: 'CHANGEME'
+  victorops_api_url: 'https://alert.victorops.com/directembed/v1/alert'
+  telegram_bot_token: 'CHANGEME'
 
 templates:
   - '/etc/alertmanager/template/*.tmpl'
 
 route:
   group_by: ['alertname', 'cluster', 'service', 'severity']
-  group_wait: 30s
-  group_interval: 5m
-  repeat_interval: 4h
-  receiver: 'default-receiver'
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: default
   routes:
     - match:
         severity: critical
-      receiver: 'critical-receiver'
+      receiver: critical
       continue: true
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1h
+
     - match:
         severity: warning
-      receiver: 'warning-receiver'
+      receiver: warning
       continue: true
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
     - match:
-        alertname: CaptchaLowSuccessRate
-      receiver: 'captcha-team-receiver'
-      continue: true
+        severity: info
+      receiver: info
+      continue: false
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 8h
+
     - match:
-        alertname: CaptchaCriticalSuccessRate
-      receiver: 'captcha-team-receiver'
-      continue: true
-    - match:
-        alertname: SecurityCriticalBlockRate
-      receiver: 'security-team-receiver'
-      continue: true
-    - match:
-        alertname: AuthBruteForceSuspected
-      receiver: 'security-team-receiver'
-      continue: true
-    - match:
-        alertname: PostgreSQLDown
-      receiver: 'dba-oncall-receiver'
-      continue: true
-    - match:
-        alertname: RedisDown
-      receiver: 'dba-oncall-receiver'
+        team: security
+      receiver: security-team
       continue: true
 
-receivers:
-  - name: 'default-receiver'
-    email_configs:
-      - to: 'ops-team@example.com'
-        send_resolved: true
-        headers:
-          subject: 'HJTPX Alert: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#alerts'
-        send_resolved: true
-        title: 'HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          {{ range .Alerts }}
-          *Alert:* {{ .Labels.alertname }}
-          *Severity:* {{ .Labels.severity }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Instance:* {{ .Labels.instance }}
-          *Time:* {{ .StartsAt }}
-          {{ end }}
-        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
-    webhook_configs:
-      - url: 'http://webhook-service:5000/alerts'
-        send_resolved: true
+    - match:
+        team: dba
+      receiver: dba-team
+      continue: true
 
-  - name: 'critical-receiver'
-    email_configs:
-      - to: 'critical-team@example.com'
-        send_resolved: true
-        headers:
-          subject: '[CRITICAL] HJTPX: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#critical-alerts'
-        send_resolved: true
-        title: '[CRITICAL] HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          :rotating_light: *CRITICAL ALERT*
-          *Alert:* {{ .Labels.alertname }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Instance:* {{ .Labels.instance }}
-          *Time:* {{ .StartsAt }}
-        color: 'danger'
-    pagerduty_configs:
-      - service_key: 'your-pagerduty-service-key'
-        severity: critical
-    webhook_configs:
-      - url: 'http://webhook-service:5000/critical-alerts'
-        send_resolved: true
+    - match:
+        team: infrastructure
+      receiver: infra-team
+      continue: true
 
-  - name: 'warning-receiver'
-    email_configs:
-      - to: 'ops-team@example.com'
-        send_resolved: true
-        headers:
-          subject: '[WARNING] HJTPX: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#alerts'
-        send_resolved: true
-        title: '[WARNING] HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          :warning: *WARNING ALERT*
-          *Alert:* {{ .Labels.alertname }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Instance:* {{ .Labels.instance }}
-          *Time:* {{ .StartsAt }}
-        color: 'warning'
+    - match:
+        team: backend
+      receiver: backend-team
+      continue: true
 
-  - name: 'captcha-team-receiver'
-    email_configs:
-      - to: 'captcha-team@example.com'
-        send_resolved: true
-        headers:
-          subject: '[CAPTCHA] HJTPX: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#captcha-alerts'
-        send_resolved: true
-        title: '[CAPTCHA] HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          :robot_face: *CAPTCHA ALERT*
-          *Alert:* {{ .Labels.alertname }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Time:* {{ .StartsAt }}
-
-  - name: 'security-team-receiver'
-    email_configs:
-      - to: 'security-team@example.com'
-        send_resolved: true
-        headers:
-          subject: '[SECURITY] HJTPX: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#security-alerts'
-        send_resolved: true
-        title: '[SECURITY] HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          :shield: *SECURITY ALERT*
-          *Alert:* {{ .Labels.alertname }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Time:* {{ .StartsAt }}
-        color: 'danger'
-    webhook_configs:
-      - url: 'http://security-service:8080/alerts'
-        send_resolved: true
-
-  - name: 'dba-oncall-receiver'
-    email_configs:
-      - to: 'dba-oncall@example.com'
-        send_resolved: true
-        headers:
-          subject: '[DATABASE] HJTPX: {{ .GroupLabels.alertname }}'
-    slack_configs:
-      - channel: '#database-alerts'
-        send_resolved: true
-        title: '[DATABASE] HJTPX Alert: {{ .GroupLabels.alertname }}'
-        text: |
-          :database: *DATABASE ALERT*
-          *Alert:* {{ .Labels.alertname }}
-          *Summary:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Instance:* {{ .Labels.instance }}
-          *Time:* {{ .StartsAt }}
-    pagerduty_configs:
-      - service_key: 'your-pagerduty-service-key'
-        severity: critical
+    - match:
+        team: product
+      receiver: product-team
+      continue: true
 
 inhibit_rules:
   - source_match:
@@ -189,17 +82,190 @@ inhibit_rules:
   - source_match:
       alertname: 'HJTXPAppDown'
     target_match_re:
-      alertname: 'HJTXP.*'
+      severity: 'warning'
     equal: ['instance']
 
   - source_match:
       alertname: 'PostgreSQLDown'
     target_match_re:
-      alertname: 'PostgreSQL.*'
+      severity: 'warning'
     equal: ['instance']
 
   - source_match:
       alertname: 'RedisDown'
     target_match_re:
-      alertname: 'Redis.*'
+      severity: 'warning'
     equal: ['instance']
+
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'oncall@example.com'
+        send_resolved: true
+        headers:
+          subject: 'HJTPX Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <html>
+          <body>
+          <h2>HJTPX Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+          <p><strong>Status:</strong> {{ .Status }}</p>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+          {{ if gt (len .Alerts.Firing) 0 }}
+          <h3>Firing Alerts</h3>
+          <table border="1">
+            <tr><th>Alert</th><th>Instance</th><th>Value</th><th>Time</th></tr>
+            {{ range .Alerts.Firing }}
+            <tr>
+              <td>{{ .Labels.alertname }}</td>
+              <td>{{ .Labels.instance }}</td>
+              <td>{{ .Annotations.description }}</td>
+              <td>{{ .StartsAt }}</td>
+            </tr>
+            {{ end }}
+          </table>
+          {{ end }}
+          {{ if gt (len .Alerts.Resolved) 0 }}
+          <h3>Resolved Alerts</h3>
+          <table border="1">
+            <tr><th>Alert</th><th>Instance</th><th>Duration</th></tr>
+            {{ range .Alerts.Resolved }}
+            <tr>
+              <td>{{ .Labels.alertname }}</td>
+              <td>{{ .Labels.instance }}</td>
+              <td>{{ .Duration.String }}</td>
+            </tr>
+            {{ end }}
+          </table>
+          {{ end }}
+          <p><a href="{{ .ExternalURL }}">View in Alertmanager</a></p>
+          </body>
+          </html>
+
+  - name: 'critical'
+    pagerduty_configs:
+      - service_key: 'CHANGEME'
+        severity: critical
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          alertname: '{{ .GroupLabels.alertname }}'
+          severity: '{{ .GroupLabels.severity }}'
+          description: '{{ .CommonAnnotations.description }}'
+        client: 'HJTPX'
+        client_url: '{{ .ExternalURL }}'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#alerts-critical'
+        send_resolved: true
+        title: 'HJTPX Critical Alert'
+        text: '<!channel> Critical: {{ .GroupLabels.alertname }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        footer: 'HJTPX Alertmanager'
+        pretext: |
+          *HJTPX Critical Alert*
+        fields:
+          - title: Alert
+            value: '{{ .GroupLabels.alertname }}'
+            short: true
+          - title: Severity
+            value: '{{ .GroupLabels.severity }}'
+            short: true
+          - title: Status
+            value: '{{ .Status }}'
+            short: true
+        actions:
+          - type: button
+            text: 'View Dashboard'
+            url: '{{ .CommonAnnotations.dashboard_url }}'
+          - type: button
+            text: 'View Runbook'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+    webhook_configs:
+      - url: 'http://alertmanager-webhook:5001/webhook'
+        send_resolved: true
+
+  - name: 'warning'
+    email_configs:
+      - to: 'team@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#alerts-warning'
+        send_resolved: true
+        title: 'HJTPX Warning Alert'
+        text: 'Warning: {{ .GroupLabels.alertname }}'
+        color: 'warning'
+        footer: 'HJTPX Alertmanager'
+
+  - name: 'info'
+    email_configs:
+      - to: 'team@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#alerts-info'
+        send_resolved: true
+        title: 'HJTPX Info Alert'
+        text: 'Info: {{ .GroupLabels.alertname }}'
+        color: '#439FE0'
+        footer: 'HJTPX Alertmanager'
+
+  - name: 'security-team'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#security-alerts'
+        send_resolved: true
+        title: 'Security Alert'
+        text: ':rotating_light: Security: {{ .GroupLabels.alertname }}'
+        color: 'danger'
+
+  - name: 'dba-team'
+    email_configs:
+      - to: 'dba@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#dba-alerts'
+        send_resolved: true
+        title: 'Database Alert'
+        text: 'Database: {{ .GroupLabels.alertname }}'
+        color: 'warning'
+
+  - name: 'infra-team'
+    email_configs:
+      - to: 'infra@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#infra-alerts'
+        send_resolved: true
+        title: 'Infrastructure Alert'
+        text: 'Infrastructure: {{ .GroupLabels.alertname }}'
+        color: 'warning'
+
+  - name: 'backend-team'
+    email_configs:
+      - to: 'backend@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#backend-alerts'
+        send_resolved: true
+        title: 'Backend Alert'
+        text: 'Backend: {{ .GroupLabels.alertname }}'
+        color: 'warning'
+
+  - name: 'product-team'
+    email_configs:
+      - to: 'product@example.com'
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGEME'
+        channel: '#product-alerts'
+        send_resolved: true
+        title: 'Product Alert'
+        text: 'Product: {{ .GroupLabels.alertname }}'
+        color: 'good'

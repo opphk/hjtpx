@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 用户画像分析</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        .profile-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+        }
+        .risk-badge {
+            font-size: 0.875rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+        }
+        .metric-card {
+            border-left: 4px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0.5rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #dee2e6;
+        }
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.25rem;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background: #007bff;
+            border: 2px solid white;
+        }
+        .behavior-tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            margin: 0.25rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            background: #e9ecef;
+        }
+        .behavior-tag.safe { background: #d4edda; color: #155724; }
+        .behavior-tag.warning { background: #fff3cd; color: #856404; }
+        .behavior-tag.danger { background: #f8d7da; color: #721c24; }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .user-avatar-large {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        @media (max-width: 768px) {
+            .user-avatar-large {
+                width: 80px;
+                height: 80px;
+                font-size: 2rem;
+            }
+            .profile-header {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body class="hold-transition sidebar-mini">
+    <div class="wrapper">
+        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/" class="nav-link">仪表盘</a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/user-profile" class="nav-link active">用户画像</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logout"><i class="fas fa-sign-out-alt"></i> 退出</a>
+                </li>
+            </ul>
+        </nav>
+
+        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+            <a href="/admin/" class="brand-link">
+                <span class="brand-text font-weight-light">HJTPX 管理后台</span>
+            </a>
+            <div class="sidebar">
+                <nav class="mt-2">
+                    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+                        <li class="nav-item">
+                            <a href="/admin/" class="nav-link"><i class="nav-icon fas fa-tachometer-alt"></i><p>仪表盘</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/stats" class="nav-link"><i class="nav-icon fas fa-chart-line"></i><p>统计分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/advanced-analytics" class="nav-link"><i class="nav-icon fas fa-chart-pie"></i><p>高级分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/behavior-analytics" class="nav-link"><i class="nav-icon fas fa-mouse-pointer"></i><p>行为分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/user-profile" class="nav-link active"><i class="nav-icon fas fa-user"></i><p>用户画像</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/applications" class="nav-link"><i class="nav-icon fas fa-mobile-alt"></i><p>应用管理</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/logs" class="nav-link"><i class="nav-icon fas fa-clipboard-list"></i><p>日志查询</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/risk-rules" class="nav-link"><i class="nav-icon fas fa-shield-alt"></i><p>风控规则</p></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <div class="content-wrapper">
+            <section class="content-header">
+                <div class="container-fluid">
+                    <div class="row mb-2">
+                        <div class="col-sm-6">
+                            <h1>用户画像分析</h1>
+                        </div>
+                        <div class="col-sm-6">
+                            <ol class="breadcrumb float-sm-right">
+                                <li class="breadcrumb-item"><a href="/admin/">首页</a></li>
+                                <li class="breadcrumb-item active">用户画像</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="content">
+                <div class="container-fluid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-search mr-2"></i>用户查询</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>用户标识</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="userIdInput" placeholder="输入用户ID、设备指纹或IP地址">
+                                            <button class="btn btn-primary" id="searchUserBtn">
+                                                <i class="fas fa-search"></i> 查询
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>查询类型</label>
+                                        <select class="form-control" id="searchType">
+                                            <option value="user_id">用户ID</option>
+                                            <option value="device_fingerprint">设备指纹</option>
+                                            <option value="ip_address">IP地址</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>时间范围</label>
+                                        <select class="form-control" id="timeRange">
+                                            <option value="7d">最近7天</option>
+                                            <option value="30d" selected>最近30天</option>
+                                            <option value="90d">最近90天</option>
+                                            <option value="all">全部历史</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-group">
+                                        <label>&nbsp;</label>
+                                        <button class="btn btn-secondary btn-block" id="advancedSearchBtn">
+                                            <i class="fas fa-filter"></i> 高级筛选
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="userProfileContent" class="d-none">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="profile-header mb-4">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-2 text-center">
+                                            <div class="user-avatar-large mx-auto" id="userAvatar">U</div>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <h3 class="mb-2" id="userIdentifier">-</h3>
+                                            <p class="mb-1"><i class="fas fa-fingerprint mr-2"></i><span id="deviceFingerprint">-</span></p>
+                                            <p class="mb-1"><i class="fas fa-map-marker-alt mr-2"></i><span id="userLocation">-</span></p>
+                                            <p class="mb-1"><i class="fas fa-clock mr-2"></i><span id="firstSeen">首次出现: -</span></p>
+                                        </div>
+                                        <div class="col-md-3 text-center">
+                                            <div class="mb-2">
+                                                <h2 class="mb-0" id="riskScore">0</h2>
+                                                <small>风险评分</small>
+                                            </div>
+                                            <span class="badge badge-pill risk-badge" id="riskLevel">-</span>
+                                        </div>
+                                        <div class="col-md-2 text-center">
+                                            <button class="btn btn-light mr-2" id="exportProfileBtn">
+                                                <i class="fas fa-download"></i> 导出
+                                            </button>
+                                            <button class="btn btn-outline-light" id="viewHistoryBtn">
+                                                <i class="fas fa-history"></i> 历史
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-lg-3 col-6">
+                                <div class="card metric-card">
+                                    <div class="card-body">
+                                        <div class="text-value text-right">
+                                            <h3 id="totalAttempts">0</h3>
+                                            <small>验证尝试次数</small>
+                                        </div>
+                                        <div class="progress mt-2">
+                                            <div class="progress-bar" id="attemptsProgress" style="width: 0%"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted" id="attemptsTrend"></small>
+                                            <span class="badge badge-light" id="attemptsBadge">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-6">
+                                <div class="card metric-card">
+                                    <div class="card-body">
+                                        <div class="text-value text-right">
+                                            <h3 id="successRate">0%</h3>
+                                            <small>成功率</small>
+                                        </div>
+                                        <div class="progress mt-2">
+                                            <div class="progress-bar bg-success" id="successProgress" style="width: 0%"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted">验证通过率</small>
+                                            <span class="badge badge-light" id="successBadge">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-6">
+                                <div class="card metric-card">
+                                    <div class="card-body">
+                                        <div class="text-value text-right">
+                                            <h3 id="avgResponse">0ms</h3>
+                                            <small>平均响应时间</small>
+                                        </div>
+                                        <div class="progress mt-2">
+                                            <div class="progress-bar bg-info" id="responseProgress" style="width: 0%"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted">响应速度</small>
+                                            <span class="badge badge-light" id="responseBadge">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-6">
+                                <div class="card metric-card">
+                                    <div class="card-body">
+                                        <div class="text-value text-right">
+                                            <h3 id="behaviorTags">0</h3>
+                                            <small>行为标签数</small>
+                                        </div>
+                                        <div class="progress mt-2">
+                                            <div class="progress-bar bg-warning" id="tagsProgress" style="width: 0%"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <small class="text-muted">行为特征</small>
+                                            <span class="badge badge-light" id="tagsBadge">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>行为特征分析</h3>
+                                        <div class="card-tools">
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="behaviorTagsList" class="mb-3"></div>
+                                        <div id="behaviorChart" class="chart-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-radar mr-2"></i>多维度风险评估</h3>
+                                        <div class="card-tools">
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="radarChart" class="chart-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>风险评分趋势</h3>
+                                        <div class="card-tools">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-tool btn-sm active" data-period="7d">7天</button>
+                                                <button type="button" class="btn btn-tool btn-sm" data-period="30d">30天</button>
+                                            </div>
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="riskTrendChart" class="chart-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-shield-alt mr-2"></i>拦截原因分析</h3>
+                                        <div class="card-tools">
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="blockReasonChart" class="chart-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-history mr-2"></i>行为时间线</h3>
+                                        <div class="card-tools">
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="timeline" id="behaviorTimeline">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title"><i class="fas fa-list mr-2"></i>详细验证记录</h3>
+                                        <div class="card-tools">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-tool btn-sm dropdown-toggle" data-toggle="dropdown">
+                                                    <i class="fas fa-download"></i> 导出
+                                                </button>
+                                                <div class="dropdown-menu">
+                                                    <a class="dropdown-item" href="#" onclick="exportRecords('csv'); return false;">
+                                                        <i class="fas fa-file-csv mr-2"></i>CSV
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" onclick="exportRecords('json'); return false;">
+                                                        <i class="fas fa-file-code mr-2"></i>JSON
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <table id="verificationTable" class="table table-bordered table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>时间</th>
+                                                    <th>验证类型</th>
+                                                    <th>结果</th>
+                                                    <th>风险评分</th>
+                                                    <th>响应时间</th>
+                                                    <th>IP地址</th>
+                                                    <th>设备信息</th>
+                                                    <th>操作</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="verificationTableBody">
+                                                <tr>
+                                                    <td colspan="8" class="text-center">暂无数据</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="emptyState" class="text-center py-5">
+                        <i class="fas fa-user-circle" style="font-size: 5rem; color: #dee2e6;"></i>
+                        <p class="text-muted mt-3">请输入用户标识进行查询</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="main-footer">
+            <div class="float-right d-none d-sm-inline">
+                HJTPX v1.0
+            </div>
+            <strong>Copyright &copy; 2024 HJTPX.</strong> All rights reserved.
+        </footer>
+    </div>
+
+    <div class="modal fade" id="historyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-history"></i> 历史记录查询</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>时间范围</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <input type="date" class="form-control" id="historyStartDate">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="date" class="form-control" id="historyEndDate">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>事件类型</label>
+                        <select class="form-control" id="historyEventType">
+                            <option value="">全部</option>
+                            <option value="verification">验证事件</option>
+                            <option value="block">拦截事件</option>
+                            <option value="login">登录事件</option>
+                        </select>
+                    </div>
+                    <div id="historyResults" class="mt-3"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" id="searchHistoryBtn">
+                        <i class="fas fa-search"></i> 查询
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/js/adminlte.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        let radarChart, riskTrendChart, blockReasonChart, behaviorChart;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            initEventListeners();
+        });
+
+        function initCharts() {
+            initBehaviorChart();
+            initRadarChart();
+            initRiskTrendChart();
+            initBlockReasonChart();
+        }
+
+        function initBehaviorChart() {
+            const container = document.getElementById('behaviorChart');
+            if (!container) return;
+
+            behaviorChart = echarts.init(container);
+            window.addEventListener('resize', () => behaviorChart.resize());
+
+            behaviorChart.setOption({
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    data: [
+                        { value: 335, name: '正常行为' },
+                        { value: 234, name: '可疑行为' },
+                        { value: 154, name: '异常行为' }
+                    ],
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            });
+        }
+
+        function initRadarChart() {
+            const container = document.getElementById('radarChart');
+            if (!container) return;
+
+            radarChart = echarts.init(container);
+            window.addEventListener('resize', () => radarChart.resize());
+
+            radarChart.setOption({
+                radar: {
+                    indicator: [
+                        { name: '轨迹真实性', max: 100 },
+                        { name: '行为一致性', max: 100 },
+                        { name: '设备信任度', max: 100 },
+                        { name: 'IP信任度', max: 100 },
+                        { name: '频率正常', max: 100 }
+                    ],
+                    radius: '65%'
+                },
+                series: [{
+                    type: 'radar',
+                    data: [{
+                        value: [85, 90, 75, 80, 95],
+                        name: '风险评估',
+                        areaStyle: {
+                            color: 'rgba(0, 123, 255, 0.3)'
+                        }
+                    }]
+                }]
+            });
+        }
+
+        function initRiskTrendChart() {
+            const container = document.getElementById('riskTrendChart');
+            if (!container) return;
+
+            riskTrendChart = echarts.init(container);
+            window.addEventListener('resize', () => riskTrendChart.resize());
+
+            const dates = [];
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                dates.push((date.getMonth() + 1) + '-' + date.getDate());
+            }
+
+            riskTrendChart.setOption({
+                tooltip: {
+                    trigger: 'axis'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dates
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100
+                },
+                series: [{
+                    type: 'line',
+                    smooth: true,
+                    data: Array.from({ length: 30 }, () => Math.floor(Math.random() * 40) + 20),
+                    areaStyle: {
+                        color: {
+                            type: 'linear',
+                            x: 0, y: 0, x2: 0, y2: 1,
+                            colorStops: [
+                                { offset: 0, color: 'rgba(220, 53, 69, 0.5)' },
+                                { offset: 1, color: 'rgba(220, 53, 69, 0.1)' }
+                            ]
+                        }
+                    },
+                    lineStyle: { color: '#dc3545' },
+                    itemStyle: { color: '#dc3545' }
+                }]
+            });
+        }
+
+        function initBlockReasonChart() {
+            const container = document.getElementById('blockReasonChart');
+            if (!container) return;
+
+            blockReasonChart = echarts.init(container);
+            window.addEventListener('resize', () => blockReasonChart.resize());
+
+            blockReasonChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['模拟器检测', 'IP异常', '设备异常', '行为异常', '频率过高', '其他']
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [{
+                    type: 'bar',
+                    data: [12, 25, 8, 15, 20, 5],
+                    itemStyle: {
+                        color: {
+                            type: 'linear',
+                            x: 0, y: 0, x2: 0, y2: 1,
+                            colorStops: [
+                                { offset: 0, color: '#dc3545' },
+                                { offset: 1, color: '#ff6b6b' }
+                            ]
+                        }
+                    }
+                }]
+            });
+        }
+
+        function initEventListeners() {
+            document.getElementById('searchUserBtn').addEventListener('click', searchUser);
+            document.getElementById('userIdInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') searchUser();
+            });
+            document.getElementById('viewHistoryBtn').addEventListener('click', showHistoryModal);
+            document.getElementById('searchHistoryBtn').addEventListener('click', searchHistory);
+            document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
+            document.getElementById('refreshBtn')?.addEventListener('click', refreshData);
+
+            const periodButtons = document.querySelectorAll('[data-period]');
+            periodButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    periodButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    updateRiskTrend(this.dataset.period);
+                });
+            });
+        }
+
+        function searchUser() {
+            const userId = document.getElementById('userIdInput').value.trim();
+            if (!userId) {
+                alert('请输入用户标识');
+                return;
+            }
+
+            document.getElementById('emptyState').classList.add('d-none');
+            document.getElementById('userProfileContent').classList.remove('d-none');
+
+            loadUserProfile(userId);
+        }
+
+        function loadUserProfile(userId) {
+            const mockData = {
+                user_id: userId,
+                device_fingerprint: 'FP_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+                location: '广东省深圳市',
+                first_seen: '2024-01-15',
+                risk_score: Math.floor(Math.random() * 50) + 30,
+                total_attempts: Math.floor(Math.random() * 500) + 100,
+                success_rate: (Math.random() * 30 + 70).toFixed(1),
+                avg_response_time: Math.floor(Math.random() * 80) + 20,
+                behavior_tags: [
+                    { name: '轨迹正常', type: 'safe' },
+                    { name: '速度稳定', type: 'safe' },
+                    { name: '偶尔异常', type: 'warning' }
+                ]
+            };
+
+            updateUserDisplay(mockData);
+            updateMetrics(mockData);
+            updateBehaviorTags(mockData.behavior_tags);
+            updateVerificationTable();
+            updateBehaviorTimeline();
+        }
+
+        function updateUserDisplay(data) {
+            document.getElementById('userIdentifier').textContent = data.user_id;
+            document.getElementById('deviceFingerprint').textContent = data.device_fingerprint;
+            document.getElementById('userLocation').textContent = data.location;
+            document.getElementById('firstSeen').textContent = '首次出现: ' + data.first_seen;
+            document.getElementById('riskScore').textContent = data.risk_score;
+
+            const avatar = document.getElementById('userAvatar');
+            avatar.textContent = data.user_id.charAt(0).toUpperCase();
+
+            const riskLevel = document.getElementById('riskLevel');
+            if (data.risk_score < 30) {
+                riskLevel.textContent = '低风险';
+                riskLevel.className = 'badge badge-pill risk-badge bg-success';
+            } else if (data.risk_score < 60) {
+                riskLevel.textContent = '中风险';
+                riskLevel.className = 'badge badge-pill risk-badge bg-warning';
+            } else {
+                riskLevel.textContent = '高风险';
+                riskLevel.className = 'badge badge-pill risk-badge bg-danger';
+            }
+        }
+
+        function updateMetrics(data) {
+            animateValue('totalAttempts', 0, data.total_attempts, 1000);
+            document.getElementById('successRate').textContent = data.success_rate + '%';
+            document.getElementById('avgResponse').textContent = data.avg_response_time + 'ms';
+            document.getElementById('behaviorTags').textContent = data.behavior_tags.length;
+
+            document.getElementById('attemptsProgress').style.width = Math.min(data.total_attempts / 5, 100) + '%';
+            document.getElementById('successProgress').style.width = data.success_rate + '%';
+            document.getElementById('responseProgress').style.width = Math.min(data.avg_response_time / 2, 100) + '%';
+            document.getElementById('tagsProgress').style.width = (data.behavior_tags.length / 10 * 100) + '%';
+        }
+
+        function updateBehaviorTags(tags) {
+            const container = document.getElementById('behaviorTagsList');
+            container.innerHTML = tags.map(tag =>
+                `<span class="behavior-tag ${tag.type}">${tag.name}</span>`
+            ).join('');
+        }
+
+        function updateVerificationTable() {
+            const tbody = document.getElementById('verificationTableBody');
+            const mockData = [];
+
+            for (let i = 0; i < 10; i++) {
+                const date = new Date();
+                date.setHours(date.getHours() - i);
+                mockData.push({
+                    time: date.toLocaleString('zh-CN'),
+                    type: ['滑动验证', '点选验证', '图像验证'][Math.floor(Math.random() * 3)],
+                    result: Math.random() > 0.2 ? 'success' : 'failed',
+                    risk_score: Math.floor(Math.random() * 40) + 20,
+                    response_time: Math.floor(Math.random() * 100) + 20,
+                    ip: '192.168.1.' + Math.floor(Math.random() * 255),
+                    device: 'Chrome / Windows 10'
+                });
+            }
+
+            tbody.innerHTML = mockData.map(item => `
+                <tr>
+                    <td><small>${item.time}</small></td>
+                    <td>${item.type}</td>
+                    <td><span class="badge badge-${item.result === 'success' ? 'success' : 'danger'}">${item.result === 'success' ? '通过' : '拒绝'}</span></td>
+                    <td><span class="badge badge-${item.risk_score < 40 ? 'success' : item.risk_score < 70 ? 'warning' : 'danger'}">${item.risk_score}</span></td>
+                    <td>${item.response_time}ms</td>
+                    <td><small>${item.ip}</small></td>
+                    <td><small>${item.device}</small></td>
+                    <td>
+                        <button class="btn btn-xs btn-outline-primary" onclick="viewDetail(${mockData.indexOf(item)})">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateBehaviorTimeline() {
+            const container = document.getElementById('behaviorTimeline');
+            const mockEvents = [
+                { time: '2024-05-19 10:30', type: 'success', description: '滑动验证通过' },
+                { time: '2024-05-19 09:15', type: 'warning', description: '行为异常被标记' },
+                { time: '2024-05-18 15:42', type: 'success', description: '点选验证通过' },
+                { time: '2024-05-18 11:20', type: 'danger', description: '模拟器检测被拦截' },
+                { time: '2024-05-17 08:00', type: 'info', description: '新设备登录' }
+            ];
+
+            container.innerHTML = mockEvents.map(event => `
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-${event.type === 'success' ? 'success' : event.type === 'warning' ? 'warning' : event.type === 'danger' ? 'danger' : 'info'}"></div>
+                    <div class="timeline-content">
+                        <div class="d-flex justify-content-between">
+                            <strong>${event.description}</strong>
+                            <small class="text-muted">${event.time}</small>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showHistoryModal() {
+            $('#historyModal').modal('show');
+
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+            document.getElementById('historyStartDate').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('historyEndDate').value = today.toISOString().split('T')[0];
+        }
+
+        function searchHistory() {
+            const startDate = document.getElementById('historyStartDate').value;
+            const endDate = document.getElementById('historyEndDate').value;
+            const eventType = document.getElementById('historyEventType').value;
+
+            const container = document.getElementById('historyResults');
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    查询历史记录: ${startDate} 至 ${endDate}, 类型: ${eventType || '全部'}
+                </div>
+            `;
+        }
+
+        function exportProfile() {
+            const data = {
+                user_id: document.getElementById('userIdentifier').textContent,
+                risk_score: document.getElementById('riskScore').textContent,
+                export_time: new Date().toISOString()
+            };
+
+            downloadFile(JSON.stringify(data, null, 2), 'user_profile_' + data.user_id + '.json', 'application/json');
+        }
+
+        function exportRecords(format) {
+            if (format === 'csv') {
+                let csv = '时间,验证类型,结果,风险评分,响应时间,IP地址,设备信息\n';
+                csv += '2024-05-19 10:30,滑动验证,通过,25,35ms,192.168.1.100,Chrome/Windows\n';
+                downloadFile(csv, 'verification_records.csv', 'text/csv');
+            } else if (format === 'json') {
+                const data = [
+                    { time: '2024-05-19 10:30', type: '滑动验证', result: '通过', risk_score: 25, response_time: '35ms', ip: '192.168.1.100', device: 'Chrome/Windows' }
+                ];
+                downloadFile(JSON.stringify(data, null, 2), 'verification_records.json', 'application/json');
+            }
+        }
+
+        function updateRiskTrend(period) {
+            if (!riskTrendChart) return;
+
+            const days = period === '7d' ? 7 : 30;
+            const dates = [];
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                dates.push((date.getMonth() + 1) + '-' + date.getDate());
+            }
+
+            riskTrendChart.setOption({
+                xAxis: {
+                    data: dates
+                },
+                series: [{
+                    data: Array.from({ length: days }, () => Math.floor(Math.random() * 40) + 20)
+                }]
+            });
+        }
+
+        function viewDetail(index) {
+            alert('查看验证详情: 索引 ' + index);
+        }
+
+        function refreshData() {
+            const userId = document.getElementById('userIdInput').value.trim();
+            if (userId) {
+                loadUserProfile(userId);
+            }
+        }
+
+        function animateValue(elementId, start, end, duration) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                const value = Math.floor(start + (end - start) * easeProgress);
+                element.textContent = formatNumber(value);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,6 +13,9 @@ type TimezoneInfo struct {
 	Zone         string `json:"zone"`
 	Region       string `json:"region"`
 	CountryCode  string `json:"country_code"`
+	IsDST        bool   `json:"is_dst"`
+	DSTName      string `json:"dst_name,omitempty"`
+	StandardName string `json:"standard_name,omitempty"`
 }
 
 var (
@@ -93,6 +97,39 @@ var (
 		"Europe/Tallinn",
 		"Europe/Riga",
 		"Europe/Vilnius",
+		"America/New_York",
+		"America/Denver",
+		"America/Panama",
+		"America/Bogota",
+		"America/Lima",
+		"Asia/Jerusalem",
+		"Africa/Casablanca",
+		"Africa/Cairo",
+		"Asia/Riyadh",
+		"Asia/Tehran",
+		"Asia/Kabul",
+		"Asia/Karachi",
+		"Asia/Kolkata",
+		"Asia/Kathmandu",
+		"Asia/Dhaka",
+		"Asia/Yangon",
+		"Asia/Bangkok",
+		"Asia/Jakarta",
+		"Asia/Ho_Chi_Minh",
+		"Asia/Manila",
+		"Asia/Shanghai",
+		"Asia/Hong_Kong",
+		"Asia/Taipei",
+		"Asia/Tokyo",
+		"Asia/Seoul",
+		"Australia/Perth",
+		"Australia/Adelaide",
+		"Australia/Brisbane",
+		"Australia/Sydney",
+		"Australia/Melbourne",
+		"Pacific/Auckland",
+		"Pacific/Fiji",
+		"America/Anchorage",
 	}
 )
 
@@ -616,4 +653,328 @@ func FormatTimeRange(start, end time.Time, tz string, lang string) string {
 func IsValidTimezone(tz string) bool {
 	_, err := time.LoadLocation(tz)
 	return err == nil
+}
+
+func GetTimezoneAbbreviationFull(tz string) (standard, dst string) {
+	loc := GetLocation(tz)
+	jan := time.Date(1, 1, 1, 12, 0, 0, 0, loc)
+	jul := time.Date(1, 7, 1, 12, 0, 0, 0, loc)
+	
+	standard, _ = jan.Zone()
+	dst, _ = jul.Zone()
+	
+	return standard, dst
+}
+
+func GetCurrentOffset(tz string) int {
+	loc := GetLocation(tz)
+	_, offset := time.Now().In(loc).Zone()
+	return offset
+}
+
+func GetTimezoneByCity(city string) []string {
+	city = strings.ToLower(city)
+	var result []string
+	
+	cityMap := map[string][]string{
+		"shanghai":   {"Asia/Shanghai"},
+		"beijing":    {"Asia/Shanghai"},
+		"tokyo":      {"Asia/Tokyo"},
+		"seoul":      {"Asia/Seoul"},
+		"singapore":  {"Asia/Singapore"},
+		"hong kong":  {"Asia/Hong_Kong"},
+		"bangkok":    {"Asia/Bangkok"},
+		"jakarta":    {"Asia/Jakarta"},
+		"mumbai":     {"Asia/Kolkata"},
+		"kolkata":    {"Asia/Kolkata"},
+		"delhi":      {"Asia/Kolkata"},
+		"dubai":      {"Asia/Dubai"},
+		"riyadh":     {"Asia/Riyadh"},
+		"tehran":     {"Asia/Tehran"},
+		"jerusalem":   {"Asia/Jerusalem"},
+		"moscow":     {"Europe/Moscow"},
+		"paris":      {"Europe/Paris"},
+		"berlin":     {"Europe/Berlin"},
+		"london":     {"Europe/London"},
+		"new york":   {"America/New_York"},
+		"los angeles": {"America/Los_Angeles"},
+		"san francisco": {"America/Los_Angeles"},
+		"chicago":    {"America/Chicago"},
+		"toronto":    {"America/Toronto"},
+		"vancouver":  {"America/Vancouver"},
+		"sydney":     {"Australia/Sydney"},
+		"melbourne":  {"Australia/Melbourne"},
+		"auckland":   {"Pacific/Auckland"},
+	}
+	
+	for key, timezones := range cityMap {
+		if strings.Contains(key, city) || strings.Contains(city, key) {
+			result = append(result, timezones...)
+		}
+	}
+	
+	return result
+}
+
+func GetTimezoneByCountryCode(countryCode string) []string {
+	countryCode = strings.ToUpper(countryCode)
+	result := make([]string, 0)
+	
+	countryTimezones := map[string][]string{
+		"CN": {"Asia/Shanghai", "Asia/Hong_Kong"},
+		"JP": {"Asia/Tokyo"},
+		"KR": {"Asia/Seoul"},
+		"SG": {"Asia/Singapore"},
+		"TH": {"Asia/Bangkok"},
+		"ID": {"Asia/Jakarta"},
+		"VN": {"Asia/Ho_Chi_Minh"},
+		"TW": {"Asia/Taipei"},
+		"IN": {"Asia/Kolkata"},
+		"AE": {"Asia/Dubai"},
+		"SA": {"Asia/Riyadh"},
+		"IL": {"Asia/Jerusalem"},
+		"IR": {"Asia/Tehran"},
+		"PK": {"Asia/Karachi"},
+		"BD": {"Asia/Dhaka"},
+		"US": {"America/New_York", "America/Los_Angeles", "America/Chicago", "America/Denver", "America/Phoenix", "America/Anchorage", "Pacific/Honolulu"},
+		"CA": {"America/Toronto", "America/Vancouver"},
+		"MX": {"America/Mexico_City"},
+		"BR": {"America/Sao_Paulo"},
+		"GB": {"Europe/London"},
+		"FR": {"Europe/Paris"},
+		"DE": {"Europe/Berlin"},
+		"ES": {"Europe/Madrid"},
+		"IT": {"Europe/Rome"},
+		"RU": {"Europe/Moscow"},
+		"TR": {"Europe/Istanbul"},
+		"AU": {"Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Australia/Adelaide", "Australia/Brisbane"},
+		"NZ": {"Pacific/Auckland"},
+		"EG": {"Africa/Cairo"},
+		"ZA": {"Africa/Johannesburg"},
+		"NG": {"Africa/Lagos"},
+		"KE": {"Africa/Nairobi"},
+	}
+	
+	if timezones, ok := countryTimezones[countryCode]; ok {
+		result = append(result, timezones...)
+	}
+	
+	return result
+}
+
+func FormatTimezoneOffset(offset int) string {
+	hours := offset / 3600
+	minutes := (offset % 3600) / 60
+	
+	if hours == 0 && minutes == 0 {
+		return "UTC"
+	}
+	
+	if minutes == 0 {
+		return fmt.Sprintf("UTC%+d", hours)
+	}
+	
+	return fmt.Sprintf("UTC%+d:%02d", hours, minutes)
+}
+
+func CompareTimezones(tz1, tz2 string) string {
+	loc1 := GetLocation(tz1)
+	loc2 := GetLocation(tz2)
+	
+	now := time.Now()
+	t1 := now.In(loc1)
+	t2 := now.In(loc2)
+	
+	_, offset1 := t1.Zone()
+	_, offset2 := t2.Zone()
+	
+	diff := offset2 - offset1
+	hours := diff / 3600
+	minutes := (diff % 3600) / 60
+	
+	if diff == 0 {
+		return "Same timezone"
+	}
+	
+	sign := "+"
+	if diff < 0 {
+		sign = "-"
+		hours = -hours
+		minutes = -minutes
+	}
+	
+	if minutes == 0 {
+		return fmt.Sprintf("%s%s hours", sign, hours)
+	}
+	
+	return fmt.Sprintf("%s%s:%02d hours", sign, hours, minutes)
+}
+
+func IsTimezoneAhead(tz1, tz2 string) bool {
+	loc1 := GetLocation(tz1)
+	loc2 := GetLocation(tz2)
+	
+	now := time.Now()
+	t1 := now.In(loc1)
+	t2 := now.In(loc2)
+	
+	_, offset1 := t1.Zone()
+	_, offset2 := t2.Zone()
+	
+	return offset1 > offset2
+}
+
+func GetTimezoneDistance(tz1, tz2 string) (hours, minutes int) {
+	loc1 := GetLocation(tz1)
+	loc2 := GetLocation(tz2)
+	
+	now := time.Now()
+	t1 := now.In(loc1)
+	t2 := now.In(loc2)
+	
+	_, offset1 := t1.Zone()
+	_, offset2 := t2.Zone()
+	
+	diff := offset2 - offset1
+	if diff < 0 {
+		diff = -diff
+	}
+	
+	hours = diff / 3600
+	minutes = (diff % 3600) / 60
+	
+	return hours, minutes
+}
+
+func GetNextWeekdayOccurrence(tz string, weekday time.Weekday, hour, minute int) time.Time {
+	loc := GetLocation(tz)
+	now := time.Now().In(loc)
+	
+	target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
+	
+	for target.Before(now) || target.Weekday() != weekday {
+		target = target.AddDate(0, 0, 1)
+	}
+	
+	return target
+}
+
+func GetBusinessHoursInTimezone(tz string, startHour, startMin, endHour, endMin int) (start, end time.Time) {
+	loc := GetLocation(tz)
+	now := time.Now().In(loc)
+	
+	start = time.Date(now.Year(), now.Month(), now.Day(), startHour, startMin, 0, 0, loc)
+	end = time.Date(now.Year(), now.Month(), now.Day(), endHour, endMin, 0, 0, loc)
+	
+	return start, end
+}
+
+func IsWithinBusinessHours(tz string, startHour, startMin, endHour, endMin int) bool {
+	loc := GetLocation(tz)
+	now := time.Now().In(loc)
+	
+	currentMinutes := now.Hour()*60 + now.Minute()
+	startMinutes := startHour*60 + startMin
+	endMinutes := endHour*60 + endMin
+	
+	return currentMinutes >= startMinutes && currentMinutes <= endMinutes
+}
+
+func GetTimeUntil(targetTime time.Time, tz string) string {
+	loc := GetLocation(tz)
+	now := time.Now().In(loc)
+	target := targetTime.In(loc)
+	
+	diff := target.Sub(now)
+	
+	if diff < 0 {
+		return "already passed"
+	}
+	
+	days := int(diff.Hours() / 24)
+	hours := int(diff.Hours()) % 24
+	minutes := int(diff.Minutes()) % 60
+	seconds := int(diff.Seconds()) % 60
+	
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	} else if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	} else {
+		return fmt.Sprintf("%ds", seconds)
+	}
+}
+
+func ParseTimeString(timeStr string) (time.Time, error) {
+	formats := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04",
+		"01/02/2006 15:04:05",
+		"01/02/2006T15:04:05",
+		"01/02/2006 15:04",
+		"01/02/2006T15:04",
+	}
+	
+	for _, format := range formats {
+		if t, err := time.Parse(format, timeStr); err == nil {
+			return t, nil
+		}
+	}
+	
+	return time.Time{}, fmt.Errorf("unable to parse time string: %s", timeStr)
+}
+
+func ConvertTimeString(timeStr string, fromTz, toTz string) (string, error) {
+	t, err := ParseTimeString(timeStr)
+	if err != nil {
+		return "", err
+	}
+	
+	loc := GetLocation(toTz)
+	t = t.In(GetLocation(fromTz)).In(loc)
+	
+	return t.Format("2006-01-02 15:04:05"), nil
+}
+
+func GetTimezoneDisplayName(tz string) string {
+	parts := splitTimezone(tz)
+	if len(parts) >= 2 {
+		return fmt.Sprintf("%s/%s", parts[0], parts[1])
+	}
+	return tz
+}
+
+func GetTimezoneCityName(tz string) string {
+	parts := splitTimezone(tz)
+	if len(parts) >= 2 {
+		city := parts[1]
+		city = strings.Replace(city, "_", " ", -1)
+		city = strings.Title(strings.ToLower(city))
+		return city
+	}
+	return tz
+}
+
+func FormatTimestamp(t time.Time, tz string) string {
+	loc := GetLocation(tz)
+	return t.In(loc).Format("2006-01-02 15:04:05 MST")
+}
+
+func FormatTimestampISO(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05Z")
+}
+
+func GetRelativeTimezoneAbbreviation(tz1, tz2 string) string {
+	_, dst1 := GetTimezoneAbbreviationFull(tz1)
+	_, dst2 := GetTimezoneAbbreviationFull(tz2)
+	
+	if dst1 == dst2 {
+		return dst1
+	}
+	
+	return fmt.Sprintf("%s/%s", dst1, dst2)
 }

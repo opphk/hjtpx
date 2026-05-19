@@ -2,7 +2,6 @@ package captcha
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 

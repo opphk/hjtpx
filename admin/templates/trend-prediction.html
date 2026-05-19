@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 趋势预测</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        .prediction-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            min-height: 400px;
+            height: 400px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .metric-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .metric-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .metric-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .accuracy-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .accuracy-high {
+            background: #d4edda;
+            color: #155724;
+        }
+        .accuracy-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .accuracy-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .prediction-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+        }
+        .sidebar-bg { background-color: #1a1a2e; }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <div class="row vh-100">
+            <!-- 侧边栏 -->
+            <div class="col-md-2 sidebar-bg d-flex flex-column p-3">
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
+                        <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+                    </div>
+                </div>
+                <nav class="d-flex flex-column gap-1 flex-grow-1">
+                    <a class="nav-link text-light" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                    <a class="nav-link text-light" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                    <a class="nav-link text-light" href="/admin/behavior-analytics"><i class="fas fa-mouse-pointer me-2"></i>用户行为分析</a>
+                    <a class="nav-link text-light" href="/admin/advanced-analytics"><i class="fas fa-chart-pie me-2"></i>高级分析</a>
+                    <a class="nav-link text-light active bg-gradient" href="/admin/trend-prediction"><i class="fas fa-chart-area me-2"></i>趋势预测</a>
+                    <a class="nav-link text-light" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                    <a class="nav-link text-light" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                </nav>
+                <div class="mt-auto">
+                    <a href="#" id="logoutBtn" class="nav-link text-light"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+                </div>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="col-md-10 p-4 overflow-auto">
+                <!-- 顶部导航 -->
+                <header class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <h2 class="mb-0">趋势预测分析</h2>
+                            <span class="badge bg-secondary" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);">墨盾</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <select class="form-select" id="predictionPeriod" style="width: 200px;">
+                                <option value="7d">未来7天</option>
+                                <option value="14d">未来14天</option>
+                                <option value="30d">未来30天</option>
+                            </select>
+                            <button id="refreshPredictionBtn" class="btn btn-outline-primary">
+                                <i class="fas fa-sync me-1"></i>刷新预测
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- 预测准确度指标 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="accuracyValue">85.6%</div>
+                            <div class="metric-label">预测准确度</div>
+                            <span class="accuracy-badge accuracy-high mt-2">高可信度</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card success">
+                            <div class="metric-value" id="trendPrediction">↑ 12.5%</div>
+                            <div class="metric-label">预期增长</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card warning">
+                            <div class="metric-value" id="peakTime">14:00-16:00</div>
+                            <div class="metric-label">预测高峰时段</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="confidenceLevel">92%</div>
+                            <div class="metric-label">置信度</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主要趋势预测图 -->
+                <div class="prediction-card">
+                    <h5 class="mb-3"><i class="fas fa-chart-line me-2"></i>请求量趋势预测</h5>
+                    <div class="chart-container" id="mainTrendChart"></div>
+                    <div class="prediction-legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #3b82f6;"></div>
+                            <span>历史数据</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #f59e0b; border-style: dashed;"></div>
+                            <span>预测数据</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(245, 158, 11, 0.2);"></div>
+                            <span>置信区间</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 多维度趋势分析 -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="prediction-card">
+                            <h5 class="mb-3"><i class="fas fa-shield-alt me-2"></i>风险趋势预测</h5>
+                            <div class="chart-container" id="riskTrendChart"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="prediction-card">
+                            <h5 class="mb-3"><i class="fas fa-check-circle me-2"></i>通过率趋势预测</h5>
+                            <div class="chart-container" id="successRateChart"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 预测算法可视化 -->
+                <div class="prediction-card">
+                    <h5 class="mb-3"><i class="fas fa-brain me-2"></i>预测算法性能分析</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="chart-container" id="algorithmAccuracyChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="chart-container" id="errorDistributionChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="chart-container" id="featureImportanceChart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 预测结果表格 -->
+                <div class="prediction-card">
+                    <h5 class="mb-3"><i class="fas fa-table me-2"></i>预测详情</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>预测请求量</th>
+                                    <th>预测通过率</th>
+                                    <th>预测风险等级</th>
+                                    <th>置信区间</th>
+                                    <th>准确度</th>
+                                </tr>
+                            </thead>
+                            <tbody id="predictionTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 季节性和周期性分析 -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="prediction-card">
+                            <h5 class="mb-3"><i class="fas fa-clock me-2"></i>周期性分析</h5>
+                            <div class="chart-container" id="periodicityChart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="prediction-card">
+                            <h5 class="mb-3"><i class="fas fa-calendar-alt me-2"></i>季节性分析</h5>
+                            <div class="chart-container" id="seasonalityChart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 异常预测和告警 -->
+                <div class="prediction-card">
+                    <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2"></i>异常预测和告警</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="alert alert-warning">
+                                <h6><i class="fas fa-exclamation-circle me-2"></i>预测异常</h6>
+                                <p class="mb-0" id="predictedAnomalies">暂无预测异常</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-info-circle me-2"></i>潜在风险</h6>
+                                <p class="mb-0" id="potentialRisks">请求量可能在周末骤降</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-success">
+                                <h6><i class="fas fa-lightbulb me-2"></i>优化建议</h6>
+                                <p class="mb-0" id="optimizationSuggestions">建议增加周末服务器配置</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        let predictionCharts = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePredictionCharts();
+            loadPredictionData();
+            setupEventListeners();
+        });
+
+        function initializePredictionCharts() {
+            initMainTrendChart();
+            initRiskTrendChart();
+            initSuccessRateChart();
+            initAlgorithmAccuracyChart();
+            initErrorDistributionChart();
+            initFeatureImportanceChart();
+            initPeriodicityChart();
+            initSeasonalityChart();
+        }
+
+        function initMainTrendChart() {
+            const container = document.getElementById('mainTrendChart');
+            if (!container) return;
+
+            predictionCharts.mainTrend = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.mainTrend.resize());
+
+            const days = [];
+            for (let i = 7; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                days.push(`${date.getMonth() + 1}-${date.getDate()}`);
+            }
+
+            for (let i = 1; i <= 7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() + i);
+                days.push(`${date.getMonth() + 1}-${date.getDate()}`);
+            }
+
+            const historicalData = [820, 932, 901, 934, 1290, 1330, 1320, 1250];
+            const forecastData = [null, null, null, null, null, null, null, null, 1280, 1350, 1420, 1380, 1450, 1520, 1480];
+            const upperBound = [null, null, null, null, null, null, null, null, 1380, 1450, 1520, 1480, 1550, 1620, 1580];
+            const lowerBound = [null, null, null, null, null, null, null, null, 1180, 1250, 1320, 1280, 1350, 1420, 1380];
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: days,
+                    boundaryGap: false,
+                    axisLabel: { color: '#666' },
+                    markLine: {
+                        silent: true,
+                        lineStyle: { color: '#f59e0b', type: 'dashed' },
+                        data: [{ xAxis: 7 }]
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#666' }
+                },
+                series: [
+                    {
+                        name: '历史数据',
+                        type: 'line',
+                        smooth: true,
+                        data: historicalData,
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                            ])
+                        },
+                        lineStyle: { color: '#3b82f6', width: 2 },
+                        itemStyle: { color: '#3b82f6' }
+                    },
+                    {
+                        name: '预测数据',
+                        type: 'line',
+                        smooth: true,
+                        data: forecastData,
+                        lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+                        itemStyle: { color: '#f59e0b' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(245, 158, 11, 0.3)' },
+                                { offset: 1, color: 'rgba(245, 158, 11, 0.05)' }
+                            ])
+                        }
+                    },
+                    {
+                        name: '置信上限',
+                        type: 'line',
+                        smooth: true,
+                        data: upperBound,
+                        lineStyle: { color: 'rgba(245, 158, 11, 0.3)', width: 1, type: 'dotted' },
+                        showSymbol: false,
+                        areaStyle: { opacity: 0 }
+                    },
+                    {
+                        name: '置信下限',
+                        type: 'line',
+                        smooth: true,
+                        data: lowerBound,
+                        lineStyle: { color: 'rgba(245, 158, 11, 0.3)', width: 1, type: 'dotted' },
+                        showSymbol: false,
+                        areaStyle: {
+                            color: 'rgba(245, 158, 11, 0.1)',
+                            origin: 'end'
+                        }
+                    }
+                ]
+            };
+
+            predictionCharts.mainTrend.setOption(option);
+        }
+
+        function initRiskTrendChart() {
+            const container = document.getElementById('riskTrendChart');
+            if (!container) return;
+
+            predictionCharts.riskTrend = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.riskTrend.resize());
+
+            const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            const historicalRisk = [15, 18, 12, 20, 25, 35, 30];
+            const predictedRisk = [22, 20, 18, 24, 30, 40, 35];
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['历史风险', '预测风险'],
+                    bottom: '0'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: days,
+                    axisLabel: { color: '#666' }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '风险指数',
+                    axisLabel: { color: '#666' }
+                },
+                series: [
+                    {
+                        name: '历史风险',
+                        type: 'bar',
+                        data: historicalRisk,
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#10b981' },
+                                { offset: 1, color: '#059669' }
+                            ])
+                        }
+                    },
+                    {
+                        name: '预测风险',
+                        type: 'line',
+                        data: predictedRisk,
+                        smooth: true,
+                        lineStyle: { color: '#f59e0b', width: 2 },
+                        itemStyle: { color: '#f59e0b' },
+                        symbol: 'circle'
+                    }
+                ]
+            };
+
+            predictionCharts.riskTrend.setOption(option);
+        }
+
+        function initSuccessRateChart() {
+            const container = document.getElementById('successRateChart');
+            if (!container) return;
+
+            predictionCharts.successRate = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.successRate.resize());
+
+            const hours = [];
+            for (let i = 0; i < 24; i++) {
+                hours.push(`${i}:00`);
+            }
+
+            const historicalRate = hours.map(() => 90 + Math.random() * 8);
+            const predictedRate = hours.map(() => 88 + Math.random() * 10);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['历史通过率', '预测通过率'],
+                    bottom: '0'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: hours,
+                    axisLabel: { color: '#666', interval: 3 }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 80,
+                    max: 100,
+                    name: '通过率 (%)',
+                    axisLabel: { color: '#666', formatter: '{value}%' }
+                },
+                series: [
+                    {
+                        name: '历史通过率',
+                        type: 'line',
+                        data: historicalRate,
+                        smooth: true,
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                            ])
+                        },
+                        lineStyle: { color: '#10b981', width: 2 },
+                        itemStyle: { color: '#10b981' }
+                    },
+                    {
+                        name: '预测通过率',
+                        type: 'line',
+                        data: predictedRate,
+                        smooth: true,
+                        lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+                        itemStyle: { color: '#f59e0b' }
+                    }
+                ]
+            };
+
+            predictionCharts.successRate.setOption(option);
+        }
+
+        function initAlgorithmAccuracyChart() {
+            const container = document.getElementById('algorithmAccuracyChart');
+            if (!container) return;
+
+            predictionCharts.algorithmAccuracy = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.algorithmAccuracy.resize());
+
+            const option = {
+                title: {
+                    text: '算法准确度',
+                    left: 'center',
+                    textStyle: { fontSize: 14, fontWeight: 'normal' }
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}%'
+                },
+                series: [{
+                    type: 'gauge',
+                    startAngle: 180,
+                    endAngle: 0,
+                    center: ['50%', '70%'],
+                    radius: '90%',
+                    min: 0,
+                    max: 100,
+                    splitNumber: 8,
+                    axisLine: {
+                        lineStyle: {
+                            width: 6,
+                            color: [
+                                [0.3, '#f59e0b'],
+                                [0.7, '#10b981'],
+                                [1, '#3b82f6']
+                            ]
+                        }
+                    },
+                    pointer: {
+                        icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
+                        length: '12%',
+                        width: 20,
+                        offsetCenter: [0, '-60%'],
+                        itemStyle: {
+                            color: '#3b82f6'
+                        }
+                    },
+                    axisTick: {
+                        length: 12,
+                        lineStyle: {
+                            color: 'auto',
+                            width: 2
+                        }
+                    },
+                    splitLine: {
+                        length: 20,
+                        lineStyle: {
+                            color: 'auto',
+                            width: 5
+                        }
+                    },
+                    axisLabel: {
+                        color: '#464646',
+                        fontSize: 12,
+                        distance: -60
+                    },
+                    title: {
+                        offsetCenter: [0, '-10%'],
+                        fontSize: 12
+                    },
+                    detail: {
+                        fontSize: 30,
+                        offsetCenter: [0, '-35%'],
+                        valueAnimation: true,
+                        formatter: function(value) {
+                            return Math.round(value) + '%';
+                        },
+                        color: 'inherit'
+                    },
+                    data: [{
+                        value: 85.6,
+                        name: '准确度'
+                    }]
+                }]
+            };
+
+            predictionCharts.algorithmAccuracy.setOption(option);
+        }
+
+        function initErrorDistributionChart() {
+            const container = document.getElementById('errorDistributionChart');
+            if (!container) return;
+
+            predictionCharts.errorDistribution = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.errorDistribution.resize());
+
+            const option = {
+                title: {
+                    text: '误差分布',
+                    left: 'center',
+                    textStyle: { fontSize: 14, fontWeight: 'normal' }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '20%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['-10%', '-5%', '0%', '+5%', '+10%'],
+                    axisLabel: { color: '#666' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#666' }
+                },
+                series: [{
+                    type: 'bar',
+                    data: [5, 15, 50, 20, 10],
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#3b82f6' },
+                            { offset: 1, color: '#1e40af' }
+                        ])
+                    }
+                }]
+            };
+
+            predictionCharts.errorDistribution.setOption(option);
+        }
+
+        function initFeatureImportanceChart() {
+            const container = document.getElementById('featureImportanceChart');
+            if (!container) return;
+
+            predictionCharts.featureImportance = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.featureImportance.resize());
+
+            const option = {
+                title: {
+                    text: '特征重要性',
+                    left: 'center',
+                    textStyle: { fontSize: 14, fontWeight: 'normal' }
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}%'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['50%', '50%'],
+                    data: [
+                        { value: 35, name: '历史趋势', itemStyle: { color: '#3b82f6' } },
+                        { value: 25, name: '周期性', itemStyle: { color: '#10b981' } },
+                        { value: 20, name: '时间因素', itemStyle: { color: '#f59e0b' } },
+                        { value: 15, name: '用户行为', itemStyle: { color: '#8b5cf6' } },
+                        { value: 5, name: '其他', itemStyle: { color: '#ec4899' } }
+                    ],
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{d}%'
+                    }
+                }]
+            };
+
+            predictionCharts.featureImportance.setOption(option);
+        }
+
+        function initPeriodicityChart() {
+            const container = document.getElementById('periodicityChart');
+            if (!container) return;
+
+            predictionCharts.periodicity = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.periodicity.resize());
+
+            const hours = [];
+            for (let i = 0; i < 24; i++) {
+                hours.push(`${i}:00`);
+            }
+
+            const data = hours.map(() => Math.random() * 100);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: hours,
+                    boundaryGap: false,
+                    axisLabel: { color: '#666', interval: 3 }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#666' }
+                },
+                series: [{
+                    type: 'line',
+                    data: data,
+                    smooth: true,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(139, 92, 246, 0.5)' },
+                            { offset: 1, color: 'rgba(139, 92, 246, 0.1)' }
+                        ])
+                    },
+                    lineStyle: { color: '#8b5cf6', width: 2 },
+                    itemStyle: { color: '#8b5cf6' }
+                }]
+            };
+
+            predictionCharts.periodicity.setOption(option);
+        }
+
+        function initSeasonalityChart() {
+            const container = document.getElementById('seasonalityChart');
+            if (!container) return;
+
+            predictionCharts.seasonality = echarts.init(container);
+            window.addEventListener('resize', () => predictionCharts.seasonality.resize());
+
+            const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+            const data = [60, 65, 75, 85, 90, 95, 100, 98, 88, 82, 70, 65];
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: months,
+                    axisLabel: { color: '#666' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: '#666' }
+                },
+                series: [{
+                    type: 'bar',
+                    data: data,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#ec4899' },
+                            { offset: 1, color: '#be185d' }
+                        ])
+                    },
+                    barWidth: '60%'
+                }]
+            };
+
+            predictionCharts.seasonality.setOption(option);
+        }
+
+        function loadPredictionData() {
+            updatePredictionTable();
+            updateMetrics();
+        }
+
+        function updatePredictionTable() {
+            const tbody = document.getElementById('predictionTableBody');
+            if (!tbody) return;
+
+            const rows = [];
+            for (let i = 1; i <= 7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() + i);
+                const dateStr = `${date.getMonth() + 1}-${date.getDate()}`;
+
+                const requests = Math.floor(Math.random() * 1000) + 1000;
+                const successRate = (90 + Math.random() * 8).toFixed(1);
+                const riskLevel = requests > 1300 ? '高' : requests > 1100 ? '中' : '低';
+                const confidence = (85 + Math.random() * 10).toFixed(1);
+                const accuracy = (80 + Math.random() * 15).toFixed(1);
+
+                rows.push(`
+                    <tr>
+                        <td>${dateStr}</td>
+                        <td>${requests}</td>
+                        <td>${successRate}%</td>
+                        <td><span class="badge ${riskLevel === '高' ? 'bg-danger' : riskLevel === '中' ? 'bg-warning' : 'bg-success'}">${riskLevel}</span></td>
+                        <td>${(parseFloat(confidence) - 5).toFixed(1)}% - ${confidence}%</td>
+                        <td><span class="accuracy-badge ${parseFloat(accuracy) > 85 ? 'accuracy-high' : parseFloat(accuracy) > 70 ? 'accuracy-medium' : 'accuracy-low'}">${accuracy}%</span></td>
+                    </tr>
+                `);
+            }
+
+            tbody.innerHTML = rows.join('');
+        }
+
+        function updateMetrics() {
+            const accuracy = (80 + Math.random() * 15).toFixed(1);
+            document.getElementById('accuracyValue').textContent = accuracy + '%';
+
+            const trend = (Math.random() * 20 - 5).toFixed(1);
+            const trendElement = document.getElementById('trendPrediction');
+            trendElement.textContent = (trend >= 0 ? '↑ ' : '↓ ') + Math.abs(trend) + '%';
+            trendElement.parentElement.className = `metric-card ${trend >= 0 ? 'success' : 'warning'}`;
+
+            const confidence = (85 + Math.random() * 10).toFixed(0);
+            document.getElementById('confidenceLevel').textContent = confidence + '%';
+
+            const hours = [9, 10, 11, 14, 15, 16];
+            const peakHour = hours[Math.floor(Math.random() * hours.length)];
+            const peakHour2 = peakHour + 2;
+            document.getElementById('peakTime').textContent = `${peakHour}:00-${peakHour2}:00`;
+        }
+
+        function setupEventListeners() {
+            document.getElementById('refreshPredictionBtn')?.addEventListener('click', () => {
+                loadPredictionData();
+                showToast('预测数据已刷新', 'success');
+            });
+
+            document.getElementById('predictionPeriod')?.addEventListener('change', (e) => {
+                loadPredictionData();
+                showToast(`已切换到${e.target.value}预测`, 'info');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        window.addEventListener('beforeunload', () => {
+            Object.values(predictionCharts).forEach(chart => {
+                if (chart) chart.dispose();
+            });
+        });
+    </script>
+</body>
+</html>

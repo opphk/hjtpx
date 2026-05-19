@@ -669,6 +669,7 @@
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/extension/bmap.min.js"></script>
 <script src="/admin/static/js/dashboard-ext.js"></script>
+<script src="/admin/static/js/dashboard-enhanced.js"></script>
 <script>
 let trendChart, pieChart, captchaTypeChart, realtimeChart, miniChart;
 let radarChart, geoChart, heatmapChart, stackChart, appUsageChart;
@@ -1973,4 +1974,159 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 </script>
+
+<!-- 增强图表区域 -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>请求分布</h3>
+                <div class="card-tools">
+                    <span class="badge badge-success" id="enhancedWsStatus"><i class="fas fa-wifi mr-1"></i>实时</span>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="requestDistributionChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-clock mr-2"></i>响应时间分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="responseTimeChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-users mr-2"></i>用户活动趋势</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="userActivityChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-warning">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-globe mr-2"></i>地域分布 TOP10</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="geographicChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-check-circle mr-2"></i>验证码成功率</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="captchaSuccessRateChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-danger">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-exclamation-triangle mr-2"></i>异常检测</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="anomalyDetectionChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>趋势预测</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="trendForecastChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-hourglass-half mr-2"></i>会话时长分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="sessionDurationChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Chart Modal -->
+<div class="modal fade" id="enhancedChartModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="enhancedModalTitle"><i class="fas fa-chart-bar"></i> 图表详情</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="enhancedModalContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

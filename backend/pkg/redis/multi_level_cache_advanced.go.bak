@@ -1,0 +1,616 @@
+package redis
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	goredis "github.com/redis/go-redis/v9"
+)
+
+type MultiLevelCache int
+
+const (
+	MultiLevelCacheL1 MultiLevelCache = iota
+	MultiLevelCacheL2
+	MultiLevelCacheBoth
+)
+
+type AdvancedMultiLevelCacheConfig struct {
+	L1Capacity      int
+	L1Expiry        time.Duration
+	L2TTL           time.Duration
+	L1HitBoost      time.Duration
+	EnableWriteBack bool
+	WriteBackBuffer int
+	WriteBackDelay  time.Duration
+	AsyncLoad       bool
+	PrefetchCount   int
+	CompressionEnabled bool
+	CompressionThreshold int
+}
+
+var DefaultMultiLevelCacheConfig = &AdvancedMultiLevelCacheConfig{
+	L1Capacity:            10000,
+	L1Expiry:              5 * time.Minute,
+	L2TTL:                 30 * time.Minute,
+	L1HitBoost:            10 * time.Minute,
+	EnableWriteBack:        true,
+	WriteBackBuffer:        100,
+	WriteBackDelay:         100 * time.Millisecond,
+	AsyncLoad:              true,
+	PrefetchCount:          50,
+	CompressionEnabled:    true,
+	CompressionThreshold:   1024,
+}
+
+type MultiLevelCache struct {
+	mu            sync.RWMutex
+	config        *AdvancedMultiLevelCacheConfig
+	l1Cache       *LRUCache
+	l2Client      *goredis.Client
+	metrics       *CacheMetrics
+	stats         *MultiLevelCacheStats
+	writeBackChan chan *WriteBackItem
+	stopChan      chan struct{}
+	enabled       bool
+}
+
+type WriteBackItem struct {
+	Key       string
+	Value     []byte
+	TTL       time.Duration
+	Timestamp time.Time
+}
+
+type CacheMetrics struct {
+	L1Hits        atomic.Int64
+	L1Misses      atomic.Int64
+	L2Hits        atomic.Int64
+	L2Misses      atomic.Int64
+	WriteBacks    atomic.Int64
+	PrefetchOps   atomic.Int64
+	CompressionOps atomic.Int64
+	TotalBytes    atomic.Int64
+}
+
+type MultiLevelCacheStats struct {
+	L1HitRate  float64
+	L2HitRate  float64
+	TotalHits  int64
+	TotalMisses int64
+	OverallHitRate float64
+}
+
+type AdvancedSetOptions struct {
+	TTL   time.Duration
+	Level CacheLevel
+	Tags  []string
+}
+
+type AdvancedGetOptions struct {
+	Level         CacheLevel
+	AsyncLoad     bool
+	AllowStale    bool
+	SkipCache     bool
+}
+
+func NewMultiLevelCache(config *AdvancedMultiLevelCacheConfig, l2Client *goredis.Client) *MultiLevelCache {
+	if config == nil {
+		config = DefaultMultiLevelCacheConfig
+	}
+
+	cache := &MultiLevelCache{
+		config:        config,
+		l1Cache:       NewLRUCache(config.L1Capacity),
+		l2Client:      l2Client,
+		metrics:       &CacheMetrics{},
+		stats:         &MultiLevelCacheStats{},
+		writeBackChan: make(chan *WriteBackItem, config.WriteBackBuffer),
+		stopChan:      make(chan struct{}),
+		enabled:       true,
+	}
+
+	if config.EnableWriteBack {
+		go cache.writeBackWorker()
+	}
+
+	go cache.metricsCollector()
+
+	return cache
+}
+
+func (mc *MultiLevelCache) Set(ctx context.Context, key string, value []byte, options *SetOptions) error {
+	if options == nil {
+		options = &SetOptions{
+			TTL:   mc.config.L2TTL,
+			Level: MultiLevelCacheBoth,
+		}
+	}
+
+	if options.Level == MultiLevelCacheL1 || options.Level == MultiLevelCacheBoth {
+		ttl := mc.config.L1Expiry
+		if options.TTL > 0 && options.TTL < ttl {
+			ttl = options.TTL
+		}
+		mc.l1Cache.Set(key, value, ttl, 1)
+	}
+
+	if options.Level == MultiLevelCacheL2 || options.Level == MultiLevelCacheBoth {
+		ttl := options.TTL
+		if ttl == 0 {
+			ttl = mc.config.L2TTL
+		}
+
+		if mc.config.EnableWriteBack {
+			select {
+			case mc.writeBackChan <- &WriteBackItem{
+				Key:       key,
+				Value:     value,
+				TTL:       ttl,
+				Timestamp: time.Now(),
+			}:
+				mc.metrics.WriteBacks.Add(1)
+			default:
+				if err := mc.setL2Direct(ctx, key, value, ttl); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := mc.setL2Direct(ctx, key, value, ttl); err != nil {
+				return err
+			}
+		}
+	}
+
+	mc.metrics.TotalBytes.Add(int64(len(value)))
+
+	return nil
+}
+
+func (mc *MultiLevelCache) setL2Direct(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	if mc.l2Client == nil {
+		return nil
+	}
+	return mc.l2Client.Set(ctx, key, value, ttl).Err()
+}
+
+func (mc *MultiLevelCache) Get(ctx context.Context, key string, options *GetOptions) ([]byte, error) {
+	if options == nil {
+		options = &GetOptions{
+			Level:     MultiLevelCacheBoth,
+			AsyncLoad: mc.config.AsyncLoad,
+		}
+	}
+
+	if options.SkipCache {
+		return nil, AdvancedErrCacheMiss
+	}
+
+	if options.Level == MultiLevelCacheL1 || options.Level == MultiLevelCacheBoth {
+		value, err := mc.l1Cache.Get(key)
+		if err == nil {
+			mc.metrics.L1Hits.Add(1)
+			return value, nil
+		}
+		mc.metrics.L1Misses.Add(1)
+	}
+
+	if options.Level == MultiLevelCacheL2 || options.Level == MultiLevelCacheBoth {
+		if mc.l2Client != nil {
+			value, err := mc.l2Client.Get(ctx, key).Bytes()
+			if err == nil {
+				mc.metrics.L2Hits.Add(1)
+
+				if options.Level == MultiLevelCacheBoth {
+					ttl := mc.config.L1HitBoost
+					mc.l1Cache.Set(key, value, ttl, 1)
+				}
+
+				return value, nil
+			}
+			mc.metrics.L2Misses.Add(1)
+		}
+	}
+
+	return nil, AdvancedErrCacheMiss
+}
+
+func (mc *MultiLevelCache) Delete(ctx context.Context, keys ...string) error {
+	for _, key := range keys {
+		mc.l1Cache.Delete(key)
+	}
+
+	if mc.l2Client != nil {
+		return mc.l2Client.Del(ctx, keys...).Err()
+	}
+
+	return nil
+}
+
+func (mc *MultiLevelCache) Exists(ctx context.Context, keys ...string) (int64, error) {
+	count := int64(0)
+
+	for _, key := range keys {
+		if _, err := mc.l1Cache.Get(key); err == nil {
+			count++
+		}
+	}
+
+	if mc.l2Client != nil {
+		result, err := mc.l2Client.Exists(ctx, keys...).Result()
+		if err != nil {
+			return count, err
+		}
+		count += result
+	}
+
+	return count, nil
+}
+
+func (mc *MultiLevelCache) GetMulti(ctx context.Context, keys []string, options *GetOptions) (map[string][]byte, error) {
+	results := make(map[string][]byte)
+
+	if options == nil {
+		options = &GetOptions{
+			Level:     MultiLevelCacheBoth,
+			AsyncLoad: mc.config.AsyncLoad,
+		}
+	}
+
+	if options.Level == MultiLevelCacheL1 || options.Level == MultiLevelCacheBoth {
+		var l1Keys []string
+		for _, key := range keys {
+			if value, err := mc.l1Cache.Get(key); err == nil {
+				results[key] = value
+				mc.metrics.L1Hits.Add(1)
+			} else {
+				l1Keys = append(l1Keys, key)
+				mc.metrics.L1Misses.Add(1)
+			}
+		}
+		keys = l1Keys
+	}
+
+	if (options.Level == MultiLevelCacheL2 || options.Level == MultiLevelCacheBoth) && len(keys) > 0 && mc.l2Client != nil {
+		pipe := mc.l2Client.Pipeline()
+		cmds := make(map[string]*goredis.StringCmd)
+
+		for _, key := range keys {
+			cmds[key] = pipe.Get(ctx, key)
+		}
+
+		_, err := pipe.Exec(ctx)
+		if err != nil && err != goredis.Nil {
+			return results, err
+		}
+
+		for key, cmd := range cmds {
+			value, err := cmd.Bytes()
+			if err == nil {
+				results[key] = value
+				mc.metrics.L2Hits.Add(1)
+
+				if options.Level == MultiLevelCacheBoth {
+					ttl := mc.config.L1HitBoost
+					mc.l1Cache.Set(key, value, ttl, 1)
+				}
+			} else {
+				mc.metrics.L2Misses.Add(1)
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func (mc *MultiLevelCache) SetMulti(ctx context.Context, items map[string][]byte, options *SetOptions) error {
+	if options == nil {
+		options = &SetOptions{
+			TTL:   mc.config.L2TTL,
+			Level: MultiLevelCacheBoth,
+		}
+	}
+
+	ttl := options.TTL
+	if ttl == 0 {
+		ttl = mc.config.L2TTL
+	}
+
+	if options.Level == MultiLevelCacheL1 || options.Level == MultiLevelCacheBoth {
+		for key, value := range items {
+			mc.l1Cache.Set(key, value, mc.config.L1Expiry, 1)
+		}
+	}
+
+	if options.Level == MultiLevelCacheL2 || options.Level == MultiLevelCacheBoth {
+		if mc.l2Client != nil {
+			pipe := mc.l2Client.Pipeline()
+
+			for key, value := range items {
+				pipe.Set(ctx, key, value, ttl)
+			}
+
+			_, err := pipe.Exec(ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, value := range items {
+		mc.metrics.TotalBytes.Add(int64(len(value)))
+	}
+
+	return nil
+}
+
+func (mc *MultiLevelCache) Prefetch(ctx context.Context, keys []string, options *GetOptions) {
+	if options == nil {
+		options = &GetOptions{
+			Level:     MultiLevelCacheBoth,
+			AsyncLoad: true,
+		}
+	}
+
+	go func() {
+		for _, key := range keys {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if _, err := mc.Get(ctx, key, options); err == nil {
+					mc.metrics.PrefetchOps.Add(1)
+				}
+			}
+		}
+	}()
+}
+
+func (mc *MultiLevelCache) writeBackWorker() {
+	ticker := time.NewTicker(mc.config.WriteBackDelay)
+	defer ticker.Stop()
+
+	buffer := make([]*WriteBackItem, 0, mc.config.WriteBackBuffer)
+
+	for {
+		select {
+		case <-mc.stopChan:
+			for _, item := range buffer {
+				if mc.l2Client != nil {
+					mc.setL2Direct(context.Background(), item.Key, item.Value, item.TTL)
+				}
+			}
+			return
+
+		case item := <-mc.writeBackChan:
+			buffer = append(buffer, item)
+			if len(buffer) >= mc.config.WriteBackBuffer/2 {
+				mc.flushWriteBack(buffer)
+				buffer = buffer[:0]
+			}
+
+		case <-ticker.C:
+			if len(buffer) > 0 {
+				mc.flushWriteBack(buffer)
+				buffer = buffer[:0]
+			}
+		}
+	}
+}
+
+func (mc *MultiLevelCache) flushWriteBack(items []*WriteBackItem) {
+	if mc.l2Client == nil || len(items) == 0 {
+		return
+	}
+
+	ctx := context.Background()
+	pipe := mc.l2Client.Pipeline()
+
+	for _, item := range items {
+		pipe.Set(ctx, item.Key, item.Value, item.TTL)
+	}
+
+	pipe.Exec(ctx)
+}
+
+func (mc *MultiLevelCache) metricsCollector() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-mc.stopChan:
+			return
+		case <-ticker.C:
+			mc.updateStats()
+		}
+	}
+}
+
+func (mc *MultiLevelCache) updateStats() {
+	l1Total := mc.metrics.L1Hits.Load() + mc.metrics.L1Misses.Load()
+	l2Total := mc.metrics.L2Hits.Load() + mc.metrics.L2Misses.Load()
+
+	mc.mu.Lock()
+	if l1Total > 0 {
+		mc.stats.L1HitRate = float64(mc.metrics.L1Hits.Load()) / float64(l1Total) * 100
+	}
+	if l2Total > 0 {
+		mc.stats.L2HitRate = float64(mc.metrics.L2Hits.Load()) / float64(l2Total) * 100
+	}
+
+	mc.stats.TotalHits = mc.metrics.L1Hits.Load() + mc.metrics.L2Hits.Load()
+	mc.stats.TotalMisses = mc.metrics.L1Misses.Load() + mc.metrics.L2Misses.Load()
+
+	total := mc.stats.TotalHits + mc.stats.TotalMisses
+	if total > 0 {
+		mc.stats.OverallHitRate = float64(mc.stats.TotalHits) / float64(total) * 100
+	}
+	mc.mu.Unlock()
+}
+
+func (mc *MultiLevelCache) GetStats() *MultiLevelCacheStats {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	stats := &MultiLevelCacheStats{
+		L1HitRate:      mc.stats.L1HitRate,
+		L2HitRate:      mc.stats.L2HitRate,
+		TotalHits:      mc.stats.TotalHits,
+		TotalMisses:    mc.stats.TotalMisses,
+		OverallHitRate: mc.stats.OverallHitRate,
+	}
+
+	return stats
+}
+
+func (mc *MultiLevelCache) Clear() {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	mc.l1Cache.Clear()
+}
+
+func (mc *MultiLevelCache) Stop() {
+	close(mc.stopChan)
+	mc.enabled = false
+}
+
+func (mc *MultiLevelCache) SetL2Client(client *goredis.Client) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.l2Client = client
+}
+
+func (mc *MultiLevelCache) UpdateConfig(config *AdvancedMultiLevelCacheConfig) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if config.L1Capacity > 0 {
+		mc.config.L1Capacity = config.L1Capacity
+	}
+	if config.L1Expiry > 0 {
+		mc.config.L1Expiry = config.L1Expiry
+	}
+	if config.L2TTL > 0 {
+		mc.config.L2TTL = config.L2TTL
+	}
+}
+
+var (
+	AdvancedErrCacheMiss = fmt.Errorf("cache miss")
+)
+
+type CacheOptimizer struct {
+	cache         *MultiLevelCache
+	accessTracker *AdvancedAccessTracker
+	mu            sync.RWMutex
+	enabled       bool
+}
+
+type AdvancedAccessTracker struct {
+	mu         sync.RWMutex
+	patterns   map[string]*AdvancedAccessPattern
+	windowSize time.Duration
+}
+
+type AdvancedAccessPattern struct {
+	Count       int64
+	LastAccess  time.Time
+	AvgInterval time.Duration
+	HotScore    float64
+}
+
+func NewCacheOptimizer(cache *MultiLevelCache) *CacheOptimizer {
+	return &CacheOptimizer{
+		cache:         cache,
+		accessTracker: NewAdvancedAccessTracker(1 * time.Hour),
+		enabled:       true,
+	}
+}
+
+func NewAdvancedAccessTracker(windowSize time.Duration) *AdvancedAccessTracker {
+	return &AdvancedAccessTracker{
+		patterns:   make(map[string]*AdvancedAccessPattern),
+		windowSize: windowSize,
+	}
+}
+
+func (at *AdvancedAccessTracker) RecordAccess(key string) {
+	at.mu.Lock()
+	defer at.mu.Unlock()
+
+	pattern, exists := at.patterns[key]
+	if !exists {
+		pattern = &AccessPattern{
+			LastAccess: time.Now(),
+		}
+		at.patterns[key] = pattern
+	}
+
+	now := time.Now()
+	if pattern.Count > 0 {
+		interval := now.Sub(pattern.LastAccess)
+		pattern.AvgInterval = (pattern.AvgInterval*time.Duration(pattern.Count) + interval) / time.Duration(pattern.Count+1)
+	}
+
+	pattern.Count++
+	pattern.LastAccess = now
+
+	pattern.HotScore = float64(pattern.Count) / (now.Sub(pattern.LastAccess).Minutes() + 1)
+}
+
+func (at *AdvancedAccessTracker) GetHotKeys(count int) []string {
+	at.mu.RLock()
+	defer at.mu.RUnlock()
+
+	type keyScore struct {
+		Key   string
+		Score float64
+	}
+
+	var scores []keyScore
+	for key, pattern := range at.patterns {
+		scores = append(scores, keyScore{Key: key, Score: pattern.HotScore})
+	}
+
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].Score > scores[j].Score
+	})
+
+	if count > len(scores) {
+		count = len(scores)
+	}
+
+	result := make([]string, count)
+	for i := 0; i < count; i++ {
+		result[i] = scores[i].Key
+	}
+
+	return result
+}
+
+func (co *CacheOptimizer) Optimize() {
+	if !co.enabled {
+		return
+	}
+
+	hotKeys := co.accessTracker.GetHotKeys(100)
+	if len(hotKeys) > 0 {
+		ctx := context.Background()
+		co.cache.Prefetch(ctx, hotKeys, nil)
+	}
+}
+
+func (co *CacheOptimizer) RecordAccess(key string) {
+	co.accessTracker.RecordAccess(key)
+}
+
+func (co *CacheOptimizer) Enable(enabled bool) {
+	co.mu.Lock()
+	defer co.mu.Unlock()
+	co.enabled = enabled
+}

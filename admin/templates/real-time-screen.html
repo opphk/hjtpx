@@ -68,6 +68,18 @@
         .gauge-container { display: flex; justify-content: center; align-items: center; padding: 10px 0; }
         .gauge-label { text-align: center; margin-top: -20px; font-size: 12px; color: rgba(255, 255, 255, 0.6); }
         .gauge-value { font-size: 24px; font-weight: 700; color: #00d4ff; }
+        .refresh-indicator { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(0, 212, 255, 0.2); border-radius: 12px; font-size: 11px; }
+        .refresh-indicator .dot { width: 6px; height: 6px; border-radius: 50%; background: #00d4ff; animation: pulse 1s infinite; }
+        .stat-card.improved { border-left: 3px solid #00d4ff; }
+        .mini-chart { height: 60px; width: 100%; }
+        .quality-indicator { display: flex; gap: 8px; margin-top: 8px; }
+        .quality-item { flex: 1; text-align: center; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .quality-value { font-size: 14px; font-weight: 600; color: #00d4ff; }
+        .quality-label { font-size: 10px; color: rgba(255,255,255,0.6); }
+        .grid-line { border-bottom: 1px dashed rgba(201, 169, 110, 0.2); padding: 8px 0; }
+        .grid-item { display: flex; justify-content: space-between; align-items: center; }
+        .grid-label { font-size: 12px; color: rgba(255,255,255,0.7); }
+        .grid-value { font-size: 14px; font-weight: 600; color: #00d4ff; }
     </style>
 </head>
 <body>
@@ -78,6 +90,10 @@
                 <h1>墨盾验证 · 实时监控大屏</h1>
             </div>
             <div class="header-info">
+                <div class="refresh-indicator" id="refreshIndicator">
+                    <div class="dot"></div>
+                    <span id="refreshStatus">数据刷新中...</span>
+                </div>
                 <div class="connection-status connected" id="connectionStatus">
                     <div class="status-dot"></div>
                     <span id="connectionText">已连接</span>
@@ -93,25 +109,39 @@
                     <div class="panel-title"><i class="fas fa-chart-bar"></i>核心指标</div>
                     <div class="row g-2">
                         <div class="col-12">
-                            <div class="stat-card">
+                            <div class="stat-card improved">
                                 <div class="stat-label">今日请求总量</div>
                                 <div class="stat-value" id="totalRequests">0</div>
-                                <div class="stat-trend up" id="requestsTrend"><i class="fas fa-arrow-up"></i> +0%</div>
+                                <div class="stat-trend up" id="requestsTrend"><i class="fas fa-arrow-up"></i> <span id="requestsChange">+0%</span></div>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="stat-card">
+                            <div class="stat-card improved">
                                 <div class="stat-label">验证成功</div>
                                 <div class="stat-value" id="successCount">0</div>
                                 <div class="stat-trend up"><i class="fas fa-check"></i> <span id="successRate">0%</span></div>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="stat-card">
+                            <div class="stat-card improved">
                                 <div class="stat-label">验证失败</div>
                                 <div class="stat-value" id="failCount">0</div>
                                 <div class="stat-trend down"><i class="fas fa-times"></i> <span id="failRate">0%</span></div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="quality-indicator mt-3">
+                        <div class="quality-item">
+                            <div class="quality-value" id="cacheHitRate">0%</div>
+                            <div class="quality-label">缓存命中</div>
+                        </div>
+                        <div class="quality-item">
+                            <div class="quality-value" id="errorRate">0%</div>
+                            <div class="quality-label">错误率</div>
+                        </div>
+                        <div class="quality-item">
+                            <div class="quality-value" id="uptime">0%</div>
+                            <div class="quality-label">可用率</div>
                         </div>
                     </div>
                 </div>
@@ -150,6 +180,58 @@
                                 <div class="gauge-value" id="diskValue">0%</div>
                                 <div class="gauge-label">磁盘</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-server"></i>服务状态</div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-database mr-1"></i>数据库</span>
+                            <span class="grid-value" id="dbStatus">正常</span>
+                        </div>
+                    </div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-server mr-1"></i>Redis缓存</span>
+                            <span class="grid-value" id="redisStatus">正常</span>
+                        </div>
+                    </div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-network-wired mr-1"></i>网络延迟</span>
+                            <span class="grid-value" id="networkLatency">0ms</span>
+                        </div>
+                    </div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-tachometer-alt mr-1"></i>活跃连接</span>
+                            <span class="grid-value" id="activeConnections">0</span>
+                        </div>
+                    </div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-hdd mr-1"></i>存储使用</span>
+                            <span class="grid-value" id="storageUsage">0%</span>
+                        </div>
+                    </div>
+                    <div class="grid-line">
+                        <div class="grid-item">
+                            <span class="grid-label"><i class="fas fa-bandcamp mr-1"></i>带宽使用</span>
+                            <span class="grid-value" id="bandwidthUsage">0Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-microchip"></i>性能指标</div>
+                    <div class="row h-100">
+                        <div class="col-6">
+                            <canvas id="responseTimeChart" class="mini-chart"></canvas>
+                        </div>
+                        <div class="col-6">
+                            <canvas id="throughputChart" class="mini-chart"></canvas>
                         </div>
                     </div>
                 </div>

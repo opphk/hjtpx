@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hjtpx-postgres
+  namespace: hjtpx
+  labels:
+    app: hjtpx-postgres
+    component: database
+    version: "14-alpine"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hjtpx-postgres
+      component: database
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: hjtpx-postgres
+        component: database
+        version: "14-alpine"
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      serviceAccountName: hjtpx-postgres
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: hjtpx-postgres-config
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: hjtpx-secrets
+                  key: DATABASE_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hjtpx-secrets
+                  key: DATABASE_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: hjtpx-secrets
+                  key: DATABASE_NAME
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - hjtpx_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - hjtpx_db
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - hjtpx_db
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-logs
+              mountPath: /var/log/postgresql
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: hjtpx-postgres-pvc
+        - name: postgres-logs
+          emptyDir: {}
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hjtpx-postgres-pvc
+  namespace: hjtpx
+  labels:
+    app: hjtpx-postgres
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

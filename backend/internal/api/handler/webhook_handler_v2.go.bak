@@ -1,0 +1,238 @@
+package handler
+
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/pkg/response"
+)
+
+type WebhookHandler struct {
+	service *service.WebhookServiceV2
+}
+
+func NewWebhookHandler() *WebhookHandler {
+	return &WebhookHandler{
+		service: service.GetWebhookServiceV2(),
+	}
+}
+
+func (h *WebhookHandler) RegisterEndpoint(c *gin.Context) {
+	var endpoint service.WebhookEndpoint
+	if err := c.ShouldBindJSON(&endpoint); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	if err := h.service.RegisterEndpoint(&endpoint); err != nil {
+		response.InternalServerError(c, "failed to register endpoint: "+err.Error())
+		return
+	}
+
+	response.Success(c, endpoint)
+}
+
+func (h *WebhookHandler) UnregisterEndpoint(c *gin.Context) {
+	endpointID := c.Param("id")
+	if endpointID == "" {
+		response.BadRequest(c, "endpoint id is required")
+		return
+	}
+
+	h.service.UnregisterEndpoint(endpointID)
+	response.Success(c, "endpoint unregistered successfully")
+}
+
+func (h *WebhookHandler) GetEndpoint(c *gin.Context) {
+	endpointID := c.Param("id")
+	if endpointID == "" {
+		response.BadRequest(c, "endpoint id is required")
+		return
+	}
+
+	endpoint, err := h.service.GetEndpoint(endpointID)
+	if err != nil {
+		response.NotFound(c, "endpoint not found")
+		return
+	}
+
+	response.Success(c, endpoint)
+}
+
+func (h *WebhookHandler) ListEndpoints(c *gin.Context) {
+	endpoints := h.service.ListEndpoints()
+	response.Success(c, gin.H{
+		"endpoints": endpoints,
+		"total":     len(endpoints),
+	})
+}
+
+func (h *WebhookHandler) UpdateEndpoint(c *gin.Context) {
+	endpointID := c.Param("id")
+	if endpointID == "" {
+		response.BadRequest(c, "endpoint id is required")
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	if err := h.service.UpdateEndpoint(endpointID, updates); err != nil {
+		response.InternalServerError(c, "failed to update endpoint: "+err.Error())
+		return
+	}
+
+	endpoint, _ := h.service.GetEndpoint(endpointID)
+	response.Success(c, endpoint)
+}
+
+func (h *WebhookHandler) TriggerEvent(c *gin.Context) {
+	var req struct {
+		Event     string                 `json:"event" binding:"required"`
+		Data      map[string]interface{} `json:"data"`
+		IPAddress string                 `json:"ip_address"`
+		UserAgent string                 `json:"user_agent"`
+		RequestID string                 `json:"request_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	metadata := &service.WebhookMetadata{
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+		RequestID: req.RequestID,
+	}
+
+	err := h.service.TriggerEvent(service.WebhookEventType(req.Event), req.Data, metadata)
+	if err != nil {
+		response.InternalServerError(c, "failed to trigger event: "+err.Error())
+		return
+	}
+
+	response.Success(c, "event triggered successfully")
+}
+
+func (h *WebhookHandler) GetDelivery(c *gin.Context) {
+	deliveryID := c.Param("id")
+	if deliveryID == "" {
+		response.BadRequest(c, "delivery id is required")
+		return
+	}
+
+	delivery, err := h.service.GetDelivery(deliveryID)
+	if err != nil {
+		response.NotFound(c, "delivery not found")
+		return
+	}
+
+	response.Success(c, delivery)
+}
+
+func (h *WebhookHandler) ListDeliveries(c *gin.Context) {
+	endpointID := c.Query("endpoint_id")
+	limit := 100
+
+	deliveries := h.service.ListDeliveries(endpointID, limit)
+	response.Success(c, gin.H{
+		"deliveries": deliveries,
+		"total":      len(deliveries),
+	})
+}
+
+func (h *WebhookHandler) RetryDelivery(c *gin.Context) {
+	deliveryID := c.Param("id")
+	if deliveryID == "" {
+		response.BadRequest(c, "delivery id is required")
+		return
+	}
+
+	err := h.service.RetryDelivery(deliveryID)
+	if err != nil {
+		response.InternalServerError(c, "failed to retry delivery: "+err.Error())
+		return
+	}
+
+	delivery, _ := h.service.GetDelivery(deliveryID)
+	response.Success(c, delivery)
+}
+
+func (h *WebhookHandler) TestEndpoint(c *gin.Context) {
+	endpointID := c.Param("id")
+	if endpointID == "" {
+		response.BadRequest(c, "endpoint id is required")
+		return
+	}
+
+	delivery, err := h.service.TestEndpoint(endpointID)
+	if err != nil {
+		response.InternalServerError(c, "failed to test endpoint: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"delivery_id":   delivery.ID,
+		"status":        delivery.Status,
+		"response_code": delivery.ResponseCode,
+		"response_body": delivery.ResponseBody,
+		"error":         delivery.Error,
+	})
+}
+
+func (h *WebhookHandler) GetStats(c *gin.Context) {
+	stats := h.service.GetStats()
+	response.Success(c, stats)
+}
+
+func (h *WebhookHandler) CleanupDeliveries(c *gin.Context) {
+	var req struct {
+		OlderThan string `json:"older_than"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	olderThan := 7 * 24 * time.Hour
+	if req.OlderThan != "" {
+		d, err := time.ParseDuration(req.OlderThan)
+		if err == nil {
+			olderThan = d
+		}
+	}
+
+	count := h.service.CleanupOldDeliveries(olderThan)
+	response.Success(c, gin.H{
+		"deleted_count": count,
+	})
+}
+
+func RegisterWebhookRoutes(r *gin.RouterGroup) {
+	handler := NewWebhookHandler()
+
+	webhooks := r.Group("/webhooks")
+	{
+		webhooks.POST("/endpoints", handler.RegisterEndpoint)
+		webhooks.GET("/endpoints", handler.ListEndpoints)
+		webhooks.GET("/endpoints/:id", handler.GetEndpoint)
+		webhooks.PUT("/endpoints/:id", handler.UpdateEndpoint)
+		webhooks.DELETE("/endpoints/:id", handler.UnregisterEndpoint)
+		webhooks.POST("/endpoints/:id/test", handler.TestEndpoint)
+
+		webhooks.POST("/trigger", handler.TriggerEvent)
+
+		webhooks.GET("/deliveries", handler.ListDeliveries)
+		webhooks.GET("/deliveries/:id", handler.GetDelivery)
+		webhooks.POST("/deliveries/:id/retry", handler.RetryDelivery)
+
+		webhooks.GET("/stats", handler.GetStats)
+		webhooks.POST("/cleanup", handler.CleanupDeliveries)
+	}
+}

@@ -1,0 +1,26 @@
+{
+  "name": "hjtpx-captcha-react-native",
+  "version": "1.0.0",
+  "description": "HJTPX Captcha SDK for React Native",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "keywords": [
+    "captcha",
+    "hjtpx",
+    "react-native"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-native": ">=0.60.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-native": "^0.69.0",
+    "typescript": "^4.7.0"
+  }
+}

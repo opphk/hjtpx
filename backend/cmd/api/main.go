@@ -9,53 +9,15 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/hjtpx/hjtpx/docs"
-	"github.com/hjtpx/hjtpx/internal/api/handler"
-	"github.com/hjtpx/hjtpx/internal/api/router"
-	"github.com/hjtpx/hjtpx/internal/repository"
-	"github.com/hjtpx/hjtpx/internal/repository/cache"
-	"github.com/hjtpx/hjtpx/internal/repository/db"
-	"github.com/hjtpx/hjtpx/internal/service"
-	"github.com/hjtpx/hjtpx/internal/service/captcha"
+	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/api/middleware"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
 	"github.com/hjtpx/hjtpx/pkg/jwt"
-	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// @title HJTPX API
-// @version 1.0
-// @description HJTPX 是一个强大的验证码系统，提供多种验证码类型和验证机制
-// @description
-// @description ## 功能特性
-// @description - 滑动验证码
-// @description - 点击验证码（支持字母、数字、中文、图标模式）
-// @description - 连连看验证码
-// @description - 语音验证码
-// @description - 3D 验证码
-// @description - 用户认证系统
-// @description - MFA 多因素认证
-// @description - 行为分析与风险评估
-// @description - 管理后台接口
-// @termsOfService https://example.com/terms
-// @contact.name API Support
-// @contact.email support@example.com
-// @license.name MIT
-// @license.url https://opensource.org/licenses/MIT
-// @host localhost:8080
-// @BasePath /
-// @schemes http https
-// @securityDefinitions.apikey ApiKeyAuth
-// @in header
-// @name Authorization
-// @securityDefinitions.bearer Bearer
-// @in header
-// @name Authorization
-// @description 请输入您的 Bearer Token，格式为：Bearer {token}
 
 func main() {
 	cfg := config.LoadConfig()
@@ -86,8 +48,6 @@ func main() {
 	jwt.InitJWT(cfg.JWT.Secret)
 	jwt.InitUserJWT(cfg.JWT.Secret)
 
-	seedAdmin()
-
 	if err := postgres.Connect(&cfg.Postgres); err != nil {
 		log.Printf("Warning: Failed to connect to PostgreSQL: %v", err)
 	} else {
@@ -101,55 +61,26 @@ func main() {
 		redis.InitEnhancedCache(nil)
 	}
 
-	if database.DB != nil {
-		handler.InitAlertService(database.DB)
-		log.Println("Alert service initialized successfully")
-	}
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.Logger())
+	r.Use(middleware.CORS())
 
-	var sessionCache *cache.SessionCache
-	if redis.Client != nil {
-		sessionCache = cache.NewSessionCache()
-		log.Println("Session cache initialized successfully")
-	}
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	})
 
-	captchaRepo := db.NewCaptchaRepository()
-	generatorService := captcha.NewGeneratorService(sessionCache, captchaRepo)
-	verifierService := captcha.NewVerifierService(sessionCache, captchaRepo)
-	handler.InitSliderCaptchaHandler(generatorService, verifierService)
-	log.Println("Slider captcha service initialized successfully")
-
-	lianLianKanGeneratorService := captcha.NewLianLianKanGeneratorService(sessionCache, captchaRepo)
-	lianLianKanVerifierService := captcha.NewLianLianKanVerifierService(sessionCache, captchaRepo)
-	handler.InitLianLianKanCaptchaHandler(lianLianKanGeneratorService, lianLianKanVerifierService)
-	log.Println("LianLianKan captcha service initialized successfully")
-
-	voiceGeneratorService := captcha.NewVoiceGeneratorService(sessionCache, captchaRepo)
-	voiceVerifierService := captcha.NewVoiceVerifierService(sessionCache, captchaRepo)
-	handler.InitVoiceCaptchaHandler(voiceGeneratorService, voiceVerifierService)
-	log.Println("Voice captcha service initialized successfully")
-
-	if database.DB != nil {
-		configRepo := repository.NewConfigRepo(database.DB)
-		configCache := service.NewConfigCache(redis.Client)
-		configService := service.NewConfigService(configRepo, configCache)
-		if err := configService.InitializeDefaults(); err != nil {
-			log.Printf("Warning: Failed to initialize default configs: %v", err)
-		} else {
-			log.Println("Config service initialized successfully")
-		}
-		handler.InitConfigService(configService)
-	}
-
-	ctx := context.Background()
-	if cacheOptimizer := service.GetCacheOptimizer(); cacheOptimizer != nil {
-		if err := cacheOptimizer.Initialize(ctx); err != nil {
-			log.Printf("Warning: Cache initialization failed: %v", err)
-		} else {
-			log.Println("Cache optimizer initialized successfully")
-		}
-	}
-
-	r := router.SetupRouter()
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"name":    "HJTPX Captcha API",
+			"version": "16.0",
+			"status":  "running",
+		})
+	})
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
@@ -173,10 +104,6 @@ func main() {
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if cacheOptimizer := service.GetCacheOptimizer(); cacheOptimizer != nil {
-		cacheOptimizer.Shutdown(ctxShutdown)
-	}
-
 	if err := srv.Shutdown(ctxShutdown); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
@@ -189,36 +116,4 @@ func main() {
 	}
 
 	log.Println("Server exited")
-}
-
-func seedAdmin() {
-	if database.DB == nil {
-		log.Println("Database not available, skipping admin user creation")
-		return
-	}
-
-	var count int64
-	database.DB.Model(&models.Admin{}).Count(&count)
-	if count > 0 {
-		return
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("Failed to hash admin password: %v", err)
-		return
-	}
-
-	admin := models.Admin{
-		Username:     "admin",
-		PasswordHash: string(hash),
-		IsSuperAdmin: true,
-	}
-
-	if err := database.DB.Create(&admin).Error; err != nil {
-		log.Printf("Failed to seed admin user: %v", err)
-		return
-	}
-
-	log.Println("Default admin user created (username: admin, password: admin123)")
 }

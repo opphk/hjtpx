@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hjtpx-prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hjtpx-prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheuses", "alertmanagers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hjtpx-prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hjtpx-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: hjtpx-prometheus
+    namespace: monitoring
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hjtpx-app-monitor
+  namespace: hjtpx
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: hjtpx-app
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - hjtpx
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hjtpx-postgres-monitor
+  namespace: hjtpx
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: hjtpx-postgres
+  endpoints:
+    - port: postgres
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - hjtpx
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hjtpx-redis-monitor
+  namespace: hjtpx
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: hjtpx-redis
+  endpoints:
+    - port: redis
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - hjtpx
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hjtpx-alerts
+  namespace: hjtpx
+  labels:
+    release: prometheus
+    app: hjtpx
+spec:
+  groups:
+    - name: hjtpx-app.rules
+      rules:
+        - alert: HjtpxAppDown
+          expr: up{job="hjtpx-app"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "HJTPX application is down"
+            description: "HJTPX application has been down for more than 1 minute"
+        - alert: HjtpxHighErrorRate
+          expr: rate(hjtpx_http_requests_total{status_code=~"5.."}[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "HJTPX high error rate"
+            description: "Error rate is above 5%"
+        - alert: HjtpxHighLatency
+          expr: histogram_quantile(0.95, rate(hjtpx_http_request_duration_seconds_bucket[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "HJTPX high latency"
+            description: "P95 latency is above 1 second"
+    - name: hjtpx-database.rules
+      rules:
+        - alert: HjtpxPostgresDown
+          expr: up{job="hjtpx-postgres"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL is down"
+            description: "PostgreSQL instance is not responding"
+        - alert: HjtpxPostgresHighConnections
+          expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL high connection usage"
+            description: "Connection usage is above 80%"
+    - name: hjtpx-cache.rules
+      rules:
+        - alert: HjtpxRedisDown
+          expr: up{job="hjtpx-redis"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis is down"
+            description: "Redis instance is not responding"
+        - alert: HjtpxRedisHighMemory
+          expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis high memory usage"
+            description: "Memory usage is above 85%"

@@ -447,3 +447,158 @@ func GetNumberFormat(lang string) string {
 	info := GetLangInfo(lang)
 	return info.NumberFormat
 }
+
+type LayoutDirection int
+
+const (
+	LayoutLeftToRight LayoutDirection = iota
+	LayoutRightToLeft
+)
+
+func GetLayoutDirection(lang string) LayoutDirection {
+	if IsRTL(lang) {
+		return LayoutRightToLeft
+	}
+	return LayoutLeftToRight
+}
+
+func GetTextAlignment(lang string) string {
+	if IsRTL(lang) {
+		return "right"
+	}
+	return "left"
+}
+
+func GetFlexDirection(lang string) string {
+	if IsRTL(lang) {
+		return "row-reverse"
+	}
+	return "row"
+}
+
+func GetRTLSupport(lang string) bool {
+	return IsRTL(lang)
+}
+
+func GetLogicalProperty(property string, lang string) string {
+	if !IsRTL(lang) {
+		return property
+	}
+
+	logicalProps := map[string]map[string]string{
+		"margin-left": {
+			"margin-right": "margin-start",
+		},
+		"margin-right": {
+			"margin-left": "margin-end",
+		},
+		"padding-left": {
+			"padding-right": "padding-start",
+		},
+		"padding-right": {
+			"padding-left": "padding-end",
+		},
+		"left": {
+			"right": "inset-start",
+		},
+		"right": {
+			"left": "inset-end",
+		},
+		"text-align-left": {
+			"text-align-right": "text-align-start",
+		},
+		"text-align-right": {
+			"text-align-left": "text-align-end",
+		},
+	}
+
+	if props, ok := logicalProps[property]; ok {
+		if newProp, ok := props[property]; ok {
+			return newProp
+		}
+	}
+
+	return property
+}
+
+func ShouldFlipIcon(iconType string) bool {
+	flipIcons := map[string]bool{
+		"arrow-left":      true,
+		"arrow-right":     true,
+		"chevron-left":    true,
+		"chevron-right":   true,
+		"caret-left":      true,
+		"caret-right":     true,
+		"angle-left":      true,
+		"angle-right":     true,
+		"long-arrow-left": true,
+		"long-arrow-right": true,
+		"back":            true,
+		"forward":         true,
+		"previous":        true,
+		"next":            true,
+	}
+
+	return flipIcons[iconType]
+}
+
+func GetFlipTransform(lang string, iconType string) string {
+	if !ShouldFlipIcon(iconType) {
+		return ""
+	}
+
+	if IsRTL(lang) {
+		return "scaleX(-1)"
+	}
+
+	return ""
+}
+
+func GetTextDirectionClass(lang string) string {
+	if IsRTL(lang) {
+		return "rtl"
+	}
+	return "ltr"
+}
+
+func GetDocumentDirection(lang string) string {
+	if IsRTL(lang) {
+		return "rtl"
+	}
+	return "ltr"
+}
+
+func GetTextAlignStyle(lang string) string {
+	if IsRTL(lang) {
+		return "text-align: right;"
+	}
+	return "text-align: left;"
+}
+
+func GetMarginStart(lang string, margin string) string {
+	if IsRTL(lang) {
+		return fmt.Sprintf("margin-right: %s;", margin)
+	}
+	return fmt.Sprintf("margin-left: %s;", margin)
+}
+
+func GetMarginEnd(lang string, margin string) string {
+	if IsRTL(lang) {
+		return fmt.Sprintf("margin-left: %s;", margin)
+	}
+	return fmt.Sprintf("margin-right: %s;", margin)
+}
+
+func GetPaddingStart(lang string, padding string) string {
+	if IsRTL(lang) {
+		return fmt.Sprintf("padding-right: %s;", padding)
+	}
+	return fmt.Sprintf("padding-left: %s;", padding)
+}
+
+func GetPaddingEnd(lang string, padding string) string {
+	if IsRTL(lang) {
+		return fmt.Sprintf("padding-left: %s;", padding)
+	}
+	return fmt.Sprintf("padding-right: %s;", padding)
+}

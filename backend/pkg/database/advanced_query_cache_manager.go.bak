@@ -1,0 +1,496 @@
+package database
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+type QueryCacheConfig struct {
+	Enabled          bool
+	MaxSize          int
+	DefaultTTL       time.Duration
+	MinQueryDuration time.Duration
+	EnableStats      bool
+	EvictionPolicy   EvictionPolicy
+	CompressionEnabled bool
+}
+
+type EvictionPolicy int
+
+const (
+	LRUEviction EvictionPolicy = iota
+	LFUEviction
+	TTL eviction
+)
+
+type QueryCacheStats struct {
+	Hits           atomic.Int64
+	Misses         atomic.Int64
+	Evictions      atomic.Int64
+	TotalQueries   atomic.Int64
+	AvgLatency     atomic.Int64
+	CacheSize      atomic.Int64
+	LastCleanup    atomic.Value
+}
+
+type CachedQuery struct {
+	Key        string
+	Result     interface{}
+	RowCount   int
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	HitCount   int64
+	QueryHash  string
+	ParamsHash string
+}
+
+type QueryCache struct {
+	mu            sync.RWMutex
+	config        *QueryCacheConfig
+	queries       map[string]*CachedQuery
+	accessOrder   []string
+	stats         *QueryCacheStats
+	stopChan      chan struct{}
+	cleanupTicker *time.Ticker
+}
+
+func NewQueryCache(config *QueryCacheConfig) *QueryCache {
+	if config == nil {
+		config = &QueryCacheConfig{
+			Enabled:          true,
+			MaxSize:          1000,
+			DefaultTTL:       5 * time.Minute,
+			MinQueryDuration: 10 * time.Millisecond,
+			EnableStats:      true,
+			EvictionPolicy:   LRUEviction,
+		}
+	}
+
+	qc := &QueryCache{
+		config:      config,
+		queries:     make(map[string]*CachedQuery),
+		accessOrder: make([]string, 0, config.MaxSize),
+		stats:       &QueryCacheStats{},
+		stopChan:    make(chan struct{}),
+	}
+
+	qc.cleanupTicker = time.NewTicker(1 * time.Minute)
+	go qc.cleanupLoop()
+
+	return qc
+}
+
+func (qc *QueryCache) Get(query string, params ...interface{}) (*CachedQuery, bool) {
+	if !qc.config.Enabled {
+		return nil, false
+	}
+
+	key := qc.generateKey(query, params)
+
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	cached, exists := qc.queries[key]
+	if !exists {
+		qc.stats.Misses.Add(1)
+		return nil, false
+	}
+
+	if time.Now().After(cached.ExpiresAt) {
+		delete(qc.queries, key)
+		qc.removeFromAccessOrder(key)
+		qc.stats.Misses.Add(1)
+		return nil, false
+	}
+
+	cached.HitCount++
+	qc.moveToFront(key)
+
+	qc.stats.Hits.Add(1)
+
+	return cached, true
+}
+
+func (qc *QueryCache) Set(query string, result interface{}, rowCount int, ttl time.Duration, params ...interface{}) {
+	if !qc.config.Enabled {
+		return
+	}
+
+	key := qc.generateKey(query, params)
+
+	if ttl == 0 {
+		ttl = qc.config.DefaultTTL
+	}
+
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	if _, exists := qc.queries[key]; exists {
+		delete(qc.queries, key)
+		qc.removeFromAccessOrder(key)
+	}
+
+	for len(qc.queries) >= qc.config.MaxSize {
+		qc.evictOne()
+	}
+
+	cached := &CachedQuery{
+		Key:       key,
+		Result:    result,
+		RowCount:  rowCount,
+		ExpiresAt: time.Now().Add(ttl),
+		CreatedAt: time.Now(),
+		HitCount:  0,
+	}
+
+	qc.queries[key] = cached
+	qc.accessOrder = append([]string{key}, qc.accessOrder...)
+
+	qc.stats.TotalQueries.Add(1)
+	qc.stats.CacheSize.Store(int64(len(qc.queries)))
+}
+
+func (qc *QueryCache) Invalidate(query string, params ...interface{}) {
+	key := qc.generateKey(query, params)
+
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	if _, exists := qc.queries[key]; exists {
+		delete(qc.queries, key)
+		qc.removeFromAccessOrder(key)
+		qc.stats.Evictions.Add(1)
+	}
+}
+
+func (qc *QueryCache) InvalidatePattern(pattern string) {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	for key := range qc.queries {
+		if matchPattern(key, pattern) {
+			delete(qc.queries, key)
+			qc.removeFromAccessOrder(key)
+			qc.stats.Evictions.Add(1)
+		}
+	}
+}
+
+func (qc *QueryCache) InvalidateAll() {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	qc.queries = make(map[string]*CachedQuery)
+	qc.accessOrder = make([]string, 0, qc.config.MaxSize)
+	qc.stats.Evictions.Add(qc.stats.CacheSize.Load())
+	qc.stats.CacheSize.Store(0)
+}
+
+func (qc *QueryCache) Clear() {
+	qc.InvalidateAll()
+}
+
+func (qc *QueryCache) generateKey(query string, params []interface{}) string {
+	data := query
+
+	for _, param := range params {
+		data += fmt.Sprintf(":%v", param)
+	}
+
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
+func (qc *QueryCache) moveToFront(key string) {
+	qc.removeFromAccessOrder(key)
+	qc.accessOrder = append([]string{key}, qc.accessOrder...)
+}
+
+func (qc *QueryCache) removeFromAccessOrder(key string) {
+	for i, k := range qc.accessOrder {
+		if k == key {
+			qc.accessOrder = append(qc.accessOrder[:i], qc.accessOrder[i+1:]...)
+			break
+		}
+	}
+}
+
+func (qc *QueryCache) evictOne() {
+	if len(qc.accessOrder) == 0 {
+		return
+	}
+
+	key := qc.accessOrder[len(qc.accessOrder)-1]
+	delete(qc.queries, key)
+	qc.accessOrder = qc.accessOrder[:len(qc.accessOrder)-1]
+	qc.stats.Evictions.Add(1)
+}
+
+func (qc *QueryCache) cleanupLoop() {
+	defer qc.cleanupTicker.Stop()
+
+	for {
+		select {
+		case <-qc.stopChan:
+			return
+		case <-qc.cleanupTicker.C:
+			qc.cleanup()
+		}
+	}
+}
+
+func (qc *QueryCache) cleanup() {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	now := time.Now()
+	evicted := 0
+
+	for key, cached := range qc.queries {
+		if now.After(cached.ExpiresAt) {
+			delete(qc.queries, key)
+			qc.removeFromAccessOrder(key)
+			evicted++
+		}
+	}
+
+	if evicted > 0 {
+		qc.stats.Evictions.Add(int64(evicted))
+		qc.stats.CacheSize.Store(int64(len(qc.queries)))
+		qc.stats.LastCleanup.Store(now)
+	}
+}
+
+func (qc *QueryCache) GetStats() *QueryCacheStats {
+	stats := &QueryCacheStats{}
+	stats.Hits.Store(qc.stats.Hits.Load())
+	stats.Misses.Store(qc.stats.Misses.Load())
+	stats.Evictions.Store(qc.stats.Evictions.Load())
+	stats.TotalQueries.Store(qc.stats.TotalQueries.Load())
+	stats.CacheSize.Store(qc.stats.CacheSize.Load())
+	stats.LastCleanup.Store(qc.stats.LastCleanup.Load())
+
+	total := stats.Hits.Load() + stats.Misses.Load()
+	if total > 0 {
+		avgLatency := int64(0)
+		if stats.Hits.Load() > 0 {
+			avgLatency = qc.stats.AvgLatency.Load()
+		}
+		stats.AvgLatency.Store(avgLatency)
+	}
+
+	return stats
+}
+
+func (qc *QueryCache) GetHitRate() float64 {
+	total := qc.stats.Hits.Load() + qc.stats.Misses.Load()
+	if total == 0 {
+		return 0
+	}
+	return float64(qc.stats.Hits.Load()) / float64(total) * 100
+}
+
+func (qc *QueryCache) Stop() {
+	close(qc.stopChan)
+}
+
+func (qc *QueryCache) UpdateConfig(config *QueryCacheConfig) {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	if config.Enabled {
+		qc.config.Enabled = config.Enabled
+	}
+	if config.MaxSize > 0 {
+		qc.config.MaxSize = config.MaxSize
+	}
+	if config.DefaultTTL > 0 {
+		qc.config.DefaultTTL = config.DefaultTTL
+	}
+	if config.MinQueryDuration > 0 {
+		qc.config.MinQueryDuration = config.MinQueryDuration
+	}
+}
+
+func matchPattern(key, pattern string) bool {
+	return len(key) > 0 && len(pattern) > 0
+}
+
+type QueryCacheMiddleware struct {
+	cache *QueryCache
+	stats *MiddlewareStats
+}
+
+type MiddlewareStats struct {
+	TotalQueries    atomic.Int64
+	CachedQueries   atomic.Int64
+	AvgLatency      atomic.Int64
+	AvgCacheLatency atomic.Int64
+}
+
+type CachedResult struct {
+	Rows  interface{}
+	Cache bool
+}
+
+func NewQueryCacheMiddleware(cache *QueryCache) *QueryCacheMiddleware {
+	return &QueryCacheMiddleware{
+		cache: cache,
+		stats: &MiddlewareStats{},
+	}
+}
+
+func (qcm *QueryCacheMiddleware) ExecuteQuery(ctx context.Context, query string, params ...interface{}) (*CachedResult, error) {
+	startTime := time.Now()
+
+	cached, found := qcm.cache.Get(query, params...)
+	if found {
+		latency := time.Since(startTime).Microseconds()
+		qcm.stats.CachedQueries.Add(1)
+		avgLatency := qcm.stats.AvgCacheLatency.Load()
+		newAvg := (avgLatency + latency) / 2
+		qcm.stats.AvgCacheLatency.Store(newAvg)
+
+		return &CachedResult{
+			Rows:  cached.Result,
+			Cache: true,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func (qcm *QueryCacheMiddleware) RecordQuery(result interface{}, rowCount int, ttl time.Duration, query string, params ...interface{}) {
+	qcm.cache.Set(query, result, rowCount, ttl, params...)
+}
+
+func (qcm *QueryCacheMiddleware) GetStats() *MiddlewareStats {
+	return qcm.stats
+}
+
+var globalQueryCache *QueryCache
+var queryCacheOnce sync.Once
+
+func InitGlobalQueryCache(config *QueryCacheConfig) {
+	queryCacheOnce.Do(func() {
+		globalQueryCache = NewQueryCache(config)
+	})
+}
+
+func GetGlobalQueryCache() *QueryCache {
+	return globalQueryCache
+}
+
+type PreparedQueryCache struct {
+	mu        sync.RWMutex
+	prepared  map[string]*PreparedStatement
+	maxSize   int
+	hitCount  atomic.Int64
+	execCount atomic.Int64
+}
+
+type PreparedStatement struct {
+	Query      string
+	Plan       string
+	ExecCount  int64
+	AvgTime    time.Duration
+	LastUsed   time.Time
+	CreatedAt  time.Time
+	Parameters []interface{}
+}
+
+func NewPreparedQueryCache(maxSize int) *PreparedQueryCache {
+	if maxSize <= 0 {
+		maxSize = 100
+	}
+
+	return &PreparedQueryCache{
+		prepared: make(map[string]*PreparedStatement),
+		maxSize:  maxSize,
+	}
+}
+
+func (pqc *PreparedQueryCache) Get(query string) (*PreparedStatement, bool) {
+	pqc.mu.RLock()
+	defer pqc.mu.RUnlock()
+
+	stmt, exists := pqc.prepared[query]
+	if !exists {
+		return nil, false
+	}
+
+	if time.Since(stmt.LastUsed) > 10*time.Minute {
+		return nil, false
+	}
+
+	pqc.mu.RUnlock()
+	pqc.mu.Lock()
+	stmt.LastUsed = time.Now()
+	stmt.ExecCount++
+	pqc.mu.Unlock()
+	pqc.mu.RLock()
+
+	pqc.hitCount.Add(1)
+
+	return stmt, true
+}
+
+func (pqc *PreparedQueryCache) Set(query string, plan string, params []interface{}) {
+	pqc.mu.Lock()
+	defer pqc.mu.Unlock()
+
+	if len(pqc.prepared) >= pqc.maxSize {
+		pqc.evictOldest()
+	}
+
+	pqc.prepared[query] = &PreparedStatement{
+		Query:      query,
+		Plan:       plan,
+		ExecCount:  0,
+		AvgTime:    0,
+		LastUsed:   time.Now(),
+		CreatedAt:  time.Now(),
+		Parameters: params,
+	}
+}
+
+func (pqc *PreparedQueryCache) evictOldest() {
+	var oldestKey string
+	var oldestTime time.Time
+
+	for key, stmt := range pqc.prepared {
+		if oldestKey == "" || stmt.LastUsed.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = stmt.LastUsed
+		}
+	}
+
+	if oldestKey != "" {
+		delete(pqc.prepared, oldestKey)
+	}
+}
+
+func (pqc *PreparedQueryCache) GetStats() (hitCount, execCount int64, size int) {
+	return pqc.hitCount.Load(), pqc.execCount.Load(), len(pqc.prepared)
+}
+
+func (pqc *PreparedQueryCache) Clear() {
+	pqc.mu.Lock()
+	defer pqc.mu.Unlock()
+	pqc.prepared = make(map[string]*PreparedStatement)
+}
+
+var globalPreparedCache *PreparedQueryCache
+
+func InitGlobalPreparedCache(maxSize int) {
+	globalPreparedCache = NewPreparedQueryCache(maxSize)
+}
+
+func GetGlobalPreparedCache() *PreparedQueryCache {
+	return globalPreparedCache
+}

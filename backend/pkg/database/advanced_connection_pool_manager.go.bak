@@ -1,0 +1,714 @@
+package database
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type AdvancedConnectionPoolManager struct {
+	mu                sync.RWMutex
+	config            *AdvancedPoolConfig
+	stats             *PoolStatistics
+	readPool          *gorm.DB
+	writePool         *gorm.DB
+	monitoringService *ConnectionMonitoringService
+	healthChecker     *ConnectionHealthChecker
+	autoTuner         *AutoPoolTuner
+	enabled           bool
+}
+
+type AdvancedPoolConfig struct {
+	MaxOpenConns           int
+	MaxIdleConns           int
+	MinIdleConns           int
+	ConnMaxLifetime        time.Duration
+	ConnMaxIdleTime        time.Duration
+	ReadPoolSize           int
+	WritePoolSize          int
+	EnableReadWriteSplit   bool
+	EnableAutoTuning       bool
+	EnableHealthCheck      bool
+	HealthCheckInterval    time.Duration
+	AutoTuningInterval     time.Duration
+	HighLoadThreshold      float64
+	LowLoadThreshold       float64
+	ConnectionTimeout      time.Duration
+	QueryTimeout           time.Duration
+}
+
+var DefaultAdvancedPoolConfig = &AdvancedPoolConfig{
+	MaxOpenConns:         100,
+	MaxIdleConns:         20,
+	MinIdleConns:         10,
+	ConnMaxLifetime:      30 * time.Minute,
+	ConnMaxIdleTime:      10 * time.Minute,
+	ReadPoolSize:         80,
+	WritePoolSize:        20,
+	EnableReadWriteSplit: true,
+	EnableAutoTuning:     true,
+	EnableHealthCheck:    true,
+	HealthCheckInterval:  30 * time.Second,
+	AutoTuningInterval:   1 * time.Minute,
+	HighLoadThreshold:    0.8,
+	LowLoadThreshold:     0.3,
+	ConnectionTimeout:    10 * time.Second,
+	QueryTimeout:         30 * time.Second,
+}
+
+type PoolStatistics struct {
+	TotalConnections     atomic.Int64
+	ActiveConnections    atomic.Int64
+	IdleConnections      atomic.Int64
+	WaitCount            atomic.Int64
+	WaitDuration         atomic.Int64
+	MaxIdleClosed        atomic.Int64
+	MaxLifetimeClosed    atomic.Int64
+	MaxConnectionsReached atomic.Int64
+	ConnectionReuseRate  atomic.Float64
+	QueryCount           atomic.Int64
+	SlowQueryCount       atomic.Int64
+	AvgQueryDuration     atomic.Int64
+	ReadOperations       atomic.Int64
+	WriteOperations      atomic.Int64
+}
+
+type ConnectionMonitoringService struct {
+	mu           sync.RWMutex
+	interval     time.Duration
+	stopChan     chan struct{}
+	enabled      bool
+	history      []*MonitoringRecord
+	maxHistoryLen int
+	callbacks    []MonitoringCallback
+}
+
+type MonitoringRecord struct {
+	Timestamp        time.Time
+	ActiveConns      int
+	IdleConns        int
+	InUse            int
+	WaitCount        int64
+	QueryCount       int64
+	AvgLatency       time.Duration
+	HitRate          float64
+	CPUUsage         float64
+	MemoryUsage      int64
+}
+
+type MonitoringCallback func(*MonitoringRecord)
+
+type ConnectionHealthChecker struct {
+	mu          sync.RWMutex
+	interval    time.Duration
+	stopChan    chan struct{}
+	enabled     bool
+	checkHistory []HealthCheckResult
+	maxHistory  int
+	lastResult  *HealthCheckResult
+}
+
+type HealthCheckResult struct {
+	Timestamp       time.Time
+	IsHealthy       bool
+	ResponseTime    time.Duration
+	ErrorMessage    string
+	ActiveConns     int
+	IdleConns       int
+	Recommendations []string
+}
+
+type AutoPoolTuner struct {
+	mu          sync.RWMutex
+	config      *AdvancedPoolConfig
+	interval    time.Duration
+	stopChan    chan struct{}
+	enabled     bool
+	tuningHistory []TuningAction
+	maxHistory   int
+}
+
+type TuningAction struct {
+	Timestamp      time.Time
+	Action         string
+	OldValue       interface{}
+	NewValue       interface{}
+	Reason         string
+	Success        bool
+}
+
+func NewAdvancedConnectionPoolManager(db *gorm.DB, config *AdvancedPoolConfig) *AdvancedConnectionPoolManager {
+	if config == nil {
+		config = DefaultAdvancedPoolConfig
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Printf("Failed to get underlying sql.DB: %v", err)
+		return nil
+	}
+
+	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(config.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(config.ConnMaxIdleTime)
+
+	manager := &AdvancedConnectionPoolManager{
+		config:             config,
+		stats:              &PoolStatistics{},
+		monitoringService:  NewConnectionMonitoringService(config.HealthCheckInterval),
+		healthChecker:      NewConnectionHealthChecker(config.HealthCheckInterval),
+		autoTuner:          NewAutoPoolTuner(config),
+		enabled:            true,
+	}
+
+	if config.EnableHealthCheck {
+		manager.healthChecker.Start()
+	}
+
+	if config.EnableAutoTuning {
+		manager.autoTuner.Start()
+	}
+
+	go manager.collectInitialStats(sqlDB)
+
+	return manager
+}
+
+func (acpm *AdvancedConnectionPoolManager) collectInitialStats(sqlDB *sql.DB) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			stats := sqlDB.Stats()
+			acpm.stats.ActiveConnections.Store(int64(stats.InUse))
+			acpm.stats.IdleConnections.Store(int64(stats.Idle))
+			acpm.stats.TotalConnections.Store(int64(stats.OpenConnections))
+		}
+	}
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetReadPool() *gorm.DB {
+	acpm.mu.RLock()
+	defer acpm.mu.RUnlock()
+	return acpm.readPool
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetWritePool() *gorm.DB {
+	acpm.mu.RLock()
+	defer acpm.mu.RUnlock()
+	return acpm.writePool
+}
+
+func (acpm *AdvancedConnectionPoolManager) SetReadPool(db *gorm.DB) {
+	acpm.mu.Lock()
+	defer acpm.mu.Unlock()
+	acpm.readPool = db
+}
+
+func (acpm *AdvancedConnectionPoolManager) SetWritePool(db *gorm.DB) {
+	acpm.mu.Lock()
+	defer acpm.mu.Unlock()
+	acpm.writePool = db
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetStatistics() *PoolStatistics {
+	return acpm.stats
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetMonitoringService() *ConnectionMonitoringService {
+	return acpm.monitoringService
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetHealthChecker() *ConnectionHealthChecker {
+	return acpm.healthChecker
+}
+
+func (acpm *AdvancedConnectionPoolManager) GetAutoTuner() *AutoPoolTuner {
+	return acpm.autoTuner
+}
+
+func (acpm *AdvancedConnectionPoolManager) UpdateConfig(config *AdvancedPoolConfig) error {
+	acpm.mu.Lock()
+	defer acpm.mu.Unlock()
+
+	if config.MaxOpenConns > 0 {
+		acpm.config.MaxOpenConns = config.MaxOpenConns
+	}
+	if config.MaxIdleConns > 0 {
+		acpm.config.MaxIdleConns = config.MaxIdleConns
+	}
+	if config.MinIdleConns > 0 {
+		acpm.config.MinIdleConns = config.MinIdleConns
+	}
+
+	acpm.config.EnableReadWriteSplit = config.EnableReadWriteSplit
+	acpm.config.EnableAutoTuning = config.EnableAutoTuning
+	acpm.config.EnableHealthCheck = config.EnableHealthCheck
+
+	return nil
+}
+
+func (acpm *AdvancedConnectionPoolManager) ExecuteRead(ctx context.Context, query func(db *gorm.DB) error) error {
+	acpm.stats.ReadOperations.Add(1)
+
+	if acpm.config.EnableReadWriteSplit && acpm.readPool != nil {
+		return query(acpm.readPool)
+	}
+
+	return query(DB)
+}
+
+func (acpm *AdvancedConnectionPoolManager) ExecuteWrite(ctx context.Context, query func(db *gorm.DB) error) error {
+	acpm.stats.WriteOperations.Add(1)
+
+	if acpm.config.EnableReadWriteSplit && acpm.writePool != nil {
+		return query(acpm.writePool)
+	}
+
+	return query(DB)
+}
+
+func (acpm *AdvancedConnectionPoolManager) Stop() {
+	acpm.enabled = false
+
+	if acpm.monitoringService != nil {
+		acpm.monitoringService.Stop()
+	}
+
+	if acpm.healthChecker != nil {
+		acpm.healthChecker.Stop()
+	}
+
+	if acpm.autoTuner != nil {
+		acpm.autoTuner.Stop()
+	}
+}
+
+func NewConnectionMonitoringService(interval time.Duration) *ConnectionMonitoringService {
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+
+	return &ConnectionMonitoringService{
+		interval:      interval,
+		stopChan:      make(chan struct{}),
+		enabled:       true,
+		history:       make([]*MonitoringRecord, 0),
+		maxHistoryLen: 1000,
+		callbacks:     make([]MonitoringCallback, 0),
+	}
+}
+
+func (cms *ConnectionMonitoringService) Start() {
+	go cms.runMonitoringLoop()
+}
+
+func (cms *ConnectionMonitoringService) Stop() {
+	close(cms.stopChan)
+	cms.enabled = false
+}
+
+func (cms *ConnectionMonitoringService) RegisterCallback(callback MonitoringCallback) {
+	cms.mu.Lock()
+	defer cms.mu.Unlock()
+	cms.callbacks = append(cms.callbacks, callback)
+}
+
+func (cms *ConnectionMonitoringService) runMonitoringLoop() {
+	ticker := time.NewTicker(cms.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-cms.stopChan:
+			return
+		case <-ticker.C:
+			if cms.enabled {
+				record := cms.collectRecord()
+				cms.addRecord(record)
+				cms.notifyCallbacks(record)
+			}
+		}
+	}
+}
+
+func (cms *ConnectionMonitoringService) collectRecord() *MonitoringRecord {
+	record := &MonitoringRecord{
+		Timestamp: time.Now(),
+	}
+
+	sqlDB, err := DB.DB()
+	if err == nil {
+		stats := sqlDB.Stats()
+		record.ActiveConns = stats.InUse
+		record.IdleConns = stats.Idle
+		record.InUse = stats.InUse
+		record.WaitCount = stats.WaitCount
+	}
+
+	return record
+}
+
+func (cms *ConnectionMonitoringService) addRecord(record *MonitoringRecord) {
+	cms.mu.Lock()
+	defer cms.mu.Unlock()
+
+	cms.history = append(cms.history, record)
+	if len(cms.history) > cms.maxHistoryLen {
+		cms.history = cms.history[1:]
+	}
+}
+
+func (cms *ConnectionMonitoringService) notifyCallbacks(record *MonitoringRecord) {
+	cms.mu.RLock()
+	callbacks := make([]MonitoringCallback, len(cms.callbacks))
+	copy(callbacks, cms.callbacks)
+	cms.mu.RUnlock()
+
+	for _, callback := range callbacks {
+		go callback(record)
+	}
+}
+
+func (cms *ConnectionMonitoringService) GetHistory(limit int) []*MonitoringRecord {
+	cms.mu.RLock()
+	defer cms.mu.RUnlock()
+
+	if limit <= 0 || limit > len(cms.history) {
+		limit = len(cms.history)
+	}
+
+	history := make([]*MonitoringRecord, limit)
+	copy(history, cms.history[len(cms.history)-limit:])
+
+	return history
+}
+
+func (cms *ConnectionMonitoringService) Enable(enabled bool) {
+	cms.mu.Lock()
+	defer cms.mu.Unlock()
+	cms.enabled = enabled
+}
+
+func NewConnectionHealthChecker(interval time.Duration) *ConnectionHealthChecker {
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+
+	return &ConnectionHealthChecker{
+		interval:     interval,
+		stopChan:     make(chan struct{}),
+		enabled:      true,
+		checkHistory: make([]HealthCheckResult, 0),
+		maxHistory:   100,
+	}
+}
+
+func (chc *ConnectionHealthChecker) Start() {
+	go chc.runHealthCheckLoop()
+}
+
+func (chc *ConnectionHealthChecker) Stop() {
+	close(chc.stopChan)
+	chc.enabled = false
+}
+
+func (chc *ConnectionHealthChecker) runHealthCheckLoop() {
+	ticker := time.NewTicker(chc.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-chc.stopChan:
+			return
+		case <-ticker.C:
+			if chc.enabled {
+				result := chc.performHealthCheck()
+				chc.recordResult(result)
+			}
+		}
+	}
+}
+
+func (chc *ConnectionHealthChecker) performHealthCheck() *HealthCheckResult {
+	result := &HealthCheckResult{
+		Timestamp: time.Now(),
+	}
+
+	startTime := time.Now()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sqlDB, err := DB.DB()
+	if err != nil {
+		result.IsHealthy = false
+		result.ErrorMessage = err.Error()
+		return result
+	}
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		result.IsHealthy = false
+		result.ErrorMessage = err.Error()
+		result.ResponseTime = time.Since(startTime)
+		return result
+	}
+
+	result.ResponseTime = time.Since(startTime)
+	result.IsHealthy = true
+
+	stats := sqlDB.Stats()
+	result.ActiveConns = stats.InUse
+	result.IdleConns = stats.Idle
+
+	result.Recommendations = chc.generateRecommendations(result)
+
+	return result
+}
+
+func (chc *ConnectionHealthChecker) generateRecommendations(result *HealthCheckResult) []string {
+	var recommendations []string
+
+	if result.ResponseTime > 1*time.Second {
+		recommendations = append(recommendations, "数据库响应时间较长，建议检查查询性能")
+	}
+
+	if result.ActiveConns > 80 {
+		recommendations = append(recommendations, "活跃连接数较高，建议增加连接池大小或优化查询")
+	}
+
+	if result.IdleConns < 5 {
+		recommendations = append(recommendations, "空闲连接数过低，可能导致连接创建开销")
+	}
+
+	if !result.IsHealthy {
+		recommendations = append(recommendations, fmt.Sprintf("健康检查失败: %s", result.ErrorMessage))
+	}
+
+	return recommendations
+}
+
+func (chc *ConnectionHealthChecker) recordResult(result *HealthCheckResult) {
+	chc.mu.Lock()
+	defer chc.mu.Unlock()
+
+	chc.checkHistory = append(chc.checkHistory, *result)
+	if len(chc.checkHistory) > chc.maxHistory {
+		chc.checkHistory = chc.checkHistory[1:]
+	}
+
+	chc.lastResult = result
+}
+
+func (chc *ConnectionHealthChecker) GetLastResult() *HealthCheckResult {
+	chc.mu.RLock()
+	defer chc.mu.RUnlock()
+	return chc.lastResult
+}
+
+func (chc *ConnectionHealthChecker) GetHistory(limit int) []HealthCheckResult {
+	chc.mu.RLock()
+	defer chc.mu.RUnlock()
+
+	if limit <= 0 || limit > len(chc.checkHistory) {
+		limit = len(chc.checkHistory)
+	}
+
+	history := make([]HealthCheckResult, limit)
+	copy(history, chc.checkHistory[len(chc.checkHistory)-limit:])
+
+	return history
+}
+
+func (chc *ConnectionHealthChecker) IsHealthy() bool {
+	chc.mu.RLock()
+	defer chc.mu.RUnlock()
+
+	if chc.lastResult == nil {
+		return true
+	}
+
+	return chc.lastResult.IsHealthy
+}
+
+func (chc *ConnectionHealthChecker) Enable(enabled bool) {
+	chc.mu.Lock()
+	defer chc.mu.Unlock()
+	chc.enabled = enabled
+}
+
+func NewAutoPoolTuner(config *AdvancedPoolConfig) *AutoPoolTuner {
+	if config == nil {
+		config = DefaultAdvancedPoolConfig
+	}
+
+	return &AutoPoolTuner{
+		config:       config,
+		interval:    config.AutoTuningInterval,
+		stopChan:    make(chan struct{}),
+		enabled:     config.EnableAutoTuning,
+		tuningHistory: make([]TuningAction, 0),
+		maxHistory:  50,
+	}
+}
+
+func (apt *AutoPoolTuner) Start() {
+	go apt.runTuningLoop()
+}
+
+func (apt *AutoPoolTuner) Stop() {
+	close(apt.stopChan)
+	apt.enabled = false
+}
+
+func (apt *AutoPoolTuner) runTuningLoop() {
+	ticker := time.NewTicker(apt.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-apt.stopChan:
+			return
+		case <-ticker.C:
+			if apt.enabled {
+				apt.performTuning()
+			}
+		}
+	}
+}
+
+func (apt *AutoPoolTuner) performTuning() {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return
+	}
+
+	stats := sqlDB.Stats()
+
+	usageRatio := float64(stats.InUse) / float64(stats.MaxOpenConnections)
+
+	if usageRatio > apt.config.HighLoadThreshold {
+		apt.increasePoolSize(stats)
+	} else if usageRatio < apt.config.LowLoadThreshold && stats.Idle > apt.config.MinIdleConns {
+		apt.decreaseIdleConnections(stats)
+	}
+
+	if stats.WaitCount > 100 {
+		apt.optimizeWaitStrategy()
+	}
+}
+
+func (apt *AutoPoolTuner) increasePoolSize(stats sql.DBStats) {
+	currentMax := stats.MaxOpenConnections
+	newMax := int(float64(currentMax) * 1.2)
+
+	if newMax > currentMax*2 {
+		newMax = currentMax * 2
+	}
+
+	sqlDB, _ := DB.DB()
+	if sqlDB != nil {
+		sqlDB.SetMaxOpenConns(newMax)
+
+		apt.recordTuningAction(TuningAction{
+			Timestamp: time.Now(),
+			Action:    "increase_pool_size",
+			OldValue:  currentMax,
+			NewValue:  newMax,
+			Reason:    fmt.Sprintf("High load detected: usage ratio exceeded %.0f%%", apt.config.HighLoadThreshold*100),
+			Success:   true,
+		})
+
+		log.Printf("[AUTO_TUNE] Increased pool size from %d to %d due to high load", currentMax, newMax)
+	}
+}
+
+func (apt *AutoPoolTuner) decreaseIdleConnections(stats sql.DBStats) {
+	newIdle := stats.Idle - 2
+	if newIdle < apt.config.MinIdleConns {
+		newIdle = apt.config.MinIdleConns
+	}
+
+	sqlDB, _ := DB.DB()
+	if sqlDB != nil {
+		sqlDB.SetMaxIdleConns(newIdle)
+
+		apt.recordTuningAction(TuningAction{
+			Timestamp: time.Now(),
+			Action:    "decrease_idle_connections",
+			OldValue:  stats.Idle,
+			NewValue:  newIdle,
+			Reason:    fmt.Sprintf("Low load detected: usage ratio below %.0f%%", apt.config.LowLoadThreshold*100),
+			Success:   true,
+		})
+
+		log.Printf("[AUTO_TUNE] Decreased idle connections from %d to %d due to low load", stats.Idle, newIdle)
+	}
+}
+
+func (apt *AutoPoolTuner) optimizeWaitStrategy() {
+	apt.recordTuningAction(TuningAction{
+		Timestamp: time.Now(),
+		Action:    "optimize_wait_strategy",
+		Reason:    "High wait count detected",
+		Success:   true,
+	})
+}
+
+func (apt *AutoPoolTuner) recordTuningAction(action TuningAction) {
+	apt.mu.Lock()
+	defer apt.mu.Unlock()
+
+	apt.tuningHistory = append(apt.tuningHistory, action)
+	if len(apt.tuningHistory) > apt.maxHistory {
+		apt.tuningHistory = apt.tuningHistory[1:]
+	}
+}
+
+func (apt *AutoPoolTuner) GetHistory(limit int) []TuningAction {
+	apt.mu.RLock()
+	defer apt.mu.RUnlock()
+
+	if limit <= 0 || limit > len(apt.tuningHistory) {
+		limit = len(apt.tuningHistory)
+	}
+
+	history := make([]TuningAction, limit)
+	copy(history, apt.tuningHistory[len(apt.tuningHistory)-limit:])
+
+	return history
+}
+
+func (apt *AutoPoolTuner) Enable(enabled bool) {
+	apt.mu.Lock()
+	defer apt.mu.Unlock()
+	apt.enabled = enabled
+}
+
+func (apt *AutoPoolTuner) UpdateInterval(interval time.Duration) {
+	apt.mu.Lock()
+	defer apt.mu.Unlock()
+	apt.interval = interval
+}
+
+var globalPoolManager *AdvancedConnectionPoolManager
+var poolManagerOnce sync.Once
+
+func InitGlobalPoolManager(db *gorm.DB, config *AdvancedPoolConfig) {
+	poolManagerOnce.Do(func() {
+		globalPoolManager = NewAdvancedConnectionPoolManager(db, config)
+	})
+}
+
+func GetGlobalPoolManager() *AdvancedConnectionPoolManager {
+	return globalPoolManager
+}

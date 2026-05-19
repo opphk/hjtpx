@@ -1,508 +1,380 @@
-// 验证码UI优化脚本 - 增强交互和动画效果
+/**
+ * Captcha UI Enhancer - 验证码UI增强组件
+ * 提供更好的用户体验，包括加载状态、错误提示、无障碍支持等
+ */
 
 (function() {
     'use strict';
 
-    // BootCDN资源加载监控
-    class CDNResourceMonitor {
-        constructor() {
-            this.resources = [
-                'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css',
-                'https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css'
-            ];
-            this.failedResources = [];
-            this.init();
-        }
+    // 错误消息管理器
+    window.CaptchaErrorManager = {
+        // 显示错误消息
+        show: function(type, title, message, suggestion, actions) {
+            var errorEl = document.getElementById(type + 'ErrorMessage');
+            if (!errorEl) return null;
 
-        init() {
-            this.resources.forEach(url => {
-                this.checkResource(url);
-            });
-        }
+            var titleEl = document.getElementById(type + 'ErrorTitle');
+            var textEl = document.getElementById(type + 'ErrorText');
+            var suggestionTextEl = document.getElementById(type + 'ErrorSuggestionText');
+            var suggestionEl = document.getElementById(type + 'ErrorSuggestion');
 
-        checkResource(url) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = url;
-            
-            link.onload = () => {
-                console.log(`✓ BootCDN资源加载成功: ${url}`);
-            };
-            
-            link.onerror = () => {
-                console.error(`✗ BootCDN资源加载失败: ${url}`);
-                this.failedResources.push(url);
-                this.showResourceError(url);
-            };
-            
-            document.head.appendChild(link);
-        }
+            if (titleEl) titleEl.textContent = title || '操作失败';
+            if (textEl) textEl.textContent = message || '请稍后重试';
 
-        showResourceError(url) {
-            console.warn('部分BootCDN资源加载失败,可能影响页面样式');
-        }
-
-        getFailedResources() {
-            return this.failedResources;
-        }
-    }
-
-    // 增强的滑块验证组件
-    class EnhancedSliderCaptcha {
-        constructor(element, options = {}) {
-            this.element = typeof element === 'string' 
-                ? document.querySelector(element) 
-                : element;
-            
-            if (!this.element) return;
-
-            this.options = {
-                onSuccess: null,
-                onError: null,
-                onRefresh: null,
-                ...options
-            };
-
-            this.isDragging = false;
-            this.startX = 0;
-            this.currentX = 0;
-            this.maxX = 0;
-            this.init();
-        }
-
-        init() {
-            this.setupUI();
-            this.bindEvents();
-        }
-
-        setupUI() {
-            const container = document.createElement('div');
-            container.className = 'captcha-slider-container';
-            container.innerHTML = `
-                <div class="captcha-slider-track"></div>
-                <div class="captcha-slider-text">向右滑动完成验证</div>
-                <div class="captcha-slider-button">
-                    <i class="fas fa-chevron-right"></i>
-                </div>
-                <div class="captcha-slider-hint">
-                    <i class="fas fa-info-circle"></i>
-                    <span>按住滑块拖动到最右侧</span>
-                </div>
-            `;
-            
-            this.element.innerHTML = '';
-            this.element.appendChild(container);
-            
-            this.container = container;
-            this.track = container.querySelector('.captcha-slider-track');
-            this.text = container.querySelector('.captcha-slider-text');
-            this.button = container.querySelector('.captcha-slider-button');
-            this.hint = container.querySelector('.captcha-slider-hint');
-        }
-
-        bindEvents() {
-            // 鼠标事件
-            this.button.addEventListener('mousedown', (e) => this.startDrag(e));
-            document.addEventListener('mousemove', (e) => this.drag(e));
-            document.addEventListener('mouseup', (e) => this.endDrag(e));
-            
-            // 触摸事件
-            this.button.addEventListener('touchstart', (e) => this.startDrag(e), { passive: false });
-            document.addEventListener('touchmove', (e) => this.drag(e), { passive: false });
-            document.addEventListener('touchend', (e) => this.endDrag(e));
-
-            // 键盘事件
-            this.container.setAttribute('tabindex', '0');
-            this.container.addEventListener('keydown', (e) => this.handleKeyboard(e));
-        }
-
-        startDrag(e) {
-            e.preventDefault();
-            this.isDragging = true;
-            this.startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
-            this.maxX = this.container.offsetWidth - this.button.offsetWidth - 4;
-            this.button.classList.add('dragging');
-            this.text.textContent = '滑动中...';
-        }
-
-        drag(e) {
-            if (!this.isDragging) return;
-            e.preventDefault();
-            
-            const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
-            const deltaX = clientX - this.startX;
-            const progress = Math.max(0, Math.min(deltaX / this.maxX, 1));
-            
-            this.currentX = progress * this.maxX;
-            this.button.style.left = (this.currentX + 2) + 'px';
-            this.track.style.width = (progress * this.maxX) + 'px';
-        }
-
-        endDrag(e) {
-            if (!this.isDragging) return;
-            this.isDragging = false;
-            this.button.classList.remove('dragging');
-            
-            const progress = this.currentX / this.maxX;
-            
-            if (progress > 0.95) {
-                this.showSuccess();
-            } else if (progress > 0.1) {
-                this.showError();
-            } else {
-                this.reset();
-            }
-        }
-
-        handleKeyboard(e) {
-            if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                this.currentX = Math.min(this.currentX + 10, this.maxX);
-                this.updateUI();
-                
-                if (this.currentX >= this.maxX) {
-                    this.showSuccess();
-                }
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                this.currentX = Math.max(this.currentX - 10, 0);
-                this.updateUI();
-            } else if (e.key === 'Enter' && this.currentX >= this.maxX * 0.95) {
-                e.preventDefault();
-                this.showSuccess();
-            }
-        }
-
-        updateUI() {
-            const progress = this.currentX / this.maxX;
-            this.button.style.left = (this.currentX + 2) + 'px';
-            this.track.style.width = (progress * this.maxX) + 'px';
-        }
-
-        showSuccess() {
-            this.container.classList.add('success');
-            this.text.textContent = '验证成功!';
-            this.button.innerHTML = '<i class="fas fa-check"></i>';
-            
-            if (this.options.onSuccess) {
-                this.options.onSuccess();
-            }
-            
-            setTimeout(() => {
-                if (this.options.onRefresh) {
-                    this.options.onRefresh();
-                }
-                this.reset();
-            }, 1500);
-        }
-
-        showError() {
-            this.container.classList.add('error');
-            this.text.textContent = '验证失败，请重试';
-            this.button.innerHTML = '<i class="fas fa-times"></i>';
-            
-            if (this.options.onError) {
-                this.options.onError();
-            }
-            
-            setTimeout(() => {
-                this.reset();
-            }, 1000);
-        }
-
-        reset() {
-            this.container.classList.remove('success', 'error');
-            this.currentX = 0;
-            this.updateUI();
-            this.text.textContent = '向右滑动完成验证';
-            this.button.innerHTML = '<i class="fas fa-chevron-right"></i>';
-        }
-    }
-
-    // 增强的点选验证组件
-    class EnhancedClickCaptcha {
-        constructor(element, options = {}) {
-            this.element = typeof element === 'string' 
-                ? document.querySelector(element) 
-                : element;
-            
-            if (!this.element) return;
-
-            this.options = {
-                maxPoints: 3,
-                onSuccess: null,
-                onError: null,
-                ...options
-            };
-
-            this.selectedPoints = [];
-            this.init();
-        }
-
-        init() {
-            this.setupUI();
-            this.bindEvents();
-        }
-
-        setupUI() {
-            const container = document.createElement('div');
-            container.className = 'captcha-click-grid';
-            container.innerHTML = `
-                <div class="captcha-click-hint-panel">
-                    <div class="hint-text">
-                        <i class="fas fa-lightbulb"></i>
-                        <span>请依次点击图中的文字</span>
-                    </div>
-                </div>
-                <div class="captcha-click-progress">
-                    <span>已选择: </span>
-                    <span class="count-badge">0</span>
-                    <span>/</span>
-                    <span>${this.options.maxPoints}</span>
-                </div>
-            `;
-            
-            this.element.innerHTML = '';
-            this.element.appendChild(container);
-            
-            this.container = container;
-            this.progressBadge = container.querySelector('.count-badge');
-        }
-
-        bindEvents() {
-            this.container.addEventListener('click', (e) => this.handleClick(e));
-        }
-
-        handleClick(e) {
-            if (this.selectedPoints.length >= this.options.maxPoints) {
-                return;
-            }
-
-            const rect = this.container.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            const point = { x, y, index: this.selectedPoints.length + 1 };
-            this.selectedPoints.push(point);
-            
-            this.addMarker(point);
-            this.updateProgress();
-            
-            if (this.selectedPoints.length === this.options.maxPoints) {
-                setTimeout(() => this.verify(), 500);
-            }
-        }
-
-        addMarker(point) {
-            const marker = document.createElement('div');
-            marker.className = 'captcha-click-marker';
-            marker.style.left = point.x + 'px';
-            marker.style.top = point.y + 'px';
-            marker.textContent = point.index;
-            marker.dataset.index = point.index;
-            
-            marker.addEventListener('click', () => this.removePoint(point.index));
-            
-            this.container.appendChild(marker);
-            
-            setTimeout(() => {
-                marker.classList.add('selected');
-            }, 50);
-        }
-
-        removePoint(index) {
-            const marker = this.container.querySelector(`.captcha-click-marker[data-index="${index}"]`);
-            if (marker) {
-                marker.remove();
-            }
-            
-            this.selectedPoints = this.selectedPoints.filter(p => p.index !== index);
-            this.renumberMarkers();
-            this.updateProgress();
-        }
-
-        renumberMarkers() {
-            this.selectedPoints.forEach((point, idx) => {
-                point.index = idx + 1;
-                const marker = this.container.querySelector(`.captcha-click-marker[data-index="${idx + 1}"]`);
-                if (marker) {
-                    marker.textContent = idx + 1;
-                }
-            });
-        }
-
-        updateProgress() {
-            this.progressBadge.textContent = this.selectedPoints.length;
-            
-            if (this.selectedPoints.length === this.options.maxPoints) {
-                this.progressBadge.classList.add('complete');
-            } else {
-                this.progressBadge.classList.remove('complete');
-            }
-        }
-
-        async verify() {
-            try {
-                if (this.options.onSuccess) {
-                    this.options.onSuccess(this.selectedPoints);
-                }
-            } catch (error) {
-                if (this.options.onError) {
-                    this.options.onError(error);
+            if (suggestionTextEl) {
+                suggestionTextEl.textContent = suggestion || '';
+                if (suggestionEl) {
+                    suggestionEl.style.display = suggestion ? 'block' : 'none';
                 }
             }
-            
-            setTimeout(() => this.reset(), 1500);
-        }
 
-        reset() {
-            this.selectedPoints = [];
-            const markers = this.container.querySelectorAll('.captcha-click-marker');
-            markers.forEach(marker => marker.remove());
-            this.progressBadge.textContent = '0';
-            this.progressBadge.classList.remove('complete');
-        }
-    }
+            // 添加错误恢复操作
+            var actionsContainer = errorEl.querySelector('.captcha-error-actions');
+            if (actionsContainer) {
+                actionsContainer.remove();
+            }
 
-    // 全局成功庆祝动画
-    function showSuccessCelebration() {
-        const confettiContainer = document.createElement('div');
-        confettiContainer.className = 'captcha-success-confetti';
-        document.body.appendChild(confettiContainer);
-        
-        const colors = ['#c9a96e', '#d4b87a', '#28a745', '#ffc107', '#dc3545'];
-        
-        for (let i = 0; i < 50; i++) {
-            const confetti = document.createElement('div');
-            confetti.className = 'confetti-piece';
-            confetti.style.left = Math.random() * 100 + '%';
-            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-            confetti.style.animationDelay = Math.random() * 2 + 's';
-            confetti.style.animationDuration = (2 + Math.random() * 2) + 's';
-            confettiContainer.appendChild(confetti);
-        }
-        
-        setTimeout(() => {
-            confettiContainer.remove();
-        }, 5000);
-    }
+            if (actions && actions.length > 0) {
+                actionsContainer = document.createElement('div');
+                actionsContainer.className = 'captcha-error-actions';
 
-    // 增强的错误提示
-    function showEnhancedError(message, container) {
-        const errorHint = document.createElement('div');
-        errorHint.className = 'captcha-error-hint';
-        errorHint.innerHTML = `
-            <i class="fas fa-exclamation-circle"></i>
-            <div class="captcha-error-hint-text">
-                <div class="captcha-error-hint-title">验证失败</div>
-                <div class="captcha-error-hint-desc">${message}</div>
-            </div>
-        `;
-        
-        if (container) {
-            container.appendChild(errorHint);
-            
-            setTimeout(() => {
-                errorHint.remove();
-            }, 3000);
-        }
-        
-        return errorHint;
-    }
-
-    // 增强的成功提示
-    function showEnhancedSuccess(message, container) {
-        const successHint = document.createElement('div');
-        successHint.className = 'captcha-success-hint';
-        successHint.innerHTML = `
-            <i class="fas fa-check-circle"></i>
-            <div class="captcha-success-hint-text">
-                <div class="captcha-success-hint-title">验证成功</div>
-                <div class="captcha-success-hint-desc">${message}</div>
-            </div>
-        `;
-        
-        if (container) {
-            container.appendChild(successHint);
-            
-            setTimeout(() => {
-                successHint.remove();
-            }, 3000);
-        }
-        
-        return successHint;
-    }
-
-    // 性能监控
-    class PerformanceMonitor {
-        constructor() {
-            this.metrics = {
-                pageLoadTime: 0,
-                fcp: 0,
-                lcp: 0
-            };
-            this.init();
-        }
-
-        init() {
-            if (window.performance) {
-                const timing = window.performance.timing;
-                this.metrics.pageLoadTime = timing.loadEventEnd - timing.navigationStart;
-                
-                window.addEventListener('load', () => {
-                    setTimeout(() => {
-                        this.updateMetricsDisplay();
-                    }, 100);
+                actions.forEach(function(action) {
+                    var btn = document.createElement('button');
+                    btn.className = 'captcha-error-action-btn' + (action.secondary ? ' secondary' : '');
+                    btn.innerHTML = '<i class="' + (action.icon || 'fas fa-redo') + '"></i>' + action.label;
+                    btn.onclick = action.onClick;
+                    actionsContainer.appendChild(btn);
                 });
-            }
-        }
 
-        updateMetricsDisplay() {
-            const metricsEl = document.getElementById('performanceMetrics');
-            if (metricsEl) {
-                const loadTimeEl = document.getElementById('pageLoadTime');
-                if (loadTimeEl) {
-                    loadTimeEl.textContent = this.metrics.pageLoadTime + 'ms';
-                    loadTimeEl.className = 'metric-value ' + this.getMetricClass(this.metrics.pageLoadTime, 2000);
+                errorEl.querySelector('.captcha-error-message-content').appendChild(actionsContainer);
+            }
+
+            errorEl.style.display = 'flex';
+            errorEl.setAttribute('role', 'alert');
+            errorEl.setAttribute('aria-live', 'assertive');
+
+            return errorEl;
+        },
+
+        // 隐藏错误消息
+        hide: function(type) {
+            var errorEl = document.getElementById(type + 'ErrorMessage');
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+        },
+
+        // 获取错误建议
+        getSuggestion: function(errorCode) {
+            var suggestions = {
+                'timeout': {
+                    title: '网络连接超时',
+                    suggestion: '请检查网络连接后重试',
+                    actions: [
+                        { label: '重试', icon: 'fas fa-redo', onClick: function() { window.refreshCaptcha(); } }
+                    ]
+                },
+                'network': {
+                    title: '网络连接失败',
+                    suggestion: '请检查您的网络设置，确保网络畅通',
+                    actions: [
+                        { label: '重试', icon: 'fas fa-redo', onClick: function() { window.refreshCaptcha(); } },
+                        { label: '检查网络', icon: 'fas fa-wifi', onClick: function() { window.open('https://www.google.com', '_blank'); } }
+                    ]
+                },
+                'invalid': {
+                    title: '验证码无效',
+                    suggestion: '验证码可能已过期或无效，请刷新获取新的验证码',
+                    actions: [
+                        { label: '刷新验证码', icon: 'fas fa-sync', onClick: function() { window.refreshCaptcha(); } }
+                    ]
+                },
+                'expired': {
+                    title: '验证码已过期',
+                    suggestion: '验证码已过期，请刷新获取新的验证码',
+                    actions: [
+                        { label: '获取新验证码', icon: 'fas fa-sync', onClick: function() { window.refreshCaptcha(); } }
+                    ]
+                },
+                'retry': {
+                    title: '操作过于频繁',
+                    suggestion: '请稍后重试，避免频繁操作',
+                    actions: [
+                        { label: '稍后重试', icon: 'fas fa-clock', onClick: function() { window.CaptchaToast.info('请5秒后重试'); } }
+                    ]
+                },
+                'server': {
+                    title: '服务器错误',
+                    suggestion: '服务器暂时不可用，请稍后重试',
+                    actions: [
+                        { label: '重试', icon: 'fas fa-redo', onClick: function() { window.refreshCaptcha(); } }
+                    ]
+                },
+                'default': {
+                    title: '操作失败',
+                    suggestion: '请稍后重试，如果问题持续存在请联系支持',
+                    actions: [
+                        { label: '重试', icon: 'fas fa-redo', onClick: function() { window.refreshCaptcha(); } }
+                    ]
                 }
-            }
-        }
+            };
 
-        getMetricClass(value, threshold) {
-            if (value < threshold * 0.5) return 'good';
-            if (value < threshold) return 'warning';
-            return 'bad';
+            return suggestions[errorCode] || suggestions['default'];
         }
-    }
-
-    // 导出到全局
-    window.CaptchaUIPack = {
-        EnhancedSliderCaptcha,
-        EnhancedClickCaptcha,
-        CDNResourceMonitor,
-        PerformanceMonitor,
-        showSuccessCelebration,
-        showEnhancedError,
-        showEnhancedSuccess
     };
 
-    // 初始化
-    document.addEventListener('DOMContentLoaded', () => {
-        // 监控CDN资源
-        new CDNResourceMonitor();
-        
-        // 初始化性能监控
-        new PerformanceMonitor();
-        
-        // 自动初始化增强的滑块验证
-        document.querySelectorAll('[data-captcha-slider]').forEach(el => {
-            new EnhancedSliderCaptcha(el);
+    // 加载状态管理器
+    window.CaptchaLoadingManager = {
+        show: function(container, type) {
+            type = type || 'spinner';
+
+            var loadingEl = document.createElement('div');
+            loadingEl.className = 'captcha-loading-' + type;
+            loadingEl.setAttribute('role', 'status');
+            loadingEl.setAttribute('aria-label', '加载中');
+
+            if (type === 'spinner') {
+                loadingEl.innerHTML = '<div class="captcha-loading-spinner"></div>';
+            } else if (type === 'dots') {
+                loadingEl.innerHTML = '<div class="captcha-loading-dots"><span></span><span></span><span></span></div>';
+            } else if (type === 'wave') {
+                loadingEl.innerHTML = '<div class="captcha-loading-wave"><div></div><div></div><div></div><div></div><div></div></div>';
+            } else if (type === 'pulse') {
+                loadingEl.innerHTML = '<div class="captcha-loading-pulse"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>';
+            }
+
+            container.appendChild(loadingEl);
+            container.classList.add('captcha-loading');
+
+            return loadingEl;
+        },
+
+        hide: function(container) {
+            var loadingEl = container.querySelector('[role="status"]');
+            if (loadingEl) {
+                loadingEl.style.opacity = '0';
+                loadingEl.style.transform = 'scale(0.8)';
+                setTimeout(function() {
+                    if (loadingEl.parentNode) {
+                        loadingEl.parentNode.removeChild(loadingEl);
+                    }
+                }, 300);
+            }
+            container.classList.remove('captcha-loading');
+        }
+    };
+
+    // 骨架屏管理器
+    window.CaptchaSkeletonManager = {
+        create: function(container, type) {
+            type = type || 'text';
+
+            var skeletonEl = document.createElement('div');
+            skeletonEl.className = 'captcha-skeleton';
+
+            if (type === 'text') {
+                skeletonEl.className += ' captcha-skeleton-text';
+            } else if (type === 'title') {
+                skeletonEl.className += ' captcha-skeleton-title';
+            } else if (type === 'avatar') {
+                skeletonEl.className += ' captcha-skeleton-avatar';
+            } else if (type === 'button') {
+                skeletonEl.className += ' captcha-skeleton-button';
+            } else if (type === 'image') {
+                skeletonEl.className += ' captcha-skeleton-image';
+            } else if (type === 'paragraph') {
+                skeletonEl.className += ' captcha-skeleton-paragraph';
+                skeletonEl.innerHTML = '<span></span><span></span><span></span><span></span>';
+            }
+
+            container.appendChild(skeletonEl);
+            return skeletonEl;
+        },
+
+        remove: function(skeletonEl) {
+            if (skeletonEl && skeletonEl.parentNode) {
+                skeletonEl.parentNode.removeChild(skeletonEl);
+            }
+        }
+    };
+
+    // 性能监控增强
+    window.CaptchaPerformanceMonitor = {
+        metrics: {
+            pageLoad: 0,
+            firstContentfulPaint: 0,
+            domInteractive: 0,
+            largestContentfulPaint: 0
+        },
+
+        init: function() {
+            var self = this;
+
+            if (window.PerformanceObserver) {
+                // 首次内容绘制
+                var fcpObserver = new PerformanceObserver(function(list) {
+                    for (var entry of list.getEntries()) {
+                        if (entry.name === 'first-contentful-paint') {
+                            self.metrics.firstContentfulPaint = Math.round(entry.startTime);
+                        }
+                    }
+                });
+                fcpObserver.observe({ entryTypes: ['paint'] });
+
+                // 最大内容绘制
+                var lcpObserver = new PerformanceObserver(function(list) {
+                    var entries = list.getEntries();
+                    var lastEntry = entries[entries.length - 1];
+                    self.metrics.largestContentfulPaint = Math.round(lastEntry.startTime);
+                });
+                lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
+
+                // DOM交互时间
+                if (document.readyState === 'complete') {
+                    self.metrics.domInteractive = Math.round(performance.timing.domInteractive - performance.timing.navigationStart);
+                } else {
+                    window.addEventListener('load', function() {
+                        self.metrics.domInteractive = Math.round(performance.timing.domInteractive - performance.timing.navigationStart);
+                    });
+                }
+            }
+
+            window.addEventListener('load', function() {
+                self.metrics.pageLoad = Math.round(performance.timing.loadEventEnd - performance.timing.navigationStart);
+                self.updateDisplay();
+            });
+        },
+
+        updateDisplay: function() {
+            var pageLoadEl = document.getElementById('pageLoadTime');
+            if (pageLoadEl) {
+                pageLoadEl.textContent = this.metrics.pageLoad + 'ms';
+                pageLoadEl.className = 'metric-value ' + (this.metrics.pageLoad < 2000 ? 'good' : this.metrics.pageLoad < 4000 ? 'warning' : 'bad');
+            }
+        },
+
+        getMetrics: function() {
+            return this.metrics;
+        }
+    };
+
+    // 初始化性能监控
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            window.CaptchaPerformanceMonitor.init();
         });
-        
-        // 自动初始化增强的点选验证
-        document.querySelectorAll('[data-captcha-click]').forEach(el => {
-            new EnhancedClickCaptcha(el);
-        });
+    } else {
+        window.CaptchaPerformanceMonitor.init();
+    }
+
+    // 无障碍增强
+    window.CaptchaAccessibilityEnhancer = {
+        // 焦点管理
+        focusFirst: function(container) {
+            var focusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (focusable.length > 0) {
+                focusable[0].focus();
+            }
+        },
+
+        // 陷阱焦点（模态框中使用）
+        trapFocus: function(container) {
+            var focusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            var firstFocusable = focusable[0];
+            var lastFocusable = focusable[focusable.length - 1];
+
+            container.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    if (e.shiftKey) {
+                        if (document.activeElement === firstFocusable) {
+                            e.preventDefault();
+                            lastFocusable.focus();
+                        }
+                    } else {
+                        if (document.activeElement === lastFocusable) {
+                            e.preventDefault();
+                            firstFocusable.focus();
+                        }
+                    }
+                }
+            });
+        },
+
+        // 区域公告
+        announce: function(message, priority) {
+            priority = priority || 'polite';
+
+            var announcer = document.createElement('div');
+            announcer.setAttribute('aria-live', priority);
+            announcer.setAttribute('aria-atomic', 'true');
+            announcer.className = 'sr-only';
+            announcer.textContent = message;
+            document.body.appendChild(announcer);
+
+            setTimeout(function() {
+                if (announcer.parentNode) {
+                    announcer.parentNode.removeChild(announcer);
+                }
+            }, 1000);
+
+            return announcer;
+        }
+    };
+
+    // 网络状态监听
+    window.CaptchaNetworkMonitor = {
+        isOnline: true,
+
+        init: function() {
+            var self = this;
+            this.isOnline = navigator.onLine;
+
+            window.addEventListener('online', function() {
+                self.isOnline = true;
+                self.onStatusChange(true);
+            });
+
+            window.addEventListener('offline', function() {
+                self.isOnline = false;
+                self.onStatusChange(false);
+            });
+        },
+
+        onStatusChange: function(online) {
+            var statusEl = document.getElementById('networkStatus');
+            if (statusEl) {
+                if (!online) {
+                    statusEl.innerHTML = '<i class="fas fa-wifi me-1"></i><span>网络连接已断开，请检查网络</span>';
+                    statusEl.classList.add('show');
+                    statusEl.setAttribute('role', 'alert');
+                    statusEl.setAttribute('aria-live', 'assertive');
+
+                    window.CaptchaAccessibilityEnhancer.announce('网络连接已断开', 'assertive');
+                } else {
+                    statusEl.innerHTML = '<i class="fas fa-wifi me-1"></i><span>网络连接已恢复</span>';
+                    statusEl.classList.add('show');
+
+                    setTimeout(function() {
+                        statusEl.classList.remove('show');
+                    }, 3000);
+
+                    window.CaptchaAccessibilityEnhancer.announce('网络连接已恢复', 'polite');
+                }
+            }
+        }
+    };
+
+    // 初始化网络监控
+    window.CaptchaNetworkMonitor.init();
+
+    // 导出API
+    window.CaptchaUI = Object.assign(window.CaptchaUI || {}, {
+        error: window.CaptchaErrorManager,
+        loading: window.CaptchaLoadingManager,
+        skeleton: window.CaptchaSkeletonManager,
+        performance: window.CaptchaPerformanceMonitor,
+        accessibility: window.CaptchaAccessibilityEnhancer,
+        network: window.CaptchaNetworkMonitor
     });
 
 })();

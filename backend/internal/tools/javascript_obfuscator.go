@@ -701,9 +701,9 @@ func (o *Obfuscator) encryptStringRot13(s string) string {
 	var encrypted strings.Builder
 	for _, c := range s {
 		if c >= 'a' && c <= 'z' {
-			encrypted.WriteByte((c-'a'+13)%26 + 'a')
+			encrypted.WriteByte(byte((c-'a'+13)%26 + 'a'))
 		} else if c >= 'A' && c <= 'Z' {
-			encrypted.WriteByte((c-'A'+13)%26 + 'A')
+			encrypted.WriteByte(byte((c-'A'+13)%26 + 'A'))
 		} else {
 			encrypted.WriteByte(byte(c))
 		}

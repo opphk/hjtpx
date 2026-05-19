@@ -1080,6 +1080,382 @@ POST /captcha/3d/verify
 ---
 
 ### 语音验证码
+### 3D验证码
+### Emoji验证码
+### 生物特征验证接口
+### 白标定制接口
+### 高级分析接口
+### Webhook接口
+5. [错误码](#错误码)
+6. [示例](#示例)
+
+---
+
+## Emoji验证码
+
+### 生成Emoji验证码
+
+```
+POST /captcha/emoji/create
+```
+
+**请求参数：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+| count | int | 否 | Emoji数量（3-6），默认4 |
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_emoji_xxx",
+    "background_image": "data:image/png;base64...",
+    "emojis": [
+      {"id": 1, "emoji": "🐱", "target": true, "x": 50, "y": 50},
+      {"id": 2, "emoji": "🐶", "target": false, "x": 150, "y": 50},
+      {"id": 3, "emoji": "🐰", "target": true, "x": 250, "y": 50},
+      {"id": 4, "emoji": "🐼", "target": false, "x": 100, "y": 150}
+    ],
+    "target_emojis": ["🐱", "🐰"],
+    "difficulty": "medium",
+    "count": 4
+  }
+}
+```
+
+### 验证Emoji验证码
+
+```
+POST /captcha/emoji/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_emoji_xxx",
+  "selected_ids": [1, 3],
+  "behavior_data": [...]
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "accuracy": 1.0,
+    "risk_score": 9.2,
+    "captcha_pass": true
+  }
+}
+```
+
+---
+
+## 生物特征验证接口
+
+### 注册生物特征档案
+
+```
+POST /api/v1/biometrics/register
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "user_id": "user_123456",
+  "keyboard_sample": {
+    "typing_speed": 85.5,
+    "total_chars": 256,
+    "dwell_time_avg": 120.3,
+    "flight_time_avg": 80.5,
+    "error_rate": 0.02
+  },
+  "mouse_sample": {
+    "movement_speed_avg": 250.5,
+    "click_frequency": 3.2,
+    "scroll_behavior": "normal"
+  }
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "profile_id": "profile_123456",
+    "enrollment_status": "completed",
+    "confidence_score": 0.92
+  }
+}
+```
+
+### 验证生物特征
+
+```
+POST /api/v1/biometrics/verify
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "user_id": "user_123456",
+  "keyboard_sample": {
+    "typing_speed": 84.8,
+    "total_chars": 200,
+    "dwell_time_avg": 118.5,
+    "flight_time_avg": 82.1,
+    "error_rate": 0.015
+  }
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "match": true,
+    "confidence": 0.88,
+    "risk_score": 5.5
+  }
+}
+```
+
+---
+
+## 白标定制接口
+
+### 获取白标配置
+
+```
+GET /api/v1/whitelabel/config
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "brand_name": "YourBrand",
+    "primary_color": "#1890ff",
+    "success_color": "#52c41a",
+    "warning_color": "#faad14",
+    "danger_color": "#f5222d",
+    "logo_url": "https://example.com/logo.png",
+    "favicon_url": "https://example.com/favicon.ico",
+    "custom_css": ".captcha-container { border-radius: 8px; }",
+    "is_enabled": true
+  }
+}
+```
+
+### 更新白标配置
+
+```
+PUT /api/v1/whitelabel/config
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "brand_name": "NewBrand",
+  "primary_color": "#722ed1",
+  "custom_css": ".captcha-container { border-radius: 12px; }",
+  "is_enabled": true
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "message": "whitelabel config updated successfully",
+    "config": {
+      "brand_name": "NewBrand",
+      "primary_color": "#722ed1",
+      "is_enabled": true
+    }
+  }
+}
+```
+
+### 获取白标CSS
+
+```
+GET /api/v1/whitelabel/css
+```
+
+返回动态生成的CSS样式。
+
+---
+
+## 高级分析接口
+
+### 行为轨迹分析
+
+```
+POST /api/v1/behavior/analyze
+Content-Type: application/json
+
+{
+  "session_id": "sess_123456",
+  "trajectory_data": [
+    {"x": 0, "y": 100, "timestamp": 1715000001000, "event": "move"},
+    {"x": 50, "y": 102, "timestamp": 1715000001050, "event": "move"},
+    {"x": 100, "y": 98, "timestamp": 1715000001100, "event": "move"},
+    {"x": 150, "y": 101, "timestamp": 1715000001150, "event": "move"}
+  ],
+  "captcha_type": "slider",
+  "device_id": "device_123456"
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "human_probability": 0.92,
+    "risk_score": 15.5,
+    "features": {
+      "dtw_distance": 12.3,
+      "velocity_variance": 2.8,
+      "acceleration_pattern": "natural",
+      "entropy": 0.85
+    },
+    "anomalies": []
+  }
+}
+```
+
+### 意图识别
+
+```
+POST /api/v1/behavior/intent
+Content-Type: application/json
+
+{
+  "session_id": "sess_123456",
+  "behavior_sequence": [
+    {"event": "page_load", "timestamp": 1715000000000},
+    {"event": "mouse_move", "timestamp": 1715000000500},
+    {"event": "focus_input", "timestamp": 1715000002000},
+    {"event": "type", "timestamp": 1715000002500}
+  ],
+  "context": {
+    "page_type": "login",
+    "user_authenticated": false
+  }
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "primary_intent": "user_login",
+    "confidence": 0.89,
+    "secondary_intents": ["form_filling"],
+    "risk_level": "low"
+  }
+}
+```
+
+---
+
+## Webhook接口
+
+### 配置Webhook
+
+```
+POST /api/v1/webhooks
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "url": "https://your-server.com/webhook",
+  "events": ["verification.success", "verification.failed", "risk.detected"],
+  "secret": "your-webhook-secret",
+  "enabled": true
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "webhook_id": "wh_123456",
+    "url": "https://your-server.com/webhook",
+    "events": ["verification.success", "verification.failed", "risk.detected"],
+    "status": "active",
+    "created_at": "2026-05-18T10:00:00Z"
+  }
+}
+```
+
+### 测试Webhook
+
+```
+POST /api/v1/webhooks/:id/test
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "webhook_id": "wh_123456",
+    "test_result": "delivered",
+    "response_time_ms": 150,
+    "status_code": 200
+  }
+}
+```
+
+### Webhook事件 payload 示例
+
+```json
+{
+  "event": "verification.success",
+  "timestamp": "2026-05-18T10:30:00Z",
+  "data": {
+    "session_id": "sess_123456",
+    "captcha_type": "slider",
+    "risk_score": 12.5,
+    "user_id": "user_123456",
+    "ip_address": "192.168.1.100",
+    "user_agent": "Mozilla/5.0..."
+  }
+}
+```
+
+### 语音验证码
 
 #### 生成语音验证码
 
@@ -1780,6 +2156,21 @@ if (error.code === 10001) {
 }
 ```
 
+```go
+// Go语言后端处理示例
+if err.Code == 10001 {
+    log.Printf("验证码验证失败: session=%s", sessionID)
+    return c.JSON(400, gin.H{
+        "code": 10001,
+        "message": "验证失败",
+        "data": gin.H{
+            "retry_allowed": true,
+            "remaining_attempts": remainingAttempts,
+        },
+    })
+}
+```
+
 #### 10002 - Session过期
 
 **原因分析**：
@@ -1792,6 +2183,147 @@ if (error.code === 10001) {
 if (error.code === 10002) {
     // 重新获取验证码
     getNewCaptcha();
+}
+```
+
+```go
+if err.Code == 10002 {
+    // 生成新的验证码
+    newCaptcha, _ := client.GenerateSliderCaptcha()
+    return c.JSON(200, gin.H{
+        "code": 10002,
+        "message": "Session已过期，已自动刷新",
+        "data": newCaptcha,
+    })
+}
+```
+
+#### 10003 - 参数错误
+
+**原因分析**：
+- 必填参数缺失
+- 参数格式不正确
+- 参数值超出有效范围
+
+**详细错误响应示例**：
+```json
+{
+  "code": 10003,
+  "message": "参数错误",
+  "data": {
+    "field": "session_id",
+    "reason": "会话ID不能为空",
+    "expected": "string",
+    "received": "null"
+  }
+}
+```
+
+#### 10004 - 验证码类型不支持
+
+**原因分析**：
+- 使用了未启用的验证码类型
+- 应用未配置该验证码类型
+
+**处理建议**：
+```go
+if err.Code == 10004 {
+    // 获取应用支持的验证码类型
+    app, _ := client.GetApplication(appID)
+    supportedTypes := app.SupportedCaptchaTypes
+    return c.JSON(400, gin.H{
+        "code": 10004,
+        "message": "不支持的验证码类型",
+        "data": gin.H{
+            "supported_types": supportedTypes,
+            "requested_type": requestedType,
+        },
+    })
+}
+```
+
+#### 10005 - 验证码已过期
+
+**原因分析**：
+- 验证码超过有效期（默认300秒）
+- 用户操作时间过长
+
+**处理建议**：
+```javascript
+if (error.code === 10005) {
+    alert('验证码已过期，请重新获取');
+    captchaWidget.reset();
+}
+```
+
+#### 10006 - 验证过于频繁
+
+**原因分析**：
+- 单个用户在短时间内验证次数过多
+- 触发了频率限制规则
+
+**处理建议**：
+```go
+if err.Code == 10006 {
+    retryAfter := time.Now().Add(30 * time.Second)
+    c.Header("Retry-After", "30")
+    return c.JSON(429, gin.H{
+        "code": 10006,
+        "message": "验证过于频繁，请稍后再试",
+        "data": gin.H{
+            "retry_after": retryAfter.Unix(),
+            "wait_seconds": 30,
+        },
+    })
+}
+```
+
+#### 10007 - 验证次数超限
+
+**原因分析**：
+- 单个验证码验证次数超过限制（默认3次）
+- 多次失败后被临时封禁
+
+**处理建议**：
+```javascript
+if (error.code === 10007) {
+    alert('验证次数已用完，请重新获取验证码');
+    // 禁用验证按钮
+    verifyButton.disabled = true;
+    // 等待一段时间后重新启用
+    setTimeout(() => {
+        verifyButton.disabled = false;
+        refreshCaptcha();
+    }, 60000);
+}
+```
+
+#### 10008 - 行为风险过高
+
+**原因分析**：
+- 轨迹数据表现出机器人特征
+- 检测到自动化工具特征
+- 行为模式异常
+
+**处理建议**：
+```go
+if err.Code == 10008 {
+    // 记录风控事件
+    logSecurityEvent("high_risk_behavior", gin.H{
+        "session_id": sessionID,
+        "risk_score": riskScore,
+        "user_id": userID,
+        "ip": clientIP,
+    })
+    // 触发额外验证或直接拒绝
+    return c.JSON(200, gin.H{
+        "code": 10008,
+        "message": "检测到异常行为，请进行额外验证",
+        "data": gin.H{
+            "action": "require_mfa",
+            "risk_level": "high",
+        },
+    })
 }
 ```
 
@@ -2720,6 +3252,372 @@ class SensitiveOperationHandler {
 
         return response.ok;
     }
+}
+```
+
+### 场景6：生物特征验证集成
+
+```go
+// Go语言生物特征验证示例
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+type KeyboardSample struct {
+    TypingSpeed   float64
+    TotalChars    int
+    DwellTimeAvg  float64
+    FlightTimeAvg float64
+    ErrorRate     float64
+}
+
+type MouseSample struct {
+    MovementSpeedAvg float64
+    ClickFrequency   float64
+    ScrollBehavior   string
+}
+
+func main() {
+    // 1. 注册生物特征档案
+    keyboardSample := &KeyboardSample{
+        TypingSpeed:   85.5,
+        TotalChars:    256,
+        DwellTimeAvg:  120.3,
+        FlightTimeAvg: 80.5,
+        ErrorRate:     0.02,
+    }
+
+    mouseSample := &MouseSample{
+        MovementSpeedAvg: 250.5,
+        ClickFrequency:   3.2,
+        ScrollBehavior:   "normal",
+    }
+
+    profile, err := biometricsService.RegisterProfile("user_123456", keyboardSample, mouseSample)
+    if err != nil {
+        fmt.Printf("注册失败: %v\n", err)
+        return
+    }
+    fmt.Printf("生物特征档案已注册: %s\n", profile.ID)
+
+    // 2. 验证生物特征
+    verifySample := &KeyboardSample{
+        TypingSpeed:   84.8,
+        TotalChars:    200,
+        DwellTimeAvg:  118.5,
+        FlightTimeAvg: 82.1,
+        ErrorRate:     0.015,
+    }
+
+    result, err := biometricsService.Verify("user_123456", verifySample, nil)
+    if err != nil {
+        fmt.Printf("验证失败: %v\n", err)
+        return
+    }
+
+    if result.Match {
+        fmt.Printf("生物特征匹配成功，置信度: %.2f%%\n", result.Confidence*100)
+    } else {
+        fmt.Printf("生物特征不匹配，可信度: %.2f%%\n", result.Confidence*100)
+    }
+}
+```
+
+### 场景7：Webhook集成
+
+```go
+// Go语言Webhook处理示例
+package main
+
+import (
+    "crypto/hmac"
+    "crypto/sha256"
+    "encoding/hex"
+    "fmt"
+    "io"
+    "net/http"
+)
+
+type WebhookEvent struct {
+    Event     string      `json:"event"`
+    Timestamp string      `json:"timestamp"`
+    Data      interface{} `json:"data"`
+}
+
+func webhookHandler(w http.ResponseWriter, r *http.Request) {
+    // 1. 验证签名
+    signature := r.Header.Get("X-Webhook-Signature")
+    body, _ := io.ReadAll(r.Body)
+    
+    if !verifySignature(body, signature, "your-webhook-secret") {
+        http.Error(w, "Invalid signature", http.StatusUnauthorized)
+        return
+    }
+
+    // 2. 解析事件
+    var event WebhookEvent
+    if err := json.Unmarshal(body, &event); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+    // 3. 处理不同类型的事件
+    switch event.Event {
+    case "verification.success":
+        handleVerificationSuccess(event.Data)
+    case "verification.failed":
+        handleVerificationFailed(event.Data)
+    case "risk.detected":
+        handleRiskDetected(event.Data)
+    default:
+        fmt.Printf("未知事件类型: %s\n", event.Event)
+    }
+
+    w.WriteHeader(http.StatusOK)
+}
+
+func verifySignature(payload []byte, signature, secret string) bool {
+    mac := hmac.New(sha256.New, []byte(secret))
+    mac.Write(payload)
+    expected := hex.EncodeToString(mac.Sum(nil))
+    return hmac.Equal([]byte(signature), []byte(expected))
+}
+```
+
+### 场景8：白标定制集成
+
+```javascript
+// 前端白标定制示例
+class WhitelabelCaptcha {
+    constructor() {
+        this.config = null;
+    }
+
+    async loadConfig() {
+        const response = await fetch('/api/v1/whitelabel/config', {
+            headers: {
+                'Authorization': `Bearer ${getAdminToken()}`
+            }
+        });
+        this.config = await response.json();
+        this.applyStyles();
+    }
+
+    applyStyles() {
+        if (!this.config || !this.config.data) return;
+
+        const { primary_color, success_color, custom_css } = this.config.data;
+
+        // 应用主色调
+        document.documentElement.style.setProperty('--captcha-primary', primary_color);
+        document.documentElement.style.setProperty('--captcha-success', success_color);
+
+        // 应用自定义CSS
+        if (custom_css) {
+            const style = document.createElement('style');
+            style.textContent = custom_css;
+            document.head.appendChild(style);
+        }
+
+        // 更新品牌名称
+        if (this.config.data.brand_name) {
+            document.title = `${this.config.data.brand_name} - Captcha`;
+        }
+    }
+
+    async updateConfig(updates) {
+        const response = await fetch('/api/v1/whitelabel/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAdminToken()}`
+            },
+            body: JSON.stringify(updates)
+        });
+
+        if (response.ok) {
+            await this.loadConfig();
+        }
+    }
+}
+
+// 使用示例
+const captcha = new WhitelabelCaptcha();
+await captcha.loadConfig();
+
+// 更新配置
+await captcha.updateConfig({
+    brand_name: 'MyBrand',
+    primary_color: '#722ed1',
+    custom_css: '.captcha-container { border-radius: 12px; }'
+});
+```
+
+### 场景9：批量验证处理
+
+```go
+// Go语言批量验证示例
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type CaptchaBatch struct {
+    client *CaptchaClient
+    results chan *VerifyResult
+    errors  chan error
+}
+
+func NewBatch(client *CaptchaClient) *CaptchaBatch {
+    return &CaptchaBatch{
+        client:  client,
+        results: make(chan *VerifyResult, 100),
+        errors:  make(chan error, 100),
+    }
+}
+
+func (b *CaptchaBatch) ProcessBatch(sessions []string) map[string]*VerifyResult {
+    var wg sync.WaitGroup
+    results := make(map[string]*VerifyResult)
+    var mu sync.Mutex
+
+    for _, sessionID := range sessions {
+        wg.Add(1)
+        go func(sid string) {
+            defer wg.Done()
+
+            result, err := b.client.VerifySliderCaptcha(sid, "160")
+            if err != nil {
+                b.errors <- fmt.Errorf("session %s: %v", sid, err)
+                return
+            }
+
+            mu.Lock()
+            results[sid] = result
+            mu.Unlock()
+        }(sessionID)
+    }
+
+    wg.Wait()
+    close(b.results)
+    close(b.errors)
+
+    return results
+}
+
+// 使用示例
+func main() {
+    client := captcha.NewCaptchaClient("app-id", "app-secret", nil)
+    defer client.Close()
+
+    batch := NewBatch(client)
+
+    sessions := []string{
+        "sess_001", "sess_002", "sess_003",
+        "sess_004", "sess_005",
+    }
+
+    start := time.Now()
+    results := batch.ProcessBatch(sessions)
+    duration := time.Since(start)
+
+    fmt.Printf("批量处理完成，耗时: %v\n", duration)
+    fmt.Printf("成功处理: %d/%d\n", len(results), len(sessions))
+
+    for sid, result := range results {
+        fmt.Printf("Session %s: 成功=%v, 风险分数=%.2f\n",
+            sid, result.Success, result.Score)
+    }
+}
+```
+
+### 场景10：高并发场景处理
+
+```go
+// Go语言高并发验证码处理
+package main
+
+import (
+    "context"
+    "fmt"
+    "golang.org/x/time/rate"
+    "sync"
+    "time"
+)
+
+type RateLimitedClient struct {
+    client  *CaptchaClient
+    limiter *rate.Limiter
+    results chan *VerifyResult
+    errors  chan error
+}
+
+func NewRateLimitedClient(qps float64) *RateLimitedClient {
+    return &RateLimitedClient{
+        client:  captcha.NewCaptchaClient("app-id", "app-secret", nil),
+        limiter: rate.NewLimiter(rate.Limit(qps), int(qps)),
+        results: make(chan *VerifyResult, 1000),
+        errors:  make(chan error, 100),
+    }
+}
+
+func (c *RateLimitedClient) ProcessWithLimit(ctx context.Context, sessions []string) {
+    var wg sync.WaitGroup
+
+    for _, sessionID := range sessions {
+        select {
+        case <-ctx.Done():
+            return
+        default:
+        }
+
+        wg.Add(1)
+        go func(sid string) {
+            defer wg.Done()
+
+            // 限速控制
+            if err := c.limiter.Wait(ctx); err != nil {
+                c.errors <- err
+                return
+            }
+
+            result, err := c.client.VerifySliderCaptcha(sid, "160")
+            if err != nil {
+                c.errors <- err
+                return
+            }
+
+            c.results <- result
+        }(sessionID)
+    }
+
+    wg.Wait()
+}
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    // 每秒处理100个请求
+    client := NewRateLimitedClient(100)
+
+    sessions := make([]string, 1000)
+    for i := range sessions {
+        sessions[i] = fmt.Sprintf("sess_%04d", i)
+    }
+
+    start := time.Now()
+    client.ProcessWithLimit(ctx, sessions)
+    duration := time.Since(start)
+
+    fmt.Printf("高并发处理完成，耗时: %v\n", duration)
+    fmt.Printf("处理速率: %.2f req/s\n", float64(1000)/duration.Seconds())
 }
 ```
 

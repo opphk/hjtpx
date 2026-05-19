@@ -1244,6 +1244,7 @@
 </head>
 <body>
     <!-- 跳转到主内容的快捷链接（无障碍访问） -->
+    <a href="#main-content" class="captcha-skip-link">跳转到主要内容</a>
     <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
     
     <!-- 网络状态提示 -->
@@ -1410,16 +1411,25 @@
                                 </div>
                                 
                                 <!-- 错误提示区域（统一错误样式） -->
-                                <div class="captcha-error-message" id="sliderErrorMessage" style="display: none;">
+                                <div class="captcha-error-message" id="sliderErrorMessage" style="display: none;" role="alert" aria-live="assertive">
                                     <div class="captcha-error-message-icon">
-                                        <i class="fas fa-exclamation-circle"></i>
+                                        <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
                                     </div>
                                     <div class="captcha-error-message-content">
                                         <div class="captcha-error-message-title" id="sliderErrorTitle">验证失败</div>
                                         <div class="captcha-error-message-text" id="sliderErrorText">请重试</div>
+                                        <div class="captcha-error-message-suggestion" id="sliderErrorSuggestion">
+                                            <div class="captcha-error-message-suggestion-title">
+                                                <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                                <span>建议</span>
+                                            </div>
+                                            <div class="captcha-error-message-suggestion-text" id="sliderErrorSuggestionText">
+                                                请检查网络连接后重试
+                                            </div>
+                                        </div>
                                     </div>
-                                    <button class="captcha-error-message-dismiss" type="button" onclick="dismissError('slider')" aria-label="关闭">
-                                        <i class="fas fa-times"></i>
+                                    <button class="captcha-error-message-dismiss" type="button" onclick="dismissError('slider')" aria-label="关闭错误提示">
+                                        <i class="fas fa-times" aria-hidden="true"></i>
                                     </button>
                                 </div>
                                 
@@ -1885,12 +1895,23 @@
                 var themeToggle = document.getElementById('themeToggle');
                 var themeIcon = document.getElementById('themeIcon');
                 var html = document.documentElement;
-                var savedTheme = localStorage.getItem('captcha-theme') || 'light';
                 var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var savedTheme = localStorage.getItem('captcha-theme');
                 
-                var initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
+                var initialTheme;
+                if (savedTheme && savedTheme !== 'auto') {
+                    initialTheme = savedTheme;
+                } else if (!savedTheme && prefersDark) {
+                    initialTheme = 'dark';
+                } else if (savedTheme === 'auto') {
+                    initialTheme = prefersDark ? 'dark' : 'light';
+                } else {
+                    initialTheme = 'light';
+                }
+                
                 html.setAttribute('data-bs-theme', initialTheme);
                 updateThemeIcon(initialTheme);
+                applyThemeToCards(initialTheme);
                 
                 if (themeToggle) {
                     themeToggle.addEventListener('click', toggleTheme);
@@ -1902,14 +1923,32 @@
                     });
                 }
                 
+                // 监听系统主题变化
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                    if (localStorage.getItem('captcha-theme') === 'auto' || !localStorage.getItem('captcha-theme')) {
+                        var newTheme = e.matches ? 'dark' : 'light';
+                        html.setAttribute('data-bs-theme', newTheme);
+                        updateThemeIcon(newTheme);
+                        applyThemeToCards(newTheme);
+                        announceToScreenReader('系统主题已切换到' + (newTheme === 'dark' ? '深色' : '浅色') + '模式');
+                    }
+                });
+                
                 function toggleTheme() {
                     var currentTheme = html.getAttribute('data-bs-theme');
                     var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    
+                    document.body.classList.add('captcha-theme-transitioning');
+                    
                     html.setAttribute('data-bs-theme', newTheme);
                     localStorage.setItem('captcha-theme', newTheme);
                     updateThemeIcon(newTheme);
                     applyThemeToCards(newTheme);
                     announceToScreenReader('主题已切换到' + (newTheme === 'dark' ? '深色' : '浅色') + '模式');
+                    
+                    setTimeout(function() {
+                        document.body.classList.remove('captcha-theme-transitioning');
+                    }, 300);
                 }
                 
                 function updateThemeIcon(theme) {
@@ -2002,6 +2041,34 @@
                             tabs[prevIndex].click();
                         }
                     });
+                });
+                
+                // 全局键盘快捷键
+                document.addEventListener('keydown', function(e) {
+                    // Alt + T: 切换主题
+                    if (e.altKey && e.key === 't') {
+                        e.preventDefault();
+                        document.getElementById('themeToggle').click();
+                    }
+                    // Alt + R: 刷新验证码
+                    if (e.altKey && e.key === 'r') {
+                        e.preventDefault();
+                        refreshCaptcha();
+                        announceToScreenReader('验证码已刷新');
+                    }
+                    // Alt + H: 高对比度模式
+                    if (e.altKey && e.key === 'h') {
+                        e.preventDefault();
+                        document.getElementById('contrastToggle').click();
+                    }
+                    // Escape: 关闭错误提示
+                    if (e.key === 'Escape') {
+                        var activeError = document.querySelector('.captcha-error-message[style*="flex"]');
+                        if (activeError) {
+                            var type = activeError.id.replace('ErrorMessage', '');
+                            dismissError(type);
+                        }
+                    }
                 });
             }
             
@@ -2230,15 +2297,20 @@
                         onSuccess: function(result) {
                             showResult(type, true, '验证成功！会话ID: ' + result.session_id);
                             CaptchaToast.success('验证成功！');
+                            announceToScreenReader('验证成功');
                             console.log('验证成功:', result);
                         },
                         onError: function(error) {
-                            showResult(type, false, '验证失败，请重试');
-                            CaptchaToast.error('验证失败，请重试');
+                            var errorCode = error.code || 'default';
+                            var errorMessage = error.message || '验证失败，请重试';
+                            showResult(type, false, errorMessage, errorCode);
+                            CaptchaToast.error(errorMessage);
+                            announceToScreenReader('验证失败：' + errorMessage);
                             console.log('验证失败:', error);
                         },
                         onRefresh: function() {
                             hideResult(type);
+                            announceToScreenReader('验证码已刷新');
                             console.log('验证码已刷新');
                         }
                     });
@@ -2309,15 +2381,19 @@
             };
             
             // 显示错误消息（统一样式）
-            function showErrorMessage(type, title, message) {
+            function showErrorMessage(type, title, message, suggestion) {
                 var errorEl = document.getElementById(type + 'ErrorMessage');
                 var titleEl = document.getElementById(type + 'ErrorTitle');
                 var textEl = document.getElementById(type + 'ErrorText');
+                var suggestionTextEl = document.getElementById(type + 'ErrorSuggestionText');
                 
                 if (!errorEl) return;
                 
                 if (titleEl) titleEl.textContent = title || '验证失败';
                 if (textEl) textEl.textContent = message || '请重试';
+                if (suggestionTextEl) {
+                    suggestionTextEl.textContent = suggestion || '请检查网络连接后重试';
+                }
                 
                 errorEl.style.display = 'flex';
                 errorEl.classList.remove('captcha-error-message');
@@ -2336,13 +2412,14 @@
             };
             
             // 显示结果
-            function showResult(type, success, message) {
+            function showResult(type, success, message, errorCode) {
                 var resultEl = document.getElementById(type + 'Result');
                 var textEl = document.getElementById(type + 'ResultText');
                 if (!resultEl || !textEl) return;
                 
                 if (!success) {
-                    showErrorMessage(type, '验证失败', message);
+                    var errorSuggestion = getErrorSuggestion(errorCode);
+                    showErrorMessage(type, '验证失败', message, errorSuggestion);
                 } else {
                     hideErrorMessage(type);
                 }
@@ -2356,6 +2433,19 @@
                 } else {
                     animateError(resultEl);
                 }
+            }
+            
+            // 根据错误代码获取错误建议
+            function getErrorSuggestion(errorCode) {
+                var suggestions = {
+                    'timeout': '网络连接超时，请检查网络后重试',
+                    'network': '网络连接失败，请检查您的网络设置',
+                    'invalid': '验证码无效，请刷新后重试',
+                    'expired': '验证码已过期，请刷新获取新的验证码',
+                    'retry': '操作过于频繁，请稍后重试',
+                    'default': '请检查网络连接后重试'
+                };
+                return suggestions[errorCode] || suggestions['default'];
             }
             
             // 隐藏结果

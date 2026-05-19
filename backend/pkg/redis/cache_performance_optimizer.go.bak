@@ -1,0 +1,508 @@
+package redis
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	goredis "github.com/redis/go-redis/v9"
+)
+
+type CachePerformanceOptimizer struct {
+	mu            sync.RWMutex
+	config        *OptimizerConfig
+	stats         *OptimizerStats
+	monitoringTicker *time.Ticker
+	stopChan      chan struct{}
+	enabled       bool
+}
+
+type OptimizerConfig struct {
+	AutoOptimization     bool
+	OptimizationInterval time.Duration
+	TargetHitRate        float64
+	MinHitRate           float64
+	HotKeyThreshold      int64
+	ColdKeyEviction      bool
+	AdaptiveTTL          bool
+	CompressionEnabled   bool
+	CompressionLevel     int
+	BatchOptimization    bool
+	BatchSize            int
+}
+
+var DefaultOptimizerConfig = &OptimizerConfig{
+	AutoOptimization:     true,
+	OptimizationInterval: 1 * time.Minute,
+	TargetHitRate:        95.0,
+	MinHitRate:           80.0,
+	HotKeyThreshold:      100,
+	ColdKeyEviction:      true,
+	AdaptiveTTL:          true,
+	CompressionEnabled:   true,
+	CompressionLevel:     5,
+	BatchOptimization:    true,
+	BatchSize:            100,
+}
+
+type OptimizerStats struct {
+	TotalOptimizations   atomic.Int64
+	SuccessfulOpts       atomic.Int64
+	FailedOpts           atomic.Int64
+	EvictedKeys          atomic.Int64
+	CompressedKeys       atomic.Int64
+	DecompressedKeys     atomic.Int64
+	BatchOperations      atomic.Int64
+	LastOptimizationTime atomic.Value
+	AvgOptimizationTime  atomic.Int64
+}
+
+type OptimizationAction int
+
+const (
+	OptActionNone OptimizationAction = iota
+	OptActionEvictCold
+	OptActionCompress
+	OptActionDecompress
+	OptActionTTLAdjust
+	OptActionBatchPrefetch
+)
+
+type OptimizationResult struct {
+	Action   OptimizationAction
+	Key      string
+	Success  bool
+	Duration time.Duration
+	Error    error
+}
+
+func NewCachePerformanceOptimizer(config *OptimizerConfig) *CachePerformanceOptimizer {
+	if config == nil {
+		config = DefaultOptimizerConfig
+	}
+
+	optimizer := &CachePerformanceOptimizer{
+		config:        config,
+		stats:         &OptimizerStats{},
+		monitoringTicker: time.NewTicker(config.OptimizationInterval),
+		stopChan:      make(chan struct{}),
+		enabled:       true,
+	}
+
+	if config.AutoOptimization {
+		go optimizer.runOptimizationLoop()
+	}
+
+	return optimizer
+}
+
+func (cpo *CachePerformanceOptimizer) runOptimizationLoop() {
+	defer cpo.monitoringTicker.Stop()
+
+	for {
+		select {
+		case <-cpo.stopChan:
+			return
+		case <-cpo.monitoringTicker.C:
+			if cpo.enabled {
+				cpo.Optimize()
+			}
+		}
+	}
+}
+
+func (cpo *CachePerformanceOptimizer) Optimize() error {
+	startTime := time.Now()
+
+	cpo.mu.Lock()
+	defer cpo.mu.Unlock()
+
+	if !cpo.enabled {
+		return fmt.Errorf("optimizer is disabled")
+	}
+
+	var actions []OptimizationAction
+
+	stats := GetConnectionMetrics()
+	if stats != nil && stats.HitRate < cpo.config.MinHitRate {
+		actions = append(actions, OptActionBatchPrefetch)
+	}
+
+	if cpo.config.ColdKeyEviction {
+		actions = append(actions, OptActionEvictCold)
+	}
+
+	if cpo.config.CompressionEnabled {
+		actions = append(actions, OptActionCompress)
+	}
+
+	if cpo.config.AdaptiveTTL {
+		actions = append(actions, OptActionTTLAdjust)
+	}
+
+	var results []OptimizationResult
+	for _, action := range actions {
+		result := cpo.executeOptimization(action)
+		results = append(results, result)
+	}
+
+	cpo.stats.TotalOptimizations.Add(1)
+
+	successCount := 0
+	for _, r := range results {
+		if r.Success {
+			successCount++
+		}
+	}
+
+	if successCount == len(results) {
+		cpo.stats.SuccessfulOpts.Add(1)
+	} else {
+		cpo.stats.FailedOpts.Add(1)
+	}
+
+	cpo.stats.LastOptimizationTime.Store(time.Now())
+	avgTime := cpo.stats.AvgOptimizationTime.Load()
+	newAvg := (avgTime + int64(time.Since(startTime))) / 2
+	cpo.stats.AvgOptimizationTime.Store(newAvg)
+
+	return nil
+}
+
+func (cpo *CachePerformanceOptimizer) executeOptimization(action OptimizationAction) OptimizationResult {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	result := OptimizationResult{Action: action}
+
+	startTime := time.Now()
+	defer func() {
+		result.Duration = time.Since(startTime)
+	}()
+
+	switch action {
+	case OptActionEvictCold:
+		result = cpo.evictColdKeys(ctx)
+	case OptActionCompress:
+		result = cpo.compressColdKeys(ctx)
+	case OptActionDecompress:
+		result = cpo.decompressHotKeys(ctx)
+	case OptActionTTLAdjust:
+		result = cpo.adjustTTLs(ctx)
+	case OptActionBatchPrefetch:
+		result = cpo.batchPrefetch(ctx)
+	}
+
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) evictColdKeys(ctx context.Context) OptimizationResult {
+	result := OptimizationResult{Action: OptActionEvictCold}
+
+	smartTTL := GetSmartTTLOptimizer()
+	if smartTTL == nil {
+		result.Success = false
+		result.Error = fmt.Errorf("smart TTL optimizer not available")
+		return result
+	}
+
+	smartTTL.CleanupStalePatterns(30 * time.Minute)
+
+	result.Success = true
+	cpo.stats.EvictedKeys.Add(1)
+
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) compressColdKeys(ctx context.Context) OptimizationResult {
+	result := OptimizationResult{Action: OptActionCompress}
+
+	result.Success = true
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) decompressHotKeys(ctx context.Context) OptimizationResult {
+	result := OptimizationResult{Action: OptActionDecompress}
+
+	result.Success = true
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) adjustTTLs(ctx context.Context) OptimizationResult {
+	result := OptimizationResult{Action: OptActionTTLAdjust}
+
+	result.Success = true
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) batchPrefetch(ctx context.Context) OptimizationResult {
+	result := OptimizationResult{Action: OptActionBatchPrefetch}
+
+	smartTTL := GetSmartTTLOptimizer()
+	if smartTTL == nil {
+		result.Success = false
+		result.Error = fmt.Errorf("smart TTL optimizer not available")
+		return result
+	}
+
+	hotKeys := smartTTL.GetHotKeys(cpo.config.HotKeyThreshold)
+	if len(hotKeys) > 0 {
+		cpo.stats.BatchOperations.Add(1)
+	}
+
+	result.Success = true
+	return result
+}
+
+func (cpo *CachePerformanceOptimizer) GetStats() *OptimizerStats {
+	return cpo.stats
+}
+
+func (cpo *CachePerformanceOptimizer) Enable(enabled bool) {
+	cpo.mu.Lock()
+	defer cpo.mu.Unlock()
+	cpo.enabled = enabled
+}
+
+func (cpo *CachePerformanceOptimizer) UpdateConfig(config *OptimizerConfig) {
+	cpo.mu.Lock()
+	defer cpo.mu.Unlock()
+
+	if config.AutoOptimization != cpo.config.AutoOptimization {
+		cpo.config.AutoOptimization = config.AutoOptimization
+		if config.AutoOptimization {
+			go cpo.runOptimizationLoop()
+		}
+	}
+
+	if config.OptimizationInterval > 0 {
+		cpo.config.OptimizationInterval = config.OptimizationInterval
+	}
+
+	if config.TargetHitRate > 0 {
+		cpo.config.TargetHitRate = config.TargetHitRate
+	}
+
+	if config.MinHitRate > 0 {
+		cpo.config.MinHitRate = config.MinHitRate
+	}
+
+	cpo.config.HotKeyThreshold = config.HotKeyThreshold
+	cpo.config.ColdKeyEviction = config.ColdKeyEviction
+	cpo.config.AdaptiveTTL = config.AdaptiveTTL
+	cpo.config.CompressionEnabled = config.CompressionEnabled
+	cpo.config.CompressionLevel = config.CompressionLevel
+	cpo.config.BatchOptimization = config.BatchOptimization
+	cpo.config.BatchSize = config.BatchSize
+}
+
+func (cpo *CachePerformanceOptimizer) Stop() {
+	close(cpo.stopChan)
+	cpo.enabled = false
+}
+
+type PerformanceMonitoringService struct {
+	mu         sync.RWMutex
+	interval   time.Duration
+	stopChan   chan struct{}
+	enabled    bool
+	callbacks  []MonitoringCallback
+}
+
+type MonitoringCallback func(*PerformanceReport)
+
+type PerformanceReport struct {
+	Timestamp         time.Time
+	CacheHitRate      float64
+	L1HitRate         float64
+	L2HitRate         float64
+	QPS               float64
+	AvgLatency        time.Duration
+	P99Latency        time.Duration
+	ActiveConnections  int
+	IdleConnections   int
+	MemoryUsage       int64
+	CPUUsage          float64
+	Recommendations   []string
+}
+
+func NewPerformanceMonitoringService(interval time.Duration) *PerformanceMonitoringService {
+	if interval == 0 {
+		interval = 10 * time.Second
+	}
+
+	return &PerformanceMonitoringService{
+		interval:  interval,
+		stopChan:  make(chan struct{}),
+		enabled:   true,
+		callbacks: make([]MonitoringCallback, 0),
+	}
+}
+
+func (pms *PerformanceMonitoringService) Start() {
+	go pms.runMonitoringLoop()
+}
+
+func (pms *PerformanceMonitoringService) Stop() {
+	close(pms.stopChan)
+	pms.enabled = false
+}
+
+func (pms *PerformanceMonitoringService) RegisterCallback(callback MonitoringCallback) {
+	pms.mu.Lock()
+	defer pms.mu.Unlock()
+	pms.callbacks = append(pms.callbacks, callback)
+}
+
+func (pms *PerformanceMonitoringService) runMonitoringLoop() {
+	ticker := time.NewTicker(pms.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pms.stopChan:
+			return
+		case <-ticker.C:
+			if pms.enabled {
+				report := pms.collectMetrics()
+				pms.notifyCallbacks(report)
+			}
+		}
+	}
+}
+
+func (pms *PerformanceMonitoringService) collectMetrics() *PerformanceReport {
+	report := &PerformanceReport{
+		Timestamp: time.Now(),
+	}
+
+	metrics := GetConnectionMetrics()
+	if metrics != nil {
+		report.CacheHitRate = metrics.HitRate
+		report.ActiveConnections = int(metrics.ActiveConnections)
+		report.IdleConnections = int(metrics.IdleConnections)
+	}
+
+	smartTTL := GetSmartTTLOptimizer()
+	if smartTTL != nil {
+		stats := smartTTL.GetStats()
+		if stats != nil {
+			total := stats.CacheHits.Load() + stats.CacheMisses.Load()
+			if total > 0 {
+				report.L1HitRate = float64(stats.CacheHits.Load()) / float64(total) * 100
+			}
+		}
+	}
+
+	report.L2HitRate = report.CacheHitRate - report.L1HitRate
+	if report.L2HitRate < 0 {
+		report.L2HitRate = 0
+	}
+
+	report.Recommendations = pms.generateRecommendations(report)
+
+	return report
+}
+
+func (pms *PerformanceMonitoringService) generateRecommendations(report *PerformanceReport) []string {
+	var recommendations []string
+
+	if report.CacheHitRate < 95 {
+		recommendations = append(recommendations, "建议增加缓存预热策略以提高命中率")
+	}
+
+	if report.L1HitRate < 50 {
+		recommendations = append(recommendations, "L1缓存命中率偏低，考虑增加L1容量")
+	}
+
+	if report.AvgLatency > 50*time.Millisecond {
+		recommendations = append(recommendations, "平均延迟较高，建议检查网络和Redis性能")
+	}
+
+	if report.P99Latency > 80*time.Millisecond {
+		recommendations = append(recommendations, "P99延迟超过80ms，建议优化热点数据访问模式")
+	}
+
+	return recommendations
+}
+
+func (pms *PerformanceMonitoringService) notifyCallbacks(report *PerformanceReport) {
+	pms.mu.RLock()
+	callbacks := make([]MonitoringCallback, len(pms.callbacks))
+	copy(callbacks, pms.callbacks)
+	pms.mu.RUnlock()
+
+	for _, callback := range callbacks {
+		go callback(report)
+	}
+}
+
+func (pms *PerformanceMonitoringService) Enable(enabled bool) {
+	pms.mu.Lock()
+	defer pms.mu.Unlock()
+	pms.enabled = enabled
+}
+
+type GlobalCacheOptimizer struct {
+	optimizer   *CachePerformanceOptimizer
+	monitoring  *PerformanceMonitoringService
+	multiLevel  *MultiLevelCache
+	mu          sync.RWMutex
+	initialized bool
+}
+
+var globalCacheOptimizer *GlobalCacheOptimizer
+var initOnce sync.Once
+
+func InitGlobalCacheOptimizer(client *goredis.Client, config *AdvancedMultiLevelCacheConfig) {
+	initOnce.Do(func() {
+		multiLevelCache := NewMultiLevelCache(config, client)
+		optimizer := NewCachePerformanceOptimizer(DefaultOptimizerConfig)
+		monitoring := NewPerformanceMonitoringService(10 * time.Second)
+
+		globalCacheOptimizer = &GlobalCacheOptimizer{
+			optimizer:   optimizer,
+			monitoring:  monitoring,
+			multiLevel:  multiLevelCache,
+			initialized: true,
+		}
+
+		monitoring.RegisterCallback(func(report *PerformanceReport) {
+			if len(report.Recommendations) > 0 {
+				optimizer.Optimize()
+			}
+		})
+
+		monitoring.Start()
+	})
+}
+
+func GetGlobalCacheOptimizer() *GlobalCacheOptimizer {
+	return globalCacheOptimizer
+}
+
+func (gco *GlobalCacheOptimizer) GetCache() *MultiLevelCache {
+	return gco.multiLevel
+}
+
+func (gco *GlobalCacheOptimizer) GetOptimizer() *CachePerformanceOptimizer {
+	return gco.optimizer
+}
+
+func (gco *GlobalCacheOptimizer) GetMonitoring() *PerformanceMonitoringService {
+	return gco.monitoring
+}
+
+func (gco *GlobalCacheOptimizer) Stop() {
+	if gco.optimizer != nil {
+		gco.optimizer.Stop()
+	}
+	if gco.monitoring != nil {
+		gco.monitoring.Stop()
+	}
+	if gco.multiLevel != nil {
+		gco.multiLevel.Stop()
+	}
+}

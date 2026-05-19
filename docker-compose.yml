@@ -26,14 +26,24 @@ services:
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
       - DATABASE_NAME=${POSTGRES_DB}
       - DATABASE_SSLMODE=${POSTGRES_SSLMODE:-disable}
+      - DATABASE_MAX_OPEN_CONNS=${DATABASE_MAX_OPEN_CONNS:-25}
+      - DATABASE_MAX_IDLE_CONNS=${DATABASE_MAX_IDLE_CONNS:-5}
+      - DATABASE_CONN_MAX_LIFETIME=${DATABASE_CONN_MAX_LIFETIME:-5m}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}
+      - REDIS_MIN_IDLE_CONNS=${REDIS_MIN_IDLE_CONNS:-5}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
       - GOMAXPROCS=${GOMAXPROCS:-2}
       - GOGC=${GOGC:-100}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PATH=${METRICS_PATH:-/metrics}
+      - HEALTH_CHECK_PATH=${HEALTH_CHECK_PATH:-/health}
     volumes:
       - ./logs:/var/log/hjtpx
       - ./config.yaml:/app/config.yaml:ro
@@ -42,7 +52,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
+      start_interval: 5s
     restart: unless-stopped
     deploy:
       resources:
@@ -58,11 +69,13 @@ services:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "3"
+        max-file: "5"
         compress: "true"
+        labels: "service,instance"
     labels:
       - "hjtpx.service=app"
       - "hjtpx.version=${BUILD_VERSION:-dev}"
+      - "hjtpx.environment=${ENVIRONMENT:-development}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     shm_size: '64mb'
@@ -71,6 +84,14 @@ services:
       nofile:
         soft: 65535
         hard: 65535
+    stop_grace_period: 30s
+    cpus: 1.0
+    cpu_count: 0
+    cpu_percent: 100
+    mem_limit: 512m
+    mem_reservation: 128m
+    OOM_score_adj: -500
+    pids_limit: 1024
 
   postgres:
     image: postgres:14-alpine
@@ -92,17 +113,26 @@ services:
       - POSTGRES_WORK_MEM=4MB
       - POSTGRES_MIN_WAL_SIZE=1GB
       - POSTGRES_MAX_WAL_SIZE=4GB
+      - POSTGRES_LOG_DESTINATION=stderr
+      - POSTGRES_LOGGING_COLLECTOR=on
+      - POSTGRES_LOG_DIRECTORY=log
+      - POSTGRES_LOG_ROTATION_AGE=1d
+      - POSTGRES_LOG_ROTATION_SIZE=100MB
+      - POSTGRES_LOG_MIN_DURATION_STATEMENT=1000
+      - POSTGRES_LOG_LINE_PREFIX=%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/docker/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - postgres_logs:/var/log/postgresql
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost && pg_settings=$(psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -t -c \"SELECT count(*) FROM pg_stat_activity WHERE state = 'active'\") && test $pg_settings -lt 90"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
+      start_interval: 5s
     restart: unless-stopped
     deploy:
       resources:
@@ -120,11 +150,19 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
+        labels: "service,instance"
     labels:
       - "hjtpx.service=postgres"
+      - "hjtpx.version=14-alpine"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     shm_size: '128mb'
+    stop_grace_period: 1m
+    cpus: 1.0
+    mem_limit: 1g
+    mem_reservation: 512m
+    OOM_score_adj: -500
+    pids_limit: 256
 
   redis:
     image: redis:7-alpine
@@ -132,6 +170,7 @@ services:
     command: >
       redis-server
       --appendonly yes
+      --appendfsync everysec
       --maxmemory ${REDIS_MAXMEMORY:-256mb}
       --maxmemory-policy allkeys-lru
       --maxmemory-samples 5
@@ -142,17 +181,32 @@ services:
       --activerehashing yes
       --hz 10
       --dynamic-hz yes
+      --loglevel notice
+      --logfile ""
+      --databases 16
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --stop-writes-on-bgsave-error yes
+      --rdbcompression yes
+      --rdbchecksum yes
+      --activerehashing yes
+      --client-output-buffer-limit normal 0 0 0
+      --client-output-buffer-limit replica 256mb 64mb 60
+      --client-output-buffer-limit pubsub 32mb 8mb 60
     volumes:
       - redis_data:/data
       - ./scripts/docker/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_logs:/var/log/redis
     ports:
       - "${REDIS_EXTERNAL_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
+      start_interval: 5s
     restart: unless-stopped
     deploy:
       resources:
@@ -170,14 +224,28 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
+        labels: "service,instance"
     labels:
       - "hjtpx.service=redis"
+      - "hjtpx.version=7-alpine"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ulimits:
       nofile:
         soft: 65535
         hard: 65535
+      nproc:
+        soft: 4096
+        hard: 8192
+      memlock:
+        soft: -1
+        hard: -1
+    stop_grace_period: 10s
+    cpus: 0.5
+    mem_limit: 256m
+    mem_reservation: 64m
+    OOM_score_adj: -500
+    pids_limit: 512
 
 networks:
   hjtpx_network:
@@ -186,13 +254,39 @@ networks:
       driver: default
       config:
         - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+          ip_range: 172.28.5.0/24
     driver_opts:
       com.docker.network.bridge.name: hjtpx-bridge
       com.docker.network.bridge.enable_icc: "true"
       com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.enable_bridge_linux: "true"
+    labels:
+      - "hjtpx.network=main"
+      - "hjtpx.network.type=bridge"
 
 volumes:
   postgres_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_PATH:-./data/postgres}
   redis_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${REDIS_DATA_PATH:-./data/redis}
+  postgres_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/postgres
+  redis_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/redis

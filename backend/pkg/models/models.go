@@ -550,6 +550,30 @@ func (UserDataSnapshot) TableName() string {
 	return "user_data_snapshots"
 }
 
+// AuditLog 审计日志模型
+type AuditLog struct {
+	gorm.Model
+	LogType      string `gorm:"size:50;index:idx_audit_log_type" json:"log_type"`
+	Level        string `gorm:"size:20;index:idx_audit_log_level" json:"level"`
+	UserID       uint   `gorm:"index:idx_audit_log_user" json:"user_id"`
+	Username     string `gorm:"size:100" json:"username"`
+	IPAddress    string `gorm:"size:50;index:idx_audit_log_ip" json:"ip_address"`
+	UserAgent    string `gorm:"size:500" json:"user_agent"`
+	Action       string `gorm:"size:255;index:idx_audit_log_action" json:"action"`
+	ResourceType string `gorm:"size:50" json:"resource_type"`
+	ResourceID   string `gorm:"size:100" json:"resource_id"`
+	Status       string `gorm:"size:20" json:"status"`
+	ErrorMessage string `gorm:"type:text" json:"error_message"`
+	Changes      string `gorm:"type:text" json:"changes"`
+	Metadata     string `gorm:"type:text" json:"metadata"`
+	Duration     int64  `json:"duration"`
+	SessionID    string `gorm:"size:100" json:"session_id"`
+}
+
+func (AuditLog) TableName() string {
+	return "audit_logs"
+}
+
 // DashboardConfig 仪表盘配置
 type DashboardConfig struct {
 	gorm.Model

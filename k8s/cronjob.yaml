@@ -1,0 +1,122 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hjtpx-backup
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+    component: backup
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: hjtpx
+            component: backup
+        spec:
+          serviceAccountName: hjtpx-app
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:14-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  pg_dump -h hjtpx-postgres -U postgres -d hjtpx_db > /backup/hjtpx-$(date +%Y%m%d-%H%M%S).sql
+                  find /backup -name "*.sql" -mtime +7 -delete
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: hjtpx-secrets
+                      key: DATABASE_PASSWORD
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: hjtpx-backup-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hjtpx-redis-backup
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+    component: backup
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: hjtpx
+            component: backup
+        spec:
+          serviceAccountName: hjtpx-redis
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: redis:7-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  redis-cli -h hjtpx-redis -a $REDIS_PASSWORD --rdb /backup/dump.rdb
+                  mv /backup/dump.rdb /backup/redis-$(date +%Y%m%d-%H%M%S).rdb
+                  find /backup -name "*.rdb" -mtime +7 -delete
+              env:
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: hjtpx-secrets
+                      key: REDIS_PASSWORD
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: hjtpx-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hjtpx-backup-pvc
+  namespace: hjtpx
+  labels:
+    app: hjtpx
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard

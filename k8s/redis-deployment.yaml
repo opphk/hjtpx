@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hjtpx-redis
+  namespace: hjtpx
+  labels:
+    app: hjtpx-redis
+    component: cache
+    version: "7-alpine"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hjtpx-redis
+      component: cache
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: hjtpx-redis
+        component: cache
+        version: "7-alpine"
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      serviceAccountName: hjtpx-redis
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --appendfsync
+            - everysec
+            - --maxmemory
+            - "$(REDIS_MAXMEMORY)"
+            - --maxmemory-policy
+            - allkeys-lru
+            - --lazyfree-lazy-eviction
+            - "yes"
+            - --lazyfree-lazy-expire
+            - "yes"
+            - --lazyfree-lazy-server-del
+            - "yes"
+          env:
+            - name: REDIS_MAXMEMORY
+              valueFrom:
+                configMapKeyRef:
+                  name: hjtpx-redis-config
+                  key: REDIS_MAXMEMORY
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hjtpx-secrets
+                  key: REDIS_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - --raw
+                - incr
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - --raw
+                - incr
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: hjtpx-redis-pvc
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hjtpx-redis-pvc
+  namespace: hjtpx
+  labels:
+    app: hjtpx-redis
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard

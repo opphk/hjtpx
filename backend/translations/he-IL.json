@@ -36,13 +36,6 @@
 	"loading": "טוען...",
 	"confirm": "אישור",
 	"welcome": "ברוך הבא",
-	"just_now": "עכשיו",
-	"minutes_ago": "לפני {0} דקות",
-	"hours_ago": "לפני {0} שעות",
-	"days_ago": "לפני {0} ימים",
-	"weeks_ago": "לפני {0} שבועות",
-	"months_ago": "לפני {0} חודשים",
-	"years_ago": "לפני {0} שנים",
 	"slider_captcha": "קאפצ'ה מחוון",
 	"click_captcha": "קאפצ'ה לחיצה",
 	"image_captcha": "קאפצ'ה תמונה",
@@ -140,5 +133,32 @@
 	"arabic": "ערבית",
 	"persian": "פרסית",
 	"hebrew": "עברית",
-	"urdu": "אורדו"
+	"urdu": "אורדו",
+	"click_captcha_hints": {
+		"number": "לחץ לפי הסדר: ",
+		"letter": "לחץ על אותיות לפי הסדר: ",
+		"chinese": "לחץ על תווים סיניים לפי הסדר: ",
+		"icon": "לחץ על אייקונים לפי הסדר: ",
+		"mixed": "לחץ לפי הסדר: ",
+		"order_hint": "אנא לחץ לפי הסדר"
+	},
+	"click_captcha_messages": {
+		"success": "אימות מוצלח",
+		"failed": "אימות נכשל",
+		"wrong_order": "סדר לחיצה שגוי",
+		"wrong_position": "מיקום לחיצה שגוי",
+		"timeout": "הקאפצ'ה פג תוקף",
+		"invalid_session": "סשן לא תקין",
+		"try_again": "אנא נסה שוב",
+		"too_fast": "לחיצה מהירה מדי",
+		"too_slow": "לחיצה איטית מדי",
+		"abnormal_behavior": "זוהתה התנהגות חריגה"
+	},
+	"just_now": "עכשיו",
+	"minutes_ago": "לפני {0} דקות",
+	"hours_ago": "לפני {0} שעות",
+	"days_ago": "לפני {0} ימים",
+	"weeks_ago": "לפני {0} שבועות",
+	"months_ago": "לפני {0} חודשים",
+	"years_ago": "לפני {0} שנים"
 }

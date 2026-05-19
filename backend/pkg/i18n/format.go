@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -702,7 +703,7 @@ type RelativeTimeFormat struct {
 
 var relativeTimeFormats = map[string]RelativeTimeFormat{
 	"zh-CN": {
-		JustNow:  "刚刚",
+		JustNow:   "刚刚",
 		MinutesAgo: "{0}分钟前",
 		HoursAgo:   "{0}小时前",
 		DaysAgo:    "{0}天前",
@@ -711,7 +712,7 @@ var relativeTimeFormats = map[string]RelativeTimeFormat{
 		YearsAgo:   "{0}年前",
 	},
 	"en-US": {
-		JustNow:  "just now",
+		JustNow:   "just now",
 		MinutesAgo: "{0}m ago",
 		HoursAgo:   "{0}h ago",
 		DaysAgo:    "{0}d ago",
@@ -720,7 +721,7 @@ var relativeTimeFormats = map[string]RelativeTimeFormat{
 		YearsAgo:   "{0}y ago",
 	},
 	"ja-JP": {
-		JustNow:  "たった今",
+		JustNow:   "たった今",
 		MinutesAgo: "{0}分前",
 		HoursAgo:   "{0}時間前",
 		DaysAgo:    "{0}日前",
@@ -729,7 +730,7 @@ var relativeTimeFormats = map[string]RelativeTimeFormat{
 		YearsAgo:   "{0}年前",
 	},
 	"ko-KR": {
-		JustNow:  "방금",
+		JustNow:   "방금",
 		MinutesAgo: "{0}분 전",
 		HoursAgo:   "{0}시간 전",
 		DaysAgo:    "{0}일 전",
@@ -738,7 +739,7 @@ var relativeTimeFormats = map[string]RelativeTimeFormat{
 		YearsAgo:   "{0}년 전",
 	},
 	"fr-FR": {
-		JustNow:  "à l'instant",
+		JustNow:   "à l'instant",
 		MinutesAgo: "il y a {0} minute",
 		HoursAgo:   "il y a {0} heure",
 		DaysAgo:    "il y a {0} jour",
@@ -747,13 +748,130 @@ var relativeTimeFormats = map[string]RelativeTimeFormat{
 		YearsAgo:   "il y a {0} an",
 	},
 	"de-DE": {
-		JustNow:  "gerade eben",
+		JustNow:   "gerade eben",
 		MinutesAgo: "vor {0} Minute",
 		HoursAgo:   "vor {0} Stunde",
 		DaysAgo:    "vor {0} Tag",
 		WeeksAgo:   "vor {0} Woche",
 		MonthsAgo:  "vor {0} Monat",
 		YearsAgo:   "vor {0} Jahr",
+	},
+	"es-ES": {
+		JustNow:   "ahora mismo",
+		MinutesAgo: "hace {0} minuto",
+		HoursAgo:   "hace {0} hora",
+		DaysAgo:    "hace {0} día",
+		WeeksAgo:   "hace {0} semana",
+		MonthsAgo:  "hace {0} mes",
+		YearsAgo:   "hace {0} año",
+	},
+	"pt-BR": {
+		JustNow:   "agora mesmo",
+		MinutesAgo: "há {0} minuto",
+		HoursAgo:   "há {0} hora",
+		DaysAgo:    "há {0} dia",
+		WeeksAgo:   "há {0} semana",
+		MonthsAgo:  "há {0} mês",
+		YearsAgo:   "há {0} ano",
+	},
+	"it-IT": {
+		JustNow:   "adesso",
+		MinutesAgo: "{0} minuto fa",
+		HoursAgo:   "{0} ora fa",
+		DaysAgo:    "{0} giorno fa",
+		WeeksAgo:   "{0} settimana fa",
+		MonthsAgo:  "{0} mese fa",
+		YearsAgo:   "{0} anno fa",
+	},
+	"ru-RU": {
+		JustNow:   "только что",
+		MinutesAgo: "{0} минуту назад",
+		HoursAgo:   "{0} час назад",
+		DaysAgo:    "{0} день назад",
+		WeeksAgo:   "{0} неделю назад",
+		MonthsAgo:  "{0} месяц назад",
+		YearsAgo:   "{0} год назад",
+	},
+	"ar-SA": {
+		JustNow:   "الآن",
+		MinutesAgo: "منذ {0} دقيقة",
+		HoursAgo:   "منذ {0} ساعة",
+		DaysAgo:    "منذ {0} يوم",
+		WeeksAgo:   "منذ {0} أسبوع",
+		MonthsAgo:  "منذ {0} شهر",
+		YearsAgo:   "منذ {0} سنة",
+	},
+	"fa-IR": {
+		JustNow:   "الان",
+		MinutesAgo: "{0} دقیقه پیش",
+		HoursAgo:   "{0} ساعت پیش",
+		DaysAgo:    "{0} روز پیش",
+		WeeksAgo:   "{0} هفته پیش",
+		MonthsAgo:  "{0} ماه پیش",
+		YearsAgo:   "{0} سال پیش",
+	},
+	"he-IL": {
+		JustNow:   "עכשיו",
+		MinutesAgo: "לפני {0} דקות",
+		HoursAgo:   "לפני {0} שעות",
+		DaysAgo:    "לפני {0} ימים",
+		WeeksAgo:   "לפני {0} שבועות",
+		MonthsAgo:  "לפני {0} חודשים",
+		YearsAgo:   "לפני {0} שנים",
+	},
+	"ur-PK": {
+		JustNow:   "ابھی",
+		MinutesAgo: "{0} منٹ پہلے",
+		HoursAgo:   "{0} گھنٹے پہلے",
+		DaysAgo:    "{0} دن پہلے",
+		WeeksAgo:   "{0} ہفتے پہلے",
+		MonthsAgo:  "{0} مہینے پہلے",
+		YearsAgo:   "{0} سال پہلے",
+	},
+	"hi-IN": {
+		JustNow:   "अभी",
+		MinutesAgo: "{0} मिनट पहले",
+		HoursAgo:   "{0} घंटे पहले",
+		DaysAgo:    "{0} दिन पहले",
+		WeeksAgo:   "{0} सप्ताह पहले",
+		MonthsAgo:  "{0} महीने पहले",
+		YearsAgo:   "{0} साल पहले",
+	},
+	"vi-VN": {
+		JustNow:   "vừa xong",
+		MinutesAgo: "{0} phút trước",
+		HoursAgo:   "{0} giờ trước",
+		DaysAgo:    "{0} ngày trước",
+		WeeksAgo:   "{0} tuần trước",
+		MonthsAgo:  "{0} tháng trước",
+		YearsAgo:   "{0} năm trước",
+	},
+	"th-TH": {
+		JustNow:   "เพิ่งจะ",
+		MinutesAgo: "{0} นาทีที่แล้ว",
+		HoursAgo:   "{0} ชั่วโมงที่แล้ว",
+		DaysAgo:    "{0} วันที่แล้ว",
+		WeeksAgo:   "{0} สัปดาห์ที่แล้ว",
+		MonthsAgo:  "{0} เดือนที่แล้ว",
+		YearsAgo:   "{0} ปีที่แล้ว",
+	},
+	"id-ID": {
+		JustNow:   "baru saja",
+		MinutesAgo: "{0} menit yang lalu",
+		HoursAgo:   "{0} jam yang lalu",
+		DaysAgo:    "{0} hari yang lalu",
+		WeeksAgo:   "{0} minggu yang lalu",
+		MonthsAgo:  "{0} bulan yang lalu",
+		YearsAgo:   "{0} tahun yang lalu",
+	},
+	"tr-TR": {
+		JustNow:   "az önce",
+		MinutesAgo: "{0} dakika önce",
+		HoursAgo:   "{0} saat önce",
+		DaysAgo:    "{0} gün önce",
+		WeeksAgo:   "{0} hafta önce",
+		MonthsAgo:  "{0} ay önce",
+		YearsAgo:   "{0} yıl önce",
 	},
 }
 
@@ -830,4 +948,438 @@ func FormatDuration(d time.Duration, lang string) string {
 		seconds := totalSeconds % 60
 		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
 	}
+}
+
+type CultureInfo struct {
+	Country         string
+	Language        string
+	CalendarType    string
+	WeekStartDay   time.Weekday
+	DateSeparator   string
+	TimeSeparator   string
+	DecimalSeparator string
+	ThousandSeparator string
+	CurrencySymbol string
+	NumberFormat   string
+	PaperSize      string
+	MeasurementSystem string
+}
+
+var cultureInfos = map[string]CultureInfo{
+	"zh-CN": {
+		Country:           "China",
+		Language:          "Chinese (Simplified)",
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Monday,
+		DateSeparator:    "-",
+		TimeSeparator:    ":",
+		DecimalSeparator: ".",
+		ThousandSeparator: ",",
+		CurrencySymbol:   "¥",
+		NumberFormat:     "1,234.56",
+		PaperSize:        "A4",
+		MeasurementSystem: "Metric",
+	},
+	"en-US": {
+		Country:           "United States",
+		Language:          "English",
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Sunday,
+		DateSeparator:    "/",
+		TimeSeparator:    ":",
+		DecimalSeparator: ".",
+		ThousandSeparator: ",",
+		CurrencySymbol:   "$",
+		NumberFormat:     "1,234.56",
+		PaperSize:        "Letter",
+		MeasurementSystem: "Imperial",
+	},
+	"ja-JP": {
+		Country:           "Japan",
+		Language:          "Japanese",
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Sunday,
+		DateSeparator:    "/",
+		TimeSeparator:    ":",
+		DecimalSeparator: ".",
+		ThousandSeparator: ",",
+		CurrencySymbol:   "¥",
+		NumberFormat:     "1,234.56",
+		PaperSize:        "A4",
+		MeasurementSystem: "Metric",
+	},
+	"ar-SA": {
+		Country:           "Saudi Arabia",
+		Language:          "Arabic",
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Saturday,
+		DateSeparator:    "/",
+		TimeSeparator:    ":",
+		DecimalSeparator: "٫",
+		ThousandSeparator: "٬",
+		CurrencySymbol:   "ر.س",
+		NumberFormat:     "١٬٢٣٤٫٥٦",
+		PaperSize:        "A4",
+		MeasurementSystem: "Metric",
+	},
+	"hi-IN": {
+		Country:           "India",
+		Language:          "Hindi",
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Sunday,
+		DateSeparator:    "/",
+		TimeSeparator:    ":",
+		DecimalSeparator: ".",
+		ThousandSeparator: ",",
+		CurrencySymbol:   "₹",
+		NumberFormat:     "1,23,456.78",
+		PaperSize:        "A4",
+		MeasurementSystem: "Metric",
+	},
+}
+
+func GetCultureInfo(lang string) CultureInfo {
+	if info, ok := cultureInfos[lang]; ok {
+		return info
+	}
+	return CultureInfo{
+		Country:           "Unknown",
+		Language:          lang,
+		CalendarType:     "Gregorian",
+		WeekStartDay:     time.Sunday,
+		DateSeparator:    "/",
+		TimeSeparator:    ":",
+		DecimalSeparator: ".",
+		ThousandSeparator: ",",
+		CurrencySymbol:   "$",
+		NumberFormat:     "1,234.56",
+		PaperSize:        "A4",
+		MeasurementSystem: "Metric",
+	}
+}
+
+func FormatPhoneNumber(phone string, countryCode string) string {
+	phone = strings.ReplaceAll(phone, " ", "")
+	phone = strings.ReplaceAll(phone, "-", "")
+	phone = strings.ReplaceAll(phone, "(", "")
+	phone = strings.ReplaceAll(phone, ")", "")
+
+	switch countryCode {
+	case "CN":
+		if len(phone) == 11 {
+			return fmt.Sprintf("%s %s %s", phone[:3], phone[3:7], phone[7:])
+		}
+	case "US", "CA":
+		if len(phone) == 10 {
+			return fmt.Sprintf("(%s) %s-%s", phone[:3], phone[3:6], phone[6:])
+		}
+	case "JP":
+		if len(phone) == 10 {
+			return fmt.Sprintf("%s-%s-%s", phone[:3], phone[3:7], phone[7:])
+		}
+	case "IN":
+		if len(phone) == 10 {
+			return fmt.Sprintf("%s-%s-%s", phone[:4], phone[4:7], phone[7:])
+		}
+	case "GB":
+		if len(phone) == 10 {
+			return fmt.Sprintf("%s %s %s", phone[:4], phone[4:7], phone[7:])
+		}
+	}
+
+	return phone
+}
+
+func FormatPostalCode(postalCode string, countryCode string) string {
+	postalCode = strings.ReplaceAll(postalCode, " ", "")
+
+	switch countryCode {
+	case "US":
+		if len(postalCode) == 5 || len(postalCode) == 9 {
+			if len(postalCode) == 9 {
+				return fmt.Sprintf("%s-%s", postalCode[:5], postalCode[5:])
+			}
+			return postalCode
+		}
+	case "GB":
+		if len(postalCode) >= 5 && len(postalCode) <= 7 {
+			if len(postalCode) == 6 {
+				return fmt.Sprintf("%s %s", postalCode[:3], postalCode[3:])
+			} else if len(postalCode) == 7 {
+				return fmt.Sprintf("%s %s", postalCode[:4], postalCode[4:])
+			}
+			return postalCode
+		}
+	case "CA":
+		if len(postalCode) == 6 {
+			return fmt.Sprintf("%s %s", postalCode[:3], postalCode[3:])
+		}
+	case "JP":
+		if len(postalCode) == 7 {
+			return fmt.Sprintf("%s-%s", postalCode[:3], postalCode[3:])
+		}
+	case "IN":
+		if len(postalCode) == 6 {
+			return postalCode
+		}
+	}
+
+	return postalCode
+}
+
+func FormatAddress(address map[string]string, countryCode string) string {
+	var parts []string
+
+	if street, ok := address["street"]; ok && street != "" {
+		parts = append(parts, street)
+	}
+
+	if city, ok := address["city"]; ok && city != "" {
+		parts = append(parts, city)
+	}
+
+	if state, ok := address["state"]; ok && state != "" {
+		parts = append(parts, state)
+	}
+
+	if postalCode, ok := address["postalCode"]; ok && postalCode != "" {
+		formattedCode := FormatPostalCode(postalCode, countryCode)
+		parts = append(parts, formattedCode)
+	}
+
+	if country, ok := address["country"]; ok && country != "" {
+		parts = append(parts, country)
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func GetFirstDayOfWeek(lang string) time.Weekday {
+	info := GetCultureInfo(lang)
+	return info.WeekStartDay
+}
+
+func GetWeekendDays(lang string) []time.Weekday {
+	switch lang {
+	case "en-US":
+		return []time.Weekday{time.Saturday, time.Sunday}
+	case "ar-SA":
+		return []time.Weekday{time.Friday, time.Saturday}
+	case "zh-CN", "ja-JP", "ko-KR":
+		return []time.Weekday{time.Saturday, time.Sunday}
+	default:
+		return []time.Weekday{time.Saturday, time.Sunday}
+	}
+}
+
+func IsWeekend(t time.Time, lang string) bool {
+	weekendDays := GetWeekendDays(lang)
+	for _, day := range weekendDays {
+		if t.Weekday() == day {
+			return true
+		}
+	}
+	return false
+}
+
+func GetBusinessDaysInRange(start, end time.Time, lang string) int {
+	businessDays := 0
+	current := start
+
+	weekendDays := GetWeekendDays(lang)
+
+	for !current.After(end) {
+		isWeekend := false
+		for _, day := range weekendDays {
+			if current.Weekday() == day {
+				isWeekend = true
+				break
+			}
+		}
+
+		if !isWeekend {
+			businessDays++
+		}
+
+		current = current.AddDate(0, 0, 1)
+	}
+
+	return businessDays
+}
+
+func GetFiscalYear(date time.Time, fiscalStartMonth time.Month) int {
+	if date.Month() >= fiscalStartMonth {
+		return date.Year()
+	}
+	return date.Year() - 1
+}
+
+func FormatFiscalQuarter(date time.Time) string {
+	quarter := (int(date.Month())-1)/3 + 1
+	return fmt.Sprintf("Q%d FY%d", quarter, GetFiscalYear(date, time.January))
+}
+
+func GetOrdinalSuffix(n int) string {
+	switch n {
+	case 1, 21, 31:
+		return "st"
+	case 2, 22:
+		return "nd"
+	case 3, 23:
+		return "rd"
+	default:
+		return "th"
+	}
+}
+
+func FormatOrdinal(n int, lang string) string {
+	suffix := GetOrdinalSuffix(n)
+
+	switch lang {
+	case "zh-CN":
+		return fmt.Sprintf("第%d", n)
+	case "ja-JP":
+		return fmt.Sprintf("%d番目", n)
+	case "ko-KR":
+		return fmt.Sprintf("%d번째", n)
+	case "ar-SA", "he-IL":
+		return fmt.Sprintf("%d%s", n, suffix)
+	default:
+		return fmt.Sprintf("%d%s", n, suffix)
+	}
+}
+
+func FormatTimeWithLocale(t time.Time, lang string, style string) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	info := GetCultureInfo(targetLang)
+	timeFormat := fmt.Sprintf("15%s04%s05", info.TimeSeparator, info.TimeSeparator)
+
+	switch style {
+	case "short":
+		return t.Format(fmt.Sprintf("15%s04", info.TimeSeparator))
+	case "medium":
+		return t.Format(timeFormat)
+	case "long":
+		return t.Format(fmt.Sprintf("3%s04%s05 PM", info.TimeSeparator, info.TimeSeparator))
+	default:
+		return t.Format(timeFormat)
+	}
+}
+
+func FormatDateWithLocale(t time.Time, lang string, style string) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	info := GetCultureInfo(targetLang)
+
+	switch style {
+	case "short":
+		return t.Format(fmt.Sprintf("01%s02%s06", info.DateSeparator, info.DateSeparator))
+	case "medium":
+		return t.Format(fmt.Sprintf("02%s01%s2006", info.DateSeparator, info.DateSeparator))
+	case "long":
+		return FormatDateTime(t, targetLang, "long")
+	default:
+		return t.Format(fmt.Sprintf("02%s01%s2006", info.DateSeparator, info.DateSeparator))
+	}
+}
+
+func FormatNumberForLocale(value float64, lang string, showThousandSeparator bool) string {
+	if !showThousandSeparator {
+		return fmt.Sprintf("%.2f", value)
+	}
+	return FormatNumber(value, lang)
+}
+
+func ParseLocalizedNumber(value string, lang string) (float64, error) {
+	info := GetCultureInfo(lang)
+
+	value = strings.ReplaceAll(value, info.ThousandSeparator, "")
+	value = strings.ReplaceAll(value, info.DecimalSeparator, ".")
+
+	return strconv.ParseFloat(value, 64)
+}
+
+func ParseLocalizedDate(dateStr string, lang string) (time.Time, error) {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	info := GetCultureInfo(targetLang)
+
+	dateStr = strings.ReplaceAll(dateStr, info.DateSeparator, "-")
+
+	formats := []string{
+		"2006-01-02",
+		"01-02-2006",
+		"02-01-2006",
+		"2006/01/02",
+		"01/02/2006",
+		"02/01/2006",
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, dateStr); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse date: %s", dateStr)
+}
+
+func FormatISODate(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
+func FormatISOTime(t time.Time) string {
+	return t.Format("15:04:05")
+}
+
+func FormatISODateTime(t time.Time) string {
+	return t.Format("2006-01-02T15:04:05Z")
+}
+
+func GetLocalCalendarMonth(lang string, month time.Month) string {
+	months := map[string][]string{
+		"zh-CN": {"一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"},
+		"en-US": {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+		"ja-JP": {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+		"ar-SA": {"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"},
+	}
+
+	if monthNames, ok := months[lang]; ok {
+		return monthNames[month-1]
+	}
+
+	if enNames, ok := months["en-US"]; ok {
+		return enNames[month-1]
+	}
+
+	return month.String()
+}
+
+func GetLocalCalendarWeekday(lang string, weekday time.Weekday) string {
+	weekdays := map[string][]string{
+		"zh-CN": {"周日", "周一", "周二", "周三", "周四", "周五", "周六"},
+		"en-US": {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+		"ja-JP": {"日", "月", "火", "水", "木", "金", "土"},
+		"ar-SA": {"الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"},
+	}
+
+	if dayNames, ok := weekdays[lang]; ok {
+		return dayNames[weekday]
+	}
+
+	if enNames, ok := weekdays["en-US"]; ok {
+		return enNames[weekday]
+	}
+
+	return weekday.String()
 }

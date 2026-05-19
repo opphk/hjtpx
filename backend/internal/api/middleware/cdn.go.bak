@@ -1,0 +1,498 @@
+package middleware
+
+import (
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+type CDNConfig struct {
+	Enabled          bool
+	BaseURL          string
+	Version          string
+	EnableMinification bool
+	EnableCompression bool
+	CacheControl     string
+	Resources        map[string]*CDNResource
+	domains          []string
+	mu               sync.RWMutex
+}
+
+type CDNResource struct {
+	Path       string
+	Type       ResourceType
+	Minified   bool
+	Compressed bool
+	CacheTTL   time.Duration
+	Priority   int
+	Preload    bool
+}
+
+type ResourceType int
+
+const (
+	ResourceTypeScript ResourceType = iota
+	ResourceTypeStyle
+	ResourceTypeImage
+	ResourceTypeFont
+	ResourceTypeOther
+)
+
+type CDNManager struct {
+	config      *CDNConfig
+	versionMap  map[string]string
+	stats       *CDNStats
+	initialized bool
+}
+
+type CDNStats struct {
+	TotalRequests  int64
+	CacheHits     int64
+	CacheMisses   int64
+	Compressions  int64
+	Minifications int64
+}
+
+var (
+	globalCDNManager *CDNManager
+	cdnOnce         sync.Once
+)
+
+func NewCDNManager(config *CDNConfig) *CDNManager {
+	if config == nil {
+		config = DefaultCDNConfig()
+	}
+
+	manager := &CDNManager{
+		config:     config,
+		versionMap: make(map[string]string),
+		stats:      &CDNStats{},
+	}
+
+	manager.initialize()
+
+	return manager
+}
+
+func DefaultCDNConfig() *CDNConfig {
+	return &CDNConfig{
+		Enabled:          false,
+		BaseURL:          "",
+		Version:          "v1.0.0",
+		EnableMinification: false,
+		EnableCompression: true,
+		CacheControl:     "public, max-age=31536000",
+		Resources:        make(map[string]*CDNResource),
+		domains:          []string{},
+	}
+}
+
+func (cdn *CDNManager) initialize() {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	if cdn.initialized {
+		return
+	}
+
+	defaultResources := []struct {
+		path     string
+		resource *CDNResource
+	}{
+		{
+			path: "/static/js/main.js",
+			resource: &CDNResource{
+				Path:       "/static/js/main.js",
+				Type:       ResourceTypeScript,
+				CacheTTL:   24 * time.Hour,
+				Priority:   1,
+				Preload:    true,
+			},
+		},
+		{
+			path: "/static/js/captcha.js",
+			resource: &CDNResource{
+				Path:       "/static/js/captcha.js",
+				Type:       ResourceTypeScript,
+				CacheTTL:   24 * time.Hour,
+				Priority:   2,
+				Preload:    true,
+			},
+		},
+		{
+			path: "/static/css/main.css",
+			resource: &CDNResource{
+				Path:       "/static/css/main.css",
+				Type:       ResourceTypeStyle,
+				CacheTTL:   24 * time.Hour,
+				Priority:   1,
+				Preload:    true,
+			},
+		},
+	}
+
+	for _, res := range defaultResources {
+		cdn.config.Resources[res.path] = res.resource
+		cdn.versionMap[res.path] = cdn.generateVersion(res.path)
+	}
+
+	cdn.initialized = true
+}
+
+func (cdn *CDNManager) generateVersion(path string) string {
+	version := cdn.config.Version
+	if version == "" {
+		version = fmt.Sprintf("v%d", time.Now().Unix())
+	}
+	return fmt.Sprintf("%s-%s", path, version)
+}
+
+func (cdn *CDNManager) GetCDNURL(path string) (string, error) {
+	if !cdn.config.Enabled {
+		return path, nil
+	}
+
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+
+	versionedPath, exists := cdn.versionMap[path]
+	if !exists {
+		versionedPath = cdn.generateVersion(path)
+		cdn.versionMap[path] = versionedPath
+	}
+
+	if cdn.config.BaseURL == "" {
+		return versionedPath, nil
+	}
+
+	parsedURL, err := url.Parse(cdn.config.BaseURL)
+	if err != nil {
+		return path, err
+	}
+
+	parsedURL.Path = filepath.Join(parsedURL.Path, versionedPath)
+
+	return parsedURL.String(), nil
+}
+
+func (cdn *CDNManager) GetVersionedURL(path string) string {
+	cdn.mu.RLock()
+	version, exists := cdn.versionMap[path]
+	cdn.mu.RUnlock()
+
+	if !exists {
+		version = cdn.generateVersion(path)
+		cdn.mu.Lock()
+		cdn.versionMap[path] = version
+		cdn.mu.Unlock()
+	}
+
+	cdn.stats.TotalRequests++
+
+	if strings.HasPrefix(path, "/static/") {
+		return version
+	}
+
+	return path
+}
+
+func (cdn *CDNManager) AddResource(path string, resource *CDNResource) {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	cdn.config.Resources[path] = resource
+	cdn.versionMap[path] = cdn.generateVersion(path)
+}
+
+func (cdn *CDNManager) RemoveResource(path string) {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	delete(cdn.config.Resources, path)
+	delete(cdn.versionMap, path)
+}
+
+func (cdn *CDNManager) UpdateVersion(newVersion string) {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	cdn.config.Version = newVersion
+
+	for path := range cdn.versionMap {
+		cdn.versionMap[path] = cdn.generateVersion(path)
+	}
+}
+
+func (cdn *CDNManager) GetResourceType(path string) ResourceType {
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+
+	if resource, exists := cdn.config.Resources[path]; exists {
+		return resource.Type
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	switch ext {
+	case ".js":
+		return ResourceTypeScript
+	case ".css":
+		return ResourceTypeStyle
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico":
+		return ResourceTypeImage
+	case ".woff", ".woff2", ".ttf", ".eot", ".otf":
+		return ResourceTypeFont
+	default:
+		return ResourceTypeOther
+	}
+}
+
+func (cdn *CDNManager) GetPreloadResources() []*CDNResource {
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+
+	var preloads []*CDNResource
+
+	for _, resource := range cdn.config.Resources {
+		if resource.Preload {
+			preloads = append(preloads, resource)
+		}
+	}
+
+	return preloads
+}
+
+func (cdn *CDNManager) GetStats() *CDNStats {
+	stats := &CDNStats{}
+	stats.TotalRequests = cdn.stats.TotalRequests
+	stats.CacheHits = cdn.stats.CacheHits
+	stats.CacheMisses = cdn.stats.CacheMisses
+	stats.Compressions = cdn.stats.Compressions
+	stats.Minifications = cdn.stats.Minifications
+
+	return stats
+}
+
+func (cdn *CDNManager) InvalidateCache(path string) error {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	if _, exists := cdn.versionMap[path]; exists {
+		cdn.versionMap[path] = cdn.generateVersion(path)
+		return nil
+	}
+
+	return fmt.Errorf("path not found: %s", path)
+}
+
+func (cdn *CDNManager) InvalidateAllCache() {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	for path := range cdn.versionMap {
+		cdn.versionMap[path] = cdn.generateVersion(path)
+	}
+}
+
+func (cdn *CDNManager) GetCacheControl(path string) string {
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+
+	if resource, exists := cdn.config.Resources[path]; exists {
+		if resource.CacheTTL > 0 {
+			return fmt.Sprintf("public, max-age=%d", int(resource.CacheTTL.Seconds()))
+		}
+	}
+
+	return cdn.config.CacheControl
+}
+
+func (cdn *CDNManager) Enable(enabled bool) {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+	cdn.config.Enabled = enabled
+}
+
+func (cdn *CDNManager) IsEnabled() bool {
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+	return cdn.config.Enabled
+}
+
+func (cdn *CDNManager) GetConfig() *CDNConfig {
+	cdn.mu.RLock()
+	defer cdn.mu.RUnlock()
+
+	config := *cdn.config
+	config.Resources = make(map[string]*CDNResource)
+	for k, v := range cdn.config.Resources {
+		resource := *v
+		config.Resources[k] = &resource
+	}
+
+	return &config
+}
+
+func (cdn *CDNManager) UpdateConfig(config *CDNConfig) {
+	cdn.mu.Lock()
+	defer cdn.mu.Unlock()
+
+	if config.BaseURL != "" {
+		cdn.config.BaseURL = config.BaseURL
+	}
+	if config.Version != "" {
+		oldVersion := cdn.config.Version
+		cdn.config.Version = config.Version
+
+		if oldVersion != config.Version {
+			for path := range cdn.versionMap {
+				cdn.versionMap[path] = cdn.generateVersion(path)
+			}
+		}
+	}
+
+	cdn.config.EnableMinification = config.EnableMinification
+	cdn.config.EnableCompression = config.EnableCompression
+	cdn.config.CacheControl = config.CacheControl
+}
+
+func InitGlobalCDNManager(config *CDNConfig) {
+	cdnOnce.Do(func() {
+		globalCDNManager = NewCDNManager(config)
+	})
+}
+
+func GetGlobalCDNManager() *CDNManager {
+	if globalCDNManager == nil {
+		globalCDNManager = NewCDNManager(nil)
+	}
+	return globalCDNManager
+}
+
+type CDNTagGenerator struct {
+	manager *CDNManager
+}
+
+func NewCDNTagGenerator(manager *CDNManager) *CDNTagGenerator {
+	return &CDNTagGenerator{manager: manager}
+}
+
+func (ctg *CDNTagGenerator) GenerateScriptTag(path string) string {
+	if ctg.manager == nil {
+		return fmt.Sprintf(`<script src="%s"></script>`, path)
+	}
+
+	url, _ := ctg.manager.GetCDNURL(path)
+	return fmt.Sprintf(`<script src="%s" %s></script>`,
+		url,
+		ctg.manager.GetCacheControl(path))
+}
+
+func (ctg *CDNTagGenerator) GenerateStyleTag(path string) string {
+	if ctg.manager == nil {
+		return fmt.Sprintf(`<link rel="stylesheet" href="%s">`, path)
+	}
+
+	url, _ := ctg.manager.GetCDNURL(path)
+	return fmt.Sprintf(`<link rel="stylesheet" href="%s" %s>`,
+		url,
+		ctg.manager.GetCacheControl(path))
+}
+
+func (ctg *CDNTagGenerator) GenerateImageTag(path string, alt string) string {
+	return fmt.Sprintf(`<img src="%s" alt="%s">`, path, alt)
+}
+
+func (ctg *CDNTagGenerator) GeneratePreloadTag(path string) string {
+	resourceType := ctg.manager.GetResourceType(path)
+
+	as := "other"
+	switch resourceType {
+	case ResourceTypeScript:
+		as = "script"
+	case ResourceTypeStyle:
+		as = "style"
+	case ResourceTypeImage:
+		as = "image"
+	case ResourceTypeFont:
+		as = "font"
+	}
+
+	return fmt.Sprintf(`<link rel="preload" href="%s" as="%s">`, path, as)
+}
+
+func (ctg *CDNTagGenerator) GeneratePrefetchTag(path string) string {
+	return fmt.Sprintf(`<link rel="prefetch" href="%s">`, path)
+}
+
+type ResourceVersionManager struct {
+	versions map[string]string
+	basePath string
+	mu       sync.RWMutex
+}
+
+func NewResourceVersionManager(basePath string) *ResourceVersionManager {
+	return &ResourceVersionManager{
+		versions: make(map[string]string),
+		basePath: basePath,
+	}
+}
+
+func (rvm *ResourceVersionManager) Register(path string, version string) {
+	rvm.mu.Lock()
+	defer rvm.mu.Unlock()
+	rvm.versions[path] = version
+}
+
+func (rvm *ResourceVersionManager) GetVersion(path string) string {
+	rvm.mu.RLock()
+	defer rvm.mu.RUnlock()
+
+	if version, exists := rvm.versions[path]; exists {
+		return version
+	}
+
+	return fmt.Sprintf("v%d", time.Now().Unix())
+}
+
+func (rvm *ResourceVersionManager) Versionize(path string) string {
+	version := rvm.GetVersion(path)
+	ext := filepath.Ext(path)
+	nameWithoutExt := strings.TrimSuffix(path, ext)
+
+	return fmt.Sprintf("%s.%s%s", nameWithoutExt, version, ext)
+}
+
+func (rvm *ResourceVersionManager) GetAllVersions() map[string]string {
+	rvm.mu.RLock()
+	defer rvm.mu.RUnlock()
+
+	versions := make(map[string]string)
+	for k, v := range rvm.versions {
+		versions[k] = v
+	}
+
+	return versions
+}
+
+func (rvm *ResourceVersionManager) Invalidate(path string) {
+	rvm.mu.Lock()
+	defer rvm.mu.Unlock()
+
+	if _, exists := rvm.versions[path]; exists {
+		rvm.versions[path] = fmt.Sprintf("v%d", time.Now().Unix())
+	}
+}
+
+func (rvm *ResourceVersionManager) InvalidateAll() {
+	rvm.mu.Lock()
+	defer rvm.mu.Unlock()
+
+	now := fmt.Sprintf("v%d", time.Now().Unix())
+	for path := range rvm.versions {
+		rvm.versions[path] = now
+	}
+}

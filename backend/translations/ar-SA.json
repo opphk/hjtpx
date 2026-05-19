@@ -36,13 +36,6 @@
 	"loading": "جارٍ التحميل...",
 	"confirm": "تأكيد",
 	"welcome": "مرحبًا",
-	"just_now": "الآن",
-	"minutes_ago": "منذ {0} دقيقة",
-	"hours_ago": "منذ {0} ساعة",
-	"days_ago": "منذ {0} يوم",
-	"weeks_ago": "منذ {0} أسبوع",
-	"months_ago": "منذ {0} شهر",
-	"years_ago": "منذ {0} سنة",
 	"slider_captcha": "كابتشا منزلق",
 	"click_captcha": "كابتشا بنقر",
 	"image_captcha": "كابتشا صورة",
@@ -140,5 +133,32 @@
 	"arabic": "العربية",
 	"persian": "فارسی",
 	"hebrew": "עברית",
-	"urdu": "اردو"
+	"urdu": "اردو",
+	"click_captcha_hints": {
+		"number": "انقر بالترتيب: ",
+		"letter": "انقر الحروف بالترتيب: ",
+		"chinese": "انقر الحروف الصينية بالترتيب: ",
+		"icon": "انقر الأيقونات بالترتيب: ",
+		"mixed": "انقر بالترتيب: ",
+		"order_hint": "يرجى النقر بالترتيب"
+	},
+	"click_captcha_messages": {
+		"success": "التحقق ناجح",
+		"failed": "التحقق فاشل",
+		"wrong_order": "ترتيب النقر غير صحيح",
+		"wrong_position": "موضع النقر غير صحيح",
+		"timeout": "انتهت صلاحية الكابتشا",
+		"invalid_session": "جلسة غير صالحة",
+		"try_again": "يرجى المحاولة مرة أخرى",
+		"too_fast": "النقر سريع جدًا",
+		"too_slow": "النقر بطيء جدًا",
+		"abnormal_behavior": "تم اكتشاف سلوك غير طبيعي"
+	},
+	"just_now": "الآن",
+	"minutes_ago": "منذ {0} دقيقة",
+	"hours_ago": "منذ {0} ساعة",
+	"days_ago": "منذ {0} يوم",
+	"weeks_ago": "منذ {0} أسبوع",
+	"months_ago": "منذ {0} شهر",
+	"years_ago": "منذ {0} سنة"
 }

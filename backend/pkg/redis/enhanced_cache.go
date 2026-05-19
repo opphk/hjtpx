@@ -1083,7 +1083,7 @@ func (ec *EnhancedCache) AcquireLock(ctx context.Context, key string, ttl time.D
 	return false, ErrLockTimeout
 }
 
-type MultiLevelCacheConfig struct {
+type TieredCacheConfig struct {
 	L1MaxMemory      int64
 	L1MaxItems       int
 	L1EvictionPolicy string
@@ -1095,7 +1095,7 @@ type MultiLevelCacheConfig struct {
 	DemoteOnMiss     bool
 }
 
-var DefaultMultiLevelConfig = &MultiLevelCacheConfig{
+var DefaultMultiLevelConfig = &TieredCacheConfig{
 	L1MaxMemory:      100 * 1024 * 1024,
 	L1MaxItems:       10000,
 	L1EvictionPolicy: "lru",
@@ -1108,7 +1108,7 @@ var DefaultMultiLevelConfig = &MultiLevelCacheConfig{
 }
 
 type TieredCache struct {
-	config   *MultiLevelCacheConfig
+	config   *TieredCacheConfig
 	l1Cache  *EnhancedCache
 	l2Cache  *EnhancedCache
 	l1Stats  *TierStats
@@ -1128,7 +1128,7 @@ type TierStats struct {
 	LastDemotionTime  atomic.Value
 }
 
-func NewTieredCache(config *MultiLevelCacheConfig) *TieredCache {
+func NewTieredCache(config *TieredCacheConfig) *TieredCache {
 	if config == nil {
 		config = DefaultMultiLevelConfig
 	}
@@ -1240,7 +1240,7 @@ func (tc *TieredCache) calculateHitRate(stats *TierStats) float64 {
 var globalTieredCache *TieredCache
 var globalTieredCacheOnce sync.Once
 
-func InitTieredCache(config *MultiLevelCacheConfig) {
+func InitTieredCache(config *TieredCacheConfig) {
 	globalTieredCacheOnce.Do(func() {
 		globalTieredCache = NewTieredCache(config)
 	})

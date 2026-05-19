@@ -1,0 +1,801 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	goredis "github.com/redis/go-redis/v9"
+)
+
+type AdvancedTaskService struct {
+	handlers       map[TaskType]TaskHandler
+	workerCount    int
+	queue          chan *Task
+	priorityQueue  chan *Task
+	wg             sync.WaitGroup
+	mu             sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	running        bool
+	taskStore      *AdvancedTaskStore
+	redisClient    *goredis.Client
+	monitoring     *TaskMonitoringService
+	scheduler      *TaskScheduler
+	metrics        *TaskMetrics
+}
+
+type AdvancedTaskStore struct {
+	mu      sync.RWMutex
+	tasks   map[string]*Task
+	indexes map[string][]string
+}
+
+type TaskMonitoringService struct {
+	mu           sync.RWMutex
+	interval     time.Duration
+	stopChan     chan struct{}
+	enabled      bool
+	callbacks    []MonitoringCallback
+	alerts       []TaskAlert
+	maxAlerts    int
+}
+
+type MonitoringCallback func(*TaskMonitoringReport)
+
+type TaskMonitoringReport struct {
+	Timestamp        time.Time
+	TotalTasks       int64
+	PendingTasks     int64
+	RunningTasks     int64
+	CompletedTasks   int64
+	FailedTasks      int64
+	AvgWaitTime      time.Duration
+	AvgExecutionTime time.Duration
+	WorkerUtilization float64
+	QueueDepth       int64
+	Alerts           []TaskAlert
+}
+
+type TaskAlert struct {
+	Timestamp   time.Time
+	Level       AlertLevel
+	Message     string
+	TaskID      string
+	TaskType    TaskType
+}
+
+type AlertLevel int
+
+const (
+	AlertLevelInfo AlertLevel = iota
+	AlertLevelWarning
+	AlertLevelError
+	AlertLevelCritical
+)
+
+type TaskScheduler struct {
+	mu          sync.RWMutex
+	tasks       map[string]*ScheduledTask
+	stopChan    chan struct{}
+	enabled     bool
+}
+
+type ScheduledTask struct {
+	ID        string
+	Type      TaskType
+	Payload   map[string]interface{}
+	Interval  time.Duration
+	NextRun   time.Time
+	LastRun   time.Time
+	Handler   TaskHandler
+	Enabled   bool
+	MaxRuns   int64
+	RunCount  int64
+}
+
+type TaskMetrics struct {
+	TotalEnqueued    atomic.Int64
+	TotalProcessed   atomic.Int64
+	TotalSucceeded   atomic.Int64
+	TotalFailed      atomic.Int64
+	TotalRetried     atomic.Int64
+	AvgWaitTime      atomic.Int64
+	AvgExecTime      atomic.Int64
+	MaxQueueDepth    atomic.Int64
+	WorkerUtilization atomic.Float64
+}
+
+type TaskQueueConfig struct {
+	MaxQueueSize    int
+	MaxRetries      int
+	DefaultTimeout  time.Duration
+	PriorityEnabled bool
+	BatchSize       int
+}
+
+var DefaultTaskQueueConfig = &TaskQueueConfig{
+	MaxQueueSize:    10000,
+	MaxRetries:      3,
+	DefaultTimeout:  5 * time.Minute,
+	PriorityEnabled: true,
+	BatchSize:       10,
+}
+
+func NewAdvancedTaskService(redisClient *goredis.Client, workerCount int, config *TaskQueueConfig) *AdvancedTaskService {
+	if config == nil {
+		config = DefaultTaskQueueConfig
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s := &AdvancedTaskService{
+		handlers:      make(map[TaskType]TaskHandler),
+		workerCount:   workerCount,
+		queue:         make(chan *Task, config.MaxQueueSize),
+		priorityQueue: make(chan *Task, config.MaxQueueSize/10),
+		ctx:           ctx,
+		cancel:        cancel,
+		taskStore:     NewAdvancedTaskStore(),
+		redisClient:   redisClient,
+		monitoring:    NewTaskMonitoringService(30 * time.Second),
+		scheduler:     NewTaskScheduler(),
+		metrics:       &TaskMetrics{},
+	}
+
+	if redisClient != nil {
+		go s.syncWithRedis()
+	}
+
+	return s
+}
+
+func NewAdvancedTaskStore() *AdvancedTaskStore {
+	return &AdvancedTaskStore{
+		tasks:   make(map[string]*Task),
+		indexes: make(map[string][]string),
+	}
+}
+
+func (ts *AdvancedTaskStore) Set(task *Task) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	ts.tasks[task.ID] = task
+
+	taskTypeIndex := fmt.Sprintf("type:%s", task.Type)
+	ts.indexes[taskTypeIndex] = append(ts.indexes[taskTypeIndex], task.ID)
+
+	statusIndex := fmt.Sprintf("status:%s", task.Status)
+	ts.indexes[statusIndex] = append(ts.indexes[statusIndex], task.ID)
+}
+
+func (ts *AdvancedTaskStore) Get(id string) (*Task, bool) {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	task, ok := ts.tasks[id]
+	return task, ok
+}
+
+func (ts *AdvancedTaskStore) Delete(id string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if task, exists := ts.tasks[id]; exists {
+		taskTypeIndex := fmt.Sprintf("type:%s", task.Type)
+		ts.removeFromIndex(taskTypeIndex, id)
+
+		statusIndex := fmt.Sprintf("status:%s", task.Status)
+		ts.removeFromIndex(statusIndex, id)
+
+		delete(ts.tasks, id)
+	}
+}
+
+func (ts *AdvancedTaskStore) removeFromIndex(indexName, taskID string) {
+	if index, exists := ts.indexes[indexName]; exists {
+		for i, id := range index {
+			if id == taskID {
+				ts.indexes[indexName] = append(index[:i], index[i+1:]...)
+				break
+			}
+		}
+	}
+}
+
+func (ts *AdvancedTaskStore) List() []*Task {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+
+	tasks := make([]*Task, 0, len(ts.tasks))
+	for _, task := range ts.tasks {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
+func (ts *AdvancedTaskStore) ListByStatus(status TaskStatus) []*Task {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+
+	indexName := fmt.Sprintf("status:%s", status)
+	taskIDs, exists := ts.indexes[indexName]
+	if !exists {
+		return []*Task{}
+	}
+
+	tasks := make([]*Task, 0, len(taskIDs))
+	for _, id := range taskIDs {
+		if task, ok := ts.tasks[id]; ok {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
+func (ts *AdvancedTaskStore) CountByStatus(status TaskStatus) int {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+
+	indexName := fmt.Sprintf("status:%s", status)
+	return len(ts.indexes[indexName])
+}
+
+func NewTaskMonitoringService(interval time.Duration) *TaskMonitoringService {
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+
+	return &TaskMonitoringService{
+		interval:   interval,
+		stopChan:   make(chan struct{}),
+		enabled:    true,
+		callbacks:  make([]MonitoringCallback, 0),
+		alerts:     make([]TaskAlert, 0),
+		maxAlerts:  100,
+	}
+}
+
+func (tms *TaskMonitoringService) Start() {
+	go tms.runMonitoringLoop()
+}
+
+func (tms *TaskMonitoringService) Stop() {
+	close(tms.stopChan)
+	tms.enabled = false
+}
+
+func (tms *TaskMonitoringService) RegisterCallback(callback MonitoringCallback) {
+	tms.mu.Lock()
+	defer tms.mu.Unlock()
+	tms.callbacks = append(tms.callbacks, callback)
+}
+
+func (tms *TaskMonitoringService) runMonitoringLoop() {
+	ticker := time.NewTicker(tms.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-tms.stopChan:
+			return
+		case <-ticker.C:
+			if tms.enabled {
+				report := tms.collectReport()
+				tms.notifyCallbacks(report)
+				tms.checkAlerts(report)
+			}
+		}
+	}
+}
+
+func (tms *TaskMonitoringService) collectReport() *TaskMonitoringReport {
+	report := &TaskMonitoringReport{
+		Timestamp: time.Now(),
+	}
+
+	return report
+}
+
+func (tms *TaskMonitoringService) notifyCallbacks(report *TaskMonitoringReport) {
+	tms.mu.RLock()
+	callbacks := make([]MonitoringCallback, len(tms.callbacks))
+	copy(callbacks, tms.callbacks)
+	tms.mu.RUnlock()
+
+	for _, callback := range callbacks {
+		go callback(report)
+	}
+}
+
+func (tms *TaskMonitoringService) checkAlerts(report *TaskMonitoringReport) {
+	tms.mu.Lock()
+	defer tms.mu.Unlock()
+
+	if report.QueueDepth > 1000 {
+		tms.addAlert(TaskAlert{
+			Timestamp: time.Now(),
+			Level:     AlertLevelWarning,
+			Message:   fmt.Sprintf("Queue depth is high: %d", report.QueueDepth),
+		})
+	}
+
+	if report.WorkerUtilization > 0.9 {
+		tms.addAlert(TaskAlert{
+			Timestamp: time.Now(),
+			Level:     AlertLevelInfo,
+			Message:   fmt.Sprintf("High worker utilization: %.2f%%", report.WorkerUtilization*100),
+		})
+	}
+
+	if report.FailedTasks > 100 {
+		tms.addAlert(TaskAlert{
+			Timestamp: time.Now(),
+			Level:     AlertLevelError,
+			Message:   fmt.Sprintf("High failure rate: %d failed tasks", report.FailedTasks),
+		})
+	}
+}
+
+func (tms *TaskMonitoringService) addAlert(alert TaskAlert) {
+	tms.alerts = append(tms.alerts, alert)
+	if len(tms.alerts) > tms.maxAlerts {
+		tms.alerts = tms.alerts[1:]
+	}
+}
+
+func (tms *TaskMonitoringService) GetAlerts(limit int) []TaskAlert {
+	tms.mu.RLock()
+	defer tms.mu.RUnlock()
+
+	if limit <= 0 || limit > len(tms.alerts) {
+		limit = len(tms.alerts)
+	}
+
+	alerts := make([]TaskAlert, limit)
+	copy(alerts, tms.alerts[len(tms.alerts)-limit:])
+
+	return alerts
+}
+
+func (tms *TaskMonitoringService) Enable(enabled bool) {
+	tms.mu.Lock()
+	defer tms.mu.Unlock()
+	tms.enabled = enabled
+}
+
+func NewTaskScheduler() *TaskScheduler {
+	return &TaskScheduler{
+		tasks:    make(map[string]*ScheduledTask),
+		stopChan: make(chan struct{}),
+		enabled:  true,
+	}
+}
+
+func (ts *TaskScheduler) SchedulePeriodicTask(id string, taskType TaskType, interval time.Duration, payload map[string]interface{}, handler TaskHandler) *ScheduledTask {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	scheduledTask := &ScheduledTask{
+		ID:       id,
+		Type:     taskType,
+		Payload:  payload,
+		Interval: interval,
+		NextRun:  time.Now().Add(interval),
+		Handler:  handler,
+		Enabled:  true,
+		MaxRuns:  -1,
+	}
+
+	ts.tasks[id] = scheduledTask
+
+	if ts.enabled {
+		go ts.runScheduledTask(scheduledTask)
+	}
+
+	return scheduledTask
+}
+
+func (ts *TaskScheduler) runScheduledTask(task *ScheduledTask) {
+	ticker := time.NewTicker(task.Interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ts.stopChan:
+			return
+		case <-ticker.C:
+			if !task.Enabled {
+				continue
+			}
+
+			if task.MaxRuns > 0 && task.RunCount >= task.MaxRuns {
+				ts.mu.Lock()
+				delete(ts.tasks, task.ID)
+				ts.mu.Unlock()
+				return
+			}
+
+			asyncTask := &Task{
+				Type:     task.Type,
+				Payload:  task.Payload,
+				Priority: 0,
+			}
+
+			if task.Handler != nil {
+				ctx := context.Background()
+				task.Handler(ctx, asyncTask)
+			}
+
+			task.LastRun = time.Now()
+			task.RunCount++
+		}
+	}
+}
+
+func (ts *TaskScheduler) Stop() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	close(ts.stopChan)
+	ts.enabled = false
+
+	for _, task := range ts.tasks {
+		task.Enabled = false
+	}
+}
+
+func (ts *TaskScheduler) Pause(id string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if task, exists := ts.tasks[id]; exists {
+		task.Enabled = false
+	}
+}
+
+func (ts *TaskScheduler) Resume(id string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if task, exists := ts.tasks[id]; exists {
+		task.Enabled = true
+		go ts.runScheduledTask(task)
+	}
+}
+
+func (ts *TaskScheduler) Remove(id string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if task, exists := ts.tasks[id]; exists {
+		task.Enabled = false
+		delete(ts.tasks, id)
+	}
+}
+
+func (s *AdvancedTaskService) Start() {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = true
+	s.mu.Unlock()
+
+	for i := 0; i < s.workerCount; i++ {
+		s.wg.Add(1)
+		go s.advancedWorker(i)
+	}
+
+	s.monitoring.Start()
+
+	log.Printf("Advanced task service started with %d workers", s.workerCount)
+}
+
+func (s *AdvancedTaskService) Stop() {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = false
+	s.mu.Unlock()
+
+	s.cancel()
+
+	close(s.queue)
+	close(s.priorityQueue)
+
+	s.wg.Wait()
+
+	s.monitoring.Stop()
+	s.scheduler.Stop()
+
+	log.Println("Advanced task service stopped")
+}
+
+func (s *AdvancedTaskService) advancedWorker(id int) {
+	defer s.wg.Done()
+
+	log.Printf("Task worker %d started", id)
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case task, ok := <-s.priorityQueue:
+			if !ok {
+				continue
+			}
+			s.processTask(s.ctx, task)
+		case task, ok := <-s.queue:
+			if !ok {
+				return
+			}
+			s.processTask(s.ctx, task)
+		}
+	}
+}
+
+func (s *AdvancedTaskService) processTask(ctx context.Context, task *Task) {
+	startTime := time.Now()
+
+	s.mu.RLock()
+	handler, ok := s.handlers[task.Type]
+	s.mu.RUnlock()
+
+	if !ok {
+		handler = s.defaultHandler
+	}
+
+	now := time.Now()
+	task.Status = TaskStatusRunning
+	task.StartedAt = &now
+	s.taskStore.Set(task)
+
+	result, err := handler(ctx, task)
+
+	completedAt := time.Now()
+	task.CompletedAt = &completedAt
+
+	if err != nil {
+		if task.RetryCount < task.MaxRetries {
+			task.RetryCount++
+			task.Status = TaskStatusPending
+			s.metrics.TotalRetried.Add(1)
+			s.metrics.TotalFailed.Add(1)
+
+			select {
+			case s.queue <- task:
+			default:
+				log.Printf("Queue full, task %s dropped", task.ID)
+			}
+		} else {
+			task.Status = TaskStatusFailed
+			task.Error = err.Error()
+			s.metrics.TotalFailed.Add(1)
+		}
+	} else {
+		task.Status = TaskStatusCompleted
+		task.Result = result
+		s.metrics.TotalSucceeded.Add(1)
+	}
+
+	s.taskStore.Set(task)
+
+	execTime := time.Since(startTime)
+	s.metrics.TotalProcessed.Add(1)
+
+	avgExec := s.metrics.AvgExecTime.Load()
+	newAvg := (avgExec + execTime.Nanoseconds()) / 2
+	s.metrics.AvgExecTime.Store(newAvg)
+
+	log.Printf("Task %s completed in %v", task.ID, execTime)
+}
+
+func (s *AdvancedTaskService) Enqueue(ctx context.Context, task *Task) error {
+	task.ID = fmt.Sprintf("task_%d_%s", time.Now().UnixNano(), generateID())
+	task.Status = TaskStatusPending
+	task.CreatedAt = time.Now()
+
+	if task.MaxRetries == 0 {
+		task.MaxRetries = 3
+	}
+	if task.Timeout == 0 {
+		task.Timeout = 5 * time.Minute
+	}
+
+	s.taskStore.Set(task)
+	s.metrics.TotalEnqueued.Add(1)
+
+	if task.Priority > 0 {
+		select {
+		case s.priorityQueue <- task:
+			return nil
+		default:
+			log.Printf("Priority queue full, falling back to normal queue")
+		}
+	}
+
+	select {
+	case s.queue <- task:
+		return nil
+	default:
+		return errors.New("queue is full")
+	}
+}
+
+func (s *AdvancedTaskService) EnqueueBatch(ctx context.Context, tasks []*Task) error {
+	for _, task := range tasks {
+		if err := s.Enqueue(ctx, task); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *AdvancedTaskService) GetTask(taskID string) (*Task, bool) {
+	return s.taskStore.Get(taskID)
+}
+
+func (s *AdvancedTaskService) ListTasks() []*Task {
+	return s.taskStore.List()
+}
+
+func (s *AdvancedTaskService) GetStats() *TaskStats {
+	tasks := s.taskStore.List()
+
+	stats := &TaskStats{
+		Total:    int64(len(tasks)),
+		ByType:   make(map[TaskType]int64),
+		ByStatus: make(map[TaskStatus]int64),
+	}
+
+	for _, task := range tasks {
+		stats.ByType[task.Type]++
+		stats.ByStatus[task.Status]++
+	}
+
+	stats.Pending = int64(s.taskStore.CountByStatus(TaskStatusPending))
+	stats.Running = int64(s.taskStore.CountByStatus(TaskStatusRunning))
+	stats.Completed = int64(s.taskStore.CountByStatus(TaskStatusCompleted))
+	stats.Failed = int64(s.taskStore.CountByStatus(TaskStatusFailed))
+	stats.Cancelled = int64(s.taskStore.CountByStatus(TaskStatusCancelled))
+	stats.QueueLength = int64(len(s.queue))
+
+	return stats
+}
+
+func (s *AdvancedTaskService) CancelTask(taskID string) error {
+	task, ok := s.taskStore.Get(taskID)
+	if !ok {
+		return ErrTaskNotFound
+	}
+
+	if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
+		return fmt.Errorf("cannot cancel task in status: %s", task.Status)
+	}
+
+	now := time.Now()
+	task.Status = TaskStatusCancelled
+	task.CancelledAt = &now
+	s.taskStore.Set(task)
+
+	return nil
+}
+
+func (s *AdvancedTaskService) GetMetrics() *TaskMetrics {
+	return s.metrics
+}
+
+func (s *AdvancedTaskService) syncWithRedis() {
+	if s.redisClient == nil {
+		return
+	}
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.syncTaskStore()
+		}
+	}
+}
+
+func (s *AdvancedTaskService) syncTaskStore() {
+	if s.redisClient == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	keys, err := s.redisClient.Keys(ctx, "task:*").Result()
+	if err != nil {
+		log.Printf("Failed to sync task store: %v", err)
+		return
+	}
+
+	for _, key := range keys {
+		taskID := key[5:]
+		if _, exists := s.taskStore.Get(taskID); !exists {
+			data, err := s.redisClient.Get(ctx, key).Bytes()
+			if err != nil {
+				continue
+			}
+
+			var task Task
+			if err := json.Unmarshal(data, &task); err != nil {
+				continue
+			}
+
+			s.taskStore.Set(&task)
+		}
+	}
+}
+
+func (s *AdvancedTaskService) RegisterHandler(taskType TaskType, handler TaskHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.handlers[taskType] = handler
+}
+
+func (s *AdvancedTaskService) RegisterDefaultHandlers() {
+	s.RegisterHandler(TaskTypeImage, s.defaultImageHandler)
+	s.RegisterHandler(TaskTypeEmail, s.defaultEmailHandler)
+	s.RegisterHandler(TaskTypeExport, s.defaultExportHandler)
+	s.RegisterHandler(TaskTypeCleanup, s.defaultCleanupHandler)
+}
+
+func (s *AdvancedTaskService) SchedulePeriodicTask(id string, taskType TaskType, interval time.Duration, payload map[string]interface{}) *ScheduledTask {
+	return s.scheduler.SchedulePeriodicTask(id, taskType, interval, payload, nil)
+}
+
+func (s *AdvancedTaskService) GetMonitoringReport() *TaskMonitoringReport {
+	report := &TaskMonitoringReport{
+		Timestamp:      time.Now(),
+		TotalTasks:    s.metrics.TotalEnqueued.Load(),
+		PendingTasks:  s.metrics.TotalEnqueued.Load() - s.metrics.TotalProcessed.Load(),
+		RunningTasks:  0,
+		CompletedTasks: s.metrics.TotalSucceeded.Load(),
+		FailedTasks:   s.metrics.TotalFailed.Load(),
+		QueueDepth:    s.metrics.TotalEnqueued.Load() - s.metrics.TotalProcessed.Load(),
+	}
+
+	if s.metrics.TotalProcessed.Load() > 0 {
+		report.AvgWaitTime = time.Duration(s.metrics.AvgWaitTime.Load())
+		report.AvgExecutionTime = time.Duration(s.metrics.AvgExecTime.Load())
+	}
+
+	report.WorkerUtilization = s.metrics.WorkerUtilization.Load()
+	report.Alerts = s.monitoring.GetAlerts(10)
+
+	return report
+}
+
+func (s *AdvancedTaskService) GetAlerts() []TaskAlert {
+	return s.monitoring.GetAlerts(100)
+}
+
+var globalAdvancedTaskService *AdvancedTaskService
+var taskServiceOnce sync.Once
+
+func InitGlobalAdvancedTaskService(redisClient *goredis.Client, workerCount int, config *TaskQueueConfig) {
+	taskServiceOnce.Do(func() {
+		globalAdvancedTaskService = NewAdvancedTaskService(redisClient, workerCount, config)
+		globalAdvancedTaskService.RegisterDefaultHandlers()
+	})
+}
+
+func GetGlobalAdvancedTaskService() *AdvancedTaskService {
+	return globalAdvancedTaskService
+}

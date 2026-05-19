@@ -493,14 +493,6 @@ func StringRandomNumeric(length int) (string, error) {
 	return StringRandom(length, "0123456789")
 }
 
-func Base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func Base64Decode(s string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(s)
-}
-
 func Base64URLEncode(data []byte) string {
 	return base64.URLEncoding.EncodeToString(data)
 }

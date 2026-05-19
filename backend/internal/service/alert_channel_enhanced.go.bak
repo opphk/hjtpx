@@ -1,0 +1,1008 @@
+package service
+
+import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/hjtpx/hjtpx/internal/pkg/logger"
+)
+
+type SlackEnhancedConfig struct {
+	WebhookURL         string   `json:"webhook_url"`
+	Channel            string   `json:"channel,omitempty"`
+	Username           string   `json:"username,omitempty"`
+	IconEmoji          string   `json:"icon_emoji,omitempty"`
+	IconURL            string   `json:"icon_url,omitempty"`
+	MinSeverity        string   `json:"min_severity,omitempty"`
+	AllowedSeverities []string `json:"allowed_severities,omitempty"`
+	BlockedSeverities []string `json:"blocked_severities,omitempty"`
+	Timeout            int      `json:"timeout,omitempty"`
+	RetryEnabled       bool     `json:"retry_enabled,omitempty"`
+	MaxRetries         int      `json:"max_retries,omitempty"`
+}
+
+type SlackEnhancedChannel struct {
+	BaseChannel
+	slackConfig *SlackEnhancedConfig
+	logger      *logger.Logger
+	client      *http.Client
+}
+
+type SlackBlockKitElement struct {
+	Type     string      `json:"type"`
+	Text     interface{} `json:"text,omitempty"`
+	URL      string      `json:"url,omitempty"`
+	ActionID string      `json:"action_id,omitempty"`
+}
+
+type SlackBlock struct {
+	Type string `json:"type"`
+	Text interface{} `json:"text,omitempty"`
+	BlockID string `json:"block_id,omitempty"`
+	Elements []SlackBlockKitElement `json:"elements,omitempty"`
+}
+
+type SlackAttachment struct {
+	Color      string                 `json:"color,omitempty"`
+	Fallback   string                 `json:"fallback,omitempty"`
+	AuthorName string                 `json:"author_name,omitempty"`
+	AuthorLink string                 `json:"author_link,omitempty"`
+	AuthorIcon string                 `json:"author_icon,omitempty"`
+	Title      string                 `json:"title,omitempty"`
+	TitleLink  string                 `json:"title_link,omitempty"`
+	Text       string                 `json:"text,omitempty"`
+	Fields     []SlackField           `json:"fields,omitempty"`
+	ImageURL   string                 `json:"image_url,omitempty"`
+	ThumbURL   string                 `json:"thumb_url,omitempty"`
+	Footer     string                 `json:"footer,omitempty"`
+	FooterIcon string                 `json:"footer_icon,omitempty"`
+	Timestamp  int64                  `json:"ts,omitempty"`
+	Blocks     []SlackBlock           `json:"blocks,omitempty"`
+}
+
+type SlackField struct {
+	Title string `json:"title"`
+	Value string `json:"value"`
+	Short bool   `json:"short"`
+}
+
+type SlackMessage struct {
+	Channel     string            `json:"channel,omitempty"`
+	Username    string            `json:"username,omitempty"`
+	IconEmoji   string            `json:"icon_emoji,omitempty"`
+	IconURL     string            `json:"icon_url,omitempty"`
+	Text        string            `json:"text,omitempty"`
+	Attachments []SlackAttachment `json:"attachments,omitempty"`
+	Blocks      []SlackBlock      `json:"blocks,omitempty"`
+	ThreadTS    string            `json:"thread_ts,omitempty"`
+	ReplyBroadcast bool           `json:"reply_broadcast,omitempty"`
+}
+
+type WeChatWorkEnhancedConfig struct {
+	WebhookURL     string   `json:"webhook_url"`
+	CorpID         string   `json:"corp_id,omitempty"`
+	CorpSecret     string   `json:"corp_secret,omitempty"`
+	AgentID        string   `json:"agent_id,omitempty"`
+	ToUsers        []string `json:"to_users,omitempty"`
+	ToParties      []string `json:"to_parties,omitempty"`
+	ToTags         []string `json:"to_tags,omitempty"`
+	Safe           int      `json:"safe,omitempty"`
+	EnableIDCard   bool     `json:"enable_id_card,omitempty"`
+	MinSeverity    string   `json:"min_severity,omitempty"`
+	AllowedSeverities []string `json:"allowed_severities,omitempty"`
+	BlockedSeverities []string `json:"blocked_severities,omitempty"`
+	AccessToken    string   `json:"access_token,omitempty"`
+	TokenExpiresAt time.Time `json:"token_expires_at,omitempty"`
+}
+
+type WeChatWorkEnhancedChannel struct {
+	BaseChannel
+	weChatConfig *WeChatWorkEnhancedConfig
+	logger       *logger.Logger
+	client       *http.Client
+	mu           sync.RWMutex
+}
+
+type WeChatWorkMessage struct {
+	MsgType  string                 `json:"msgtype"`
+	AgentID  string                 `json:"agentid,omitempty"`
+	ToUser   string                 `json:"touser,omitempty"`
+	ToParty  string                 `json:"toparty,omitempty"`
+	ToTag    string                 `json:"totag,omitempty"`
+	Safe     int                    `json:"safe,omitempty"`
+	Text     *WeChatTextContent     `json:"text,omitempty"`
+	Markdown *WeChatMarkdownContent `json:"markdown,omitempty"`
+	News     *WeChatNewsContent     `json:"news,omitempty"`
+	Image    *WeChatImageContent    `json:"image,omitempty"`
+	File     *WeChatFileContent     `json:"file,omitempty"`
+}
+
+type WeChatTextContent struct {
+	Content string `json:"content"`
+}
+
+type WeChatMarkdownContent struct {
+	Content string `json:"content"`
+}
+
+type WeChatNewsContent struct {
+	Articles []WeChatArticle `json:"articles"`
+}
+
+type WeChatArticle struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+	PicURL      string `json:"picurl"`
+}
+
+type WeChatImageContent struct {
+	MediaID string `json:"media_id"`
+}
+
+type WeChatFileContent struct {
+	MediaID string `json:"media_id"`
+}
+
+func NewSlackEnhancedChannel(config map[string]interface{}) (*SlackEnhancedChannel, error) {
+	slackConfig, err := ParseSlackEnhancedConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	timeout := 10
+	if slackConfig.Timeout > 0 {
+		timeout = slackConfig.Timeout
+	}
+
+	return &SlackEnhancedChannel{
+		BaseChannel: NewBaseChannel(config),
+		slackConfig: slackConfig,
+		logger:     logger.Default(),
+		client: &http.Client{
+			Timeout: time.Duration(timeout) * time.Second,
+		},
+	}, nil
+}
+
+func ParseSlackEnhancedConfig(config map[string]interface{}) (*SlackEnhancedConfig, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	var slackConfig SlackEnhancedConfig
+	if err := json.Unmarshal(data, &slackConfig); err != nil {
+		return nil, err
+	}
+
+	if slackConfig.WebhookURL == "" {
+		return nil, fmt.Errorf("slack webhook URL is required")
+	}
+
+	if slackConfig.MaxRetries == 0 {
+		slackConfig.MaxRetries = 3
+	}
+
+	return &slackConfig, nil
+}
+
+func (s *SlackEnhancedChannel) Name() string {
+	return "slack_enhanced"
+}
+
+func (s *SlackEnhancedChannel) ValidateConfig() error {
+	_, err := ParseSlackEnhancedConfig(s.GetConfig())
+	return err
+}
+
+func (s *SlackEnhancedChannel) ShouldSend(severity string) bool {
+	if len(s.slackConfig.BlockedSeverities) > 0 {
+		for _, blocked := range s.slackConfig.BlockedSeverities {
+			if strings.EqualFold(blocked, severity) {
+				return false
+			}
+		}
+	}
+
+	if len(s.slackConfig.AllowedSeverities) > 0 {
+		for _, allowed := range s.slackConfig.AllowedSeverities {
+			if strings.EqualFold(allowed, severity) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if s.slackConfig.MinSeverity != "" {
+		return s.isSeverityHighEnough(severity, s.slackConfig.MinSeverity)
+	}
+
+	return true
+}
+
+func (s *SlackEnhancedChannel) isSeverityHighEnough(current, minimum string) bool {
+	severityLevels := map[string]int{
+		"debug":     0,
+		"info":      1,
+		"notice":    2,
+		"warning":   3,
+		"warn":      3,
+		"error":     4,
+		"critical":  5,
+		"alert":     6,
+		"emergency": 7,
+		"emerg":     7,
+	}
+
+	currentLevel := severityLevels[strings.ToLower(current)]
+	minLevel := severityLevels[strings.ToLower(minimum)]
+
+	return currentLevel >= minLevel
+}
+
+func (s *SlackEnhancedChannel) Send(msg AlertMessage) error {
+	if !s.ShouldSend(msg.Severity) {
+		s.logger.Debug("Message filtered by severity", "severity", msg.Severity)
+		return nil
+	}
+
+	payload := s.buildEnhancedPayload(msg)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	var lastErr error
+	maxRetries := s.slackConfig.MaxRetries
+
+	if !s.slackConfig.RetryEnabled {
+		maxRetries = 0
+	}
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		resp, err := s.client.Post(s.slackConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+		if err != nil {
+			lastErr = err
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			s.logger.Log(logger.INFO, "Slack message sent successfully", logger.Fields{"severity": msg.Severity})
+			return nil
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		lastErr = fmt.Errorf("slack API returned status %d: %s", resp.StatusCode, string(body))
+
+		if attempt < maxRetries {
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+	}
+
+	return lastErr
+}
+
+func (s *SlackEnhancedChannel) buildEnhancedPayload(msg AlertMessage) SlackMessage {
+	attachment := s.buildAttachment(msg)
+
+	payload := SlackMessage{
+		Attachments: []SlackAttachment{attachment},
+	}
+
+	if s.slackConfig.Channel != "" {
+		payload.Channel = s.slackConfig.Channel
+	}
+	if s.slackConfig.Username != "" {
+		payload.Username = s.slackConfig.Username
+	}
+	if s.slackConfig.IconEmoji != "" {
+		payload.IconEmoji = s.slackConfig.IconEmoji
+	}
+	if s.slackConfig.IconURL != "" {
+		payload.IconURL = s.slackConfig.IconURL
+	}
+
+	return payload
+}
+
+func (s *SlackEnhancedChannel) buildAttachment(msg AlertMessage) SlackAttachment {
+	color := s.getSeverityColor(msg.Severity)
+
+	fields := []SlackField{
+		{
+			Title: "Severity",
+			Value: strings.ToUpper(msg.Severity),
+			Short: true,
+		},
+		{
+			Title: "Event ID",
+			Value: msg.EventID,
+			Short: true,
+		},
+		{
+			Title: "Timestamp",
+			Value: msg.Timestamp.Format(time.RFC3339),
+			Short: true,
+		},
+	}
+
+	for key, value := range msg.Context {
+		fields = append(fields, SlackField{
+			Title: key,
+			Value: fmt.Sprintf("%v", value),
+			Short: true,
+		})
+	}
+
+	footer := fmt.Sprintf("HJTPX Alert System • %s", time.Now().Format("2006-01-02 15:04:05"))
+
+	return SlackAttachment{
+		Color:     color,
+		Fallback:  fmt.Sprintf("[%s] %s: %s", strings.ToUpper(msg.Severity), msg.Title, msg.Message),
+		Title:     msg.Title,
+		Text:      msg.Message,
+		Fields:    fields,
+		Footer:    footer,
+		Timestamp: msg.Timestamp.Unix(),
+	}
+}
+
+func (s *SlackEnhancedChannel) getSeverityColor(severity string) string {
+	switch strings.ToLower(severity) {
+	case "critical", "emergency", "emerg":
+		return "#DC3545"
+	case "error", "alert":
+		return "#FF0000"
+	case "warning", "warn":
+		return "#FFC107"
+	case "notice":
+		return "#17A2B8"
+	case "info":
+		return "#28A745"
+	case "debug":
+		return "#6C757D"
+	default:
+		return "#6C757D"
+	}
+}
+
+func (s *SlackEnhancedChannel) SendWithBlocks(msg AlertMessage, blocks []SlackBlock) error {
+	if !s.ShouldSend(msg.Severity) {
+		return nil
+	}
+
+	payload := SlackMessage{
+		Attachments: []SlackAttachment{
+			{
+				Color:     s.getSeverityColor(msg.Severity),
+				Fallback:  fmt.Sprintf("[%s] %s: %s", strings.ToUpper(msg.Severity), msg.Title, msg.Message),
+				Timestamp: msg.Timestamp.Unix(),
+			},
+		},
+		Blocks: blocks,
+	}
+
+	if s.slackConfig.Channel != "" {
+		payload.Channel = s.slackConfig.Channel
+	}
+	if s.slackConfig.Username != "" {
+		payload.Username = s.slackConfig.Username
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := s.client.Post(s.slackConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("slack API returned status %d: %s", resp.StatusCode, string(body))
+}
+
+func (s *SlackEnhancedChannel) SendRichMessage(title, message, severity string, fields map[string]string, imageURL string) error {
+	if !s.ShouldSend(severity) {
+		return nil
+	}
+
+	attachmentFields := []SlackField{}
+	for k, v := range fields {
+		attachmentFields = append(attachmentFields, SlackField{
+			Title: k,
+			Value: v,
+			Short: true,
+		})
+	}
+
+	attachment := SlackAttachment{
+		Color:     s.getSeverityColor(severity),
+		Fallback:  fmt.Sprintf("[%s] %s: %s", strings.ToUpper(severity), title, message),
+		Title:     title,
+		Text:      message,
+		Fields:    attachmentFields,
+		ImageURL:  imageURL,
+		Footer:    fmt.Sprintf("HJTPX • %s", time.Now().Format("2006-01-02 15:04:05")),
+		Timestamp: time.Now().Unix(),
+	}
+
+	payload := SlackMessage{
+		Attachments: []SlackAttachment{attachment},
+	}
+
+	if s.slackConfig.Channel != "" {
+		payload.Channel = s.slackConfig.Channel
+	}
+	if s.slackConfig.Username != "" {
+		payload.Username = s.slackConfig.Username
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := s.client.Post(s.slackConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("slack API returned status %d: %s", resp.StatusCode, string(body))
+}
+
+func NewWeChatWorkEnhancedChannel(config map[string]interface{}) (*WeChatWorkEnhancedChannel, error) {
+	weChatConfig, err := ParseWeChatWorkEnhancedConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WeChatWorkEnhancedChannel{
+		BaseChannel: NewBaseChannel(config),
+		weChatConfig: weChatConfig,
+		logger:     logger.Default(),
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+func ParseWeChatWorkEnhancedConfig(config map[string]interface{}) (*WeChatWorkEnhancedConfig, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	var weChatConfig WeChatWorkEnhancedConfig
+	if err := json.Unmarshal(data, &weChatConfig); err != nil {
+		return nil, err
+	}
+
+	if weChatConfig.WebhookURL == "" && (weChatConfig.CorpID == "" || weChatConfig.CorpSecret == "" || weChatConfig.AgentID == "") {
+		return nil, fmt.Errorf("either webhook_url or (corp_id, corp_secret, agent_id) is required")
+	}
+
+	return &weChatConfig, nil
+}
+
+func (w *WeChatWorkEnhancedChannel) Name() string {
+	return "wechat_work_enhanced"
+}
+
+func (w *WeChatWorkEnhancedChannel) ValidateConfig() error {
+	_, err := ParseWeChatWorkEnhancedConfig(w.GetConfig())
+	return err
+}
+
+func (w *WeChatWorkEnhancedChannel) ShouldSend(severity string) bool {
+	if len(w.weChatConfig.BlockedSeverities) > 0 {
+		for _, blocked := range w.weChatConfig.BlockedSeverities {
+			if strings.EqualFold(blocked, severity) {
+				return false
+			}
+		}
+	}
+
+	if len(w.weChatConfig.AllowedSeverities) > 0 {
+		for _, allowed := range w.weChatConfig.AllowedSeverities {
+			if strings.EqualFold(allowed, severity) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if w.weChatConfig.MinSeverity != "" {
+		return w.isSeverityHighEnough(severity, w.weChatConfig.MinSeverity)
+	}
+
+	return true
+}
+
+func (w *WeChatWorkEnhancedChannel) isSeverityHighEnough(current, minimum string) bool {
+	severityLevels := map[string]int{
+		"debug":     0,
+		"info":      1,
+		"notice":    2,
+		"warning":   3,
+		"warn":      3,
+		"error":     4,
+		"critical":  5,
+		"alert":     6,
+		"emergency": 7,
+		"emerg":     7,
+	}
+
+	currentLevel := severityLevels[strings.ToLower(current)]
+	minLevel := severityLevels[strings.ToLower(minimum)]
+
+	return currentLevel >= minLevel
+}
+
+func (w *WeChatWorkEnhancedChannel) Send(msg AlertMessage) error {
+	if !w.ShouldSend(msg.Severity) {
+		w.logger.Debug("Message filtered by severity", "severity", msg.Severity)
+		return nil
+	}
+
+	if w.weChatConfig.WebhookURL != "" {
+		return w.sendViaWebhook(msg)
+	}
+
+	return w.sendViaAPI(msg)
+}
+
+func (w *WeChatWorkEnhancedChannel) sendViaWebhook(msg AlertMessage) error {
+	content := w.buildMarkdownContent(msg)
+	message := WeChatWorkMessage{
+		MsgType:  "markdown",
+		Markdown: &WeChatMarkdownContent{
+			Content: content,
+		},
+	}
+
+	if w.weChatConfig.AgentID != "" {
+		message.AgentID = w.weChatConfig.AgentID
+	}
+	if len(w.weChatConfig.ToUsers) > 0 {
+		message.ToUser = strings.Join(w.weChatConfig.ToUsers, "|")
+	}
+	if len(w.weChatConfig.ToParties) > 0 {
+		message.ToParty = strings.Join(w.weChatConfig.ToParties, "|")
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	resp, err := w.client.Post(w.weChatConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("wechat work API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	if errCode, ok := result["errcode"].(float64); ok && errCode != 0 {
+		return fmt.Errorf("wechat work API error: %d - %s", int(errCode), result["errmsg"])
+	}
+
+	w.logger.Info("WeChat Work message sent successfully", "severity", msg.Severity)
+	return nil
+}
+
+func (w *WeChatWorkEnhancedChannel) buildMarkdownContent(msg AlertMessage) string {
+	var content strings.Builder
+
+	content.WriteString(fmt.Sprintf("### <font color=\"%s\">[%s] %s</font>\n\n",
+		w.getSeverityColorHex(msg.Severity),
+		strings.ToUpper(msg.Severity),
+		msg.Title,
+	))
+
+	content.WriteString(fmt.Sprintf("> **Details:** %s\n\n", msg.Message))
+	content.WriteString(fmt.Sprintf("> **Event ID:** %s\n\n", msg.EventID))
+	content.WriteString(fmt.Sprintf("> **Time:** %s\n\n", msg.Timestamp.Format("2006-01-02 15:04:05")))
+
+	if len(msg.Context) > 0 {
+		content.WriteString("> **Context:**\n")
+		for key, value := range msg.Context {
+			content.WriteString(fmt.Sprintf("> - %s: %v\n", key, value))
+		}
+	}
+
+	return content.String()
+}
+
+func (w *WeChatWorkEnhancedChannel) sendViaAPI(msg AlertMessage) error {
+	accessToken, err := w.getAccessToken()
+	if err != nil {
+		return fmt.Errorf("failed to get access token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", accessToken)
+
+	content := w.buildTextContent(msg)
+	message := WeChatWorkMessage{
+		MsgType: "text",
+		AgentID: w.weChatConfig.AgentID,
+		Text: &WeChatTextContent{
+			Content: content,
+		},
+	}
+
+	if len(w.weChatConfig.ToUsers) > 0 {
+		message.ToUser = strings.Join(w.weChatConfig.ToUsers, "|")
+	}
+	if len(w.weChatConfig.ToParties) > 0 {
+		message.ToParty = strings.Join(w.weChatConfig.ToParties, "|")
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	resp, err := w.client.Post(apiURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	if errCode, ok := result["errcode"].(float64); ok && errCode != 0 {
+		return fmt.Errorf("wechat work API error: %d - %s", int(errCode), result["errmsg"])
+	}
+
+	return nil
+}
+
+func (w *WeChatWorkEnhancedChannel) getAccessToken() (string, error) {
+	w.mu.RLock()
+	if w.weChatConfig.AccessToken != "" && time.Now().Before(w.weChatConfig.TokenExpiresAt.Add(-5*time.Minute)) {
+		token := w.weChatConfig.AccessToken
+		w.mu.RUnlock()
+		return token, nil
+	}
+	w.mu.RUnlock()
+
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s",
+		w.weChatConfig.CorpID,
+		w.weChatConfig.CorpSecret,
+	)
+
+	resp, err := w.client.Get(apiURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if errCode, ok := result["errcode"].(float64); ok && errCode != 0 {
+		return "", fmt.Errorf("failed to get access token: %d - %s", int(errCode), result["errmsg"])
+	}
+
+	accessToken, _ := result["access_token"].(string)
+	expiresIn, _ := result["expires_in"].(float64)
+
+	w.mu.Lock()
+	w.weChatConfig.AccessToken = accessToken
+	w.weChatConfig.TokenExpiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
+	w.mu.Unlock()
+
+	return accessToken, nil
+}
+
+func (w *WeChatWorkEnhancedChannel) getSeverityColorHex(severity string) string {
+	switch strings.ToLower(severity) {
+	case "critical", "emergency", "emerg":
+		return "red"
+	case "error", "alert":
+		return "red"
+	case "warning", "warn":
+		return "warning"
+	case "notice", "info":
+		return "info"
+	default:
+		return "comment"
+	}
+}
+
+func (w *WeChatWorkEnhancedChannel) SendTextMessage(content string, toUsers []string, toParties []string) error {
+	message := WeChatWorkMessage{
+		MsgType: "text",
+		Text: &WeChatTextContent{
+			Content: content,
+		},
+	}
+
+	if len(toUsers) > 0 {
+		message.ToUser = strings.Join(toUsers, "|")
+	}
+	if len(toParties) > 0 {
+		message.ToParty = strings.Join(toParties, "|")
+	}
+
+	if w.weChatConfig.WebhookURL != "" {
+		webhookMessage := WeChatWorkMessage{
+			MsgType: "text",
+			Text:    message.Text,
+		}
+		data, err := json.Marshal(webhookMessage)
+		if err != nil {
+			return err
+		}
+
+		resp, err := w.client.Post(w.weChatConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		return nil
+	}
+
+	accessToken, err := w.getAccessToken()
+	if err != nil {
+		return err
+	}
+
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", accessToken)
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	resp, err := w.client.Post(apiURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	if errCode, ok := result["errcode"].(float64); ok && errCode != 0 {
+		return fmt.Errorf("wechat work API error: %d", int(errCode))
+	}
+
+	return nil
+}
+
+func (w *WeChatWorkEnhancedChannel) SendMarkdownMessage(content string) error {
+	message := WeChatWorkMessage{
+		MsgType: "markdown",
+		Markdown: &WeChatMarkdownContent{
+			Content: content,
+		},
+	}
+
+	if w.weChatConfig.WebhookURL != "" {
+		data, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+
+		resp, err := w.client.Post(w.weChatConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		return nil
+	}
+
+	accessToken, err := w.getAccessToken()
+	if err != nil {
+		return err
+	}
+
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", accessToken)
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	resp, err := w.client.Post(apiURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func (w *WeChatWorkEnhancedChannel) SendNewsMessage(articles []WeChatArticle) error {
+	message := WeChatWorkMessage{
+		MsgType: "news",
+		News: &WeChatNewsContent{
+			Articles: articles,
+		},
+	}
+
+	if w.weChatConfig.WebhookURL != "" {
+		data, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+
+		resp, err := w.client.Post(w.weChatConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		return nil
+	}
+
+	accessToken, err := w.getAccessToken()
+	if err != nil {
+		return err
+	}
+
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", accessToken)
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	resp, err := w.client.Post(apiURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+type EnhancedAlertManager struct {
+	channels     map[string]AlertChannel
+	mu           sync.RWMutex
+	logger       *logger.Logger
+}
+
+var enhancedAlertManager *EnhancedAlertManager
+var enhancedAlertOnce sync.Once
+
+func GetEnhancedAlertManager() *EnhancedAlertManager {
+	enhancedAlertOnce.Do(func() {
+		enhancedAlertManager = &EnhancedAlertManager{
+			channels: make(map[string]AlertChannel),
+			logger:   logger.Default(),
+		}
+	})
+	return enhancedAlertManager
+}
+
+func (m *EnhancedAlertManager) RegisterChannel(name string, channel AlertChannel) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := channel.ValidateConfig(); err != nil {
+		return fmt.Errorf("invalid channel configuration: %w", err)
+	}
+
+	m.channels[name] = channel
+	m.logger.Log(logger.INFO, "Alert channel registered", logger.Fields{"name": name})
+	return nil
+}
+
+func (m *EnhancedAlertManager) UnregisterChannel(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.channels, name)
+}
+
+func (m *EnhancedAlertManager) GetChannel(name string) (AlertChannel, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	channel, exists := m.channels[name]
+	if !exists {
+		return nil, fmt.Errorf("channel not found: %s", name)
+	}
+	return channel, nil
+}
+
+func (m *EnhancedAlertManager) ListChannels() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	names := make([]string, 0, len(m.channels))
+	for name := range m.channels {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (m *EnhancedAlertManager) SendToAll(msg AlertMessage) []error {
+	var errors []error
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for name, channel := range m.channels {
+		if err := channel.Send(msg); err != nil {
+			errors = append(errors, fmt.Errorf("channel %s: %w", name, err))
+			m.logger.Error("Failed to send alert to channel", "channel", name, "error", err)
+		}
+	}
+
+	return errors
+}
+
+func (m *EnhancedAlertManager) SendTo(name string, msg AlertMessage) error {
+	channel, err := m.GetChannel(name)
+	if err != nil {
+		return err
+	}
+
+	if err := channel.Send(msg); err != nil {
+		m.logger.Log(logger.ERROR, "Failed to send alert", logger.Fields{"channel": name, "error": err.Error()})
+		return err
+	}
+
+	return nil
+}
+
+func (m *EnhancedAlertManager) SendWithSeverity(severity string, title, message string, context map[string]interface{}) []error {
+	msg := AlertMessage{
+		Title:     title,
+		Message:   message,
+		Severity:  severity,
+		EventID:   fmt.Sprintf("evt_%d", time.Now().UnixNano()),
+		Timestamp: time.Now(),
+		Context:   context,
+	}
+
+	return m.SendToAll(msg)
+}

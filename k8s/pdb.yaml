@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PodDisruptionBudget
+metadata:
+  name: hjtpx-app-pdb
+  namespace: hjtpx
+  labels:
+    app: hjtpx-app
+    component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: hjtpx-app
+      component: backend
+---
+apiVersion: v1
+kind: PodDisruptionBudget
+metadata:
+  name: hjtpx-postgres-pdb
+  namespace: hjtpx
+  labels:
+    app: hjtpx-postgres
+    component: database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: hjtpx-postgres
+      component: database

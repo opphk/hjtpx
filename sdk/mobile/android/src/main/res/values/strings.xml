@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hjtpx Captcha SDK</string>
+    <string name="captcha_loading">加载验证中...</string>
+    <string name="captcha_slider_hint">拖动滑块完成验证</string>
+    <string name="captcha_success">验证成功</string>
+    <string name="captcha_failed">验证失败，请重试</string>
+    <string name="captcha_timeout">验证超时，请重试</string>
+    <string name="captcha_network_error">网络连接失败</string>
+    <string name="captcha_retry">重试</string>
+</resources>
