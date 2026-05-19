@@ -6,7 +6,11 @@ import (
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
 )
 
+var aiModelV3Handler *handler.AIModelV3Handler
+
 func SetupRoutes(r *gin.Engine) {
+	aiModelV3Handler = handler.NewAIModelV3Handler()
+
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
@@ -75,6 +79,12 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)
 		api.POST("/captcha/combo/verify", handler.ComboCaptchaVerify)
 		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
+
+		// ============ v17.0 新增 AI 模型 v3 路由 ============
+		api.POST("/ai/v3/smart-captcha/generate", aiModelV3Handler.GenerateSmartCaptcha)
+		api.POST("/ai/v3/risk-assessment", aiModelV3Handler.ComprehensiveRiskAssessment)
+		api.POST("/ai/v3/feedback", aiModelV3Handler.RecordFeedback)
+		api.GET("/ai/v3/stats", aiModelV3Handler.GetLearningStats)
 
 		// 统一验证码验证接口
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
