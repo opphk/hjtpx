@@ -3,6 +3,7 @@ package captcha
 import (
 	"context"
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 
