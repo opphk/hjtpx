@@ -10,7 +10,6 @@ import (
 
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
-	"gorm.io/gorm"
 )
 
 type LogService struct{}
@@ -461,7 +460,7 @@ type CountResult struct {
 	Count int64
 }
 
-func (s *LogService) getCountsByField(field, startDate, endDate time.Time) ([]CountResult, error) {
+func (s *LogService) getCountsByField(field string, startDate, endDate time.Time) ([]CountResult, error) {
 	var results []CountResult
 
 	query := database.DB.Model(&AuditLog{}).

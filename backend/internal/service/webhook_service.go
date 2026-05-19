@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 )
@@ -685,7 +684,6 @@ func (m *WebhookManager) deliverWebhook(delivery WebhookDelivery) {
 		return
 	}
 	
-	var lastErr error
 	maxAttempts := 1
 	if webhook.RetryEnabled {
 		maxAttempts = webhook.RetryCount + 1
@@ -701,7 +699,6 @@ func (m *WebhookManager) deliverWebhook(delivery WebhookDelivery) {
 		}
 		
 		if err := m.sendWebhook(webhook, delivery); err != nil {
-			lastErr = err
 			delivery.Error = err.Error()
 			
 			if attempt < maxAttempts {
@@ -822,18 +819,19 @@ func (m *WebhookManager) saveDelivery(delivery *WebhookDelivery) {
 
 func (m *WebhookManager) recordWebhookMetrics(webhookID uint, delivery WebhookDelivery) {
 	if redisClient := redis.GetClient(); redisClient != nil {
+		ctx := context.Background()
 		prefix := fmt.Sprintf("webhook:metrics:%d", webhookID)
 		
 		if delivery.Status == DeliveryStatusSuccess {
-			redisClient.Incr(prefix + ":success")
+			redisClient.Incr(ctx, prefix + ":success")
 		} else {
-			redisClient.Incr(prefix + ":failed")
+			redisClient.Incr(ctx, prefix + ":failed")
 		}
-		redisClient.Incr(prefix + ":total")
+		redisClient.Incr(ctx, prefix + ":total")
 		
-		redisClient.Expire(prefix+":success", 24*time.Hour)
-		redisClient.Expire(prefix+":failed", 24*time.Hour)
-		redisClient.Expire(prefix+":total", 24*time.Hour)
+		redisClient.Expire(ctx, prefix+":success", 24*time.Hour)
+		redisClient.Expire(ctx, prefix+":failed", 24*time.Hour)
+		redisClient.Expire(ctx, prefix+":total", 24*time.Hour)
 	}
 }
 

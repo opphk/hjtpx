@@ -77,7 +77,7 @@ func (pm *PerformanceMonitor) Middleware(next http.Handler) http.Handler {
 			statusCode:     http.StatusOK,
 		}
 
-		next.ServeHTTP(&lrw, r)
+		next.ServeHTTP(lrw, r)
 
 		latency := time.Since(start)
 

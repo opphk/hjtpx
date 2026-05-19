@@ -38,6 +38,7 @@ const (
 var (
 	ErrConnectionClosed   = errors.New("connection closed")
 	ErrInvalidMessageType = errors.New("invalid message type")
+	ErrSessionNotFound    = errors.New("session not found")
 )
 
 // WebSocketMessage 定义通用消息结构

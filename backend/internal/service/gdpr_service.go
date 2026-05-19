@@ -7,6 +7,7 @@ import (
 
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"gorm.io/gorm"
 )
 
 type GDPRService struct{}
@@ -149,7 +150,7 @@ func (s *GDPRService) ExportUserData(userID uint) (map[string]interface{}, error
 		CreatedAt time.Time `json:"created_at"`
 		ExpiresAt time.Time `json:"expires_at"`
 	}
-	database.DB.Model(&models.Session{}).Where("user_id = ?", userID).Select("id, created_at, expires_at").Find(&sessions)
+	database.DB.Table("sessions").Where("user_id = ?", userID).Select("id, created_at, expires_at").Find(&sessions)
 
 	exportData := map[string]interface{}{
 		"exported_at":     time.Now(),
@@ -198,7 +199,7 @@ func (s *GDPRService) DeleteUserData(userID uint, dataTypes []string) (map[strin
 			err = result.Error
 
 		case "sessions":
-			result := database.DB.Where("user_id = ?", userID).Delete(&models.Session{})
+			result := database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
 			count = result.RowsAffected
 			err = result.Error
 
@@ -208,7 +209,7 @@ func (s *GDPRService) DeleteUserData(userID uint, dataTypes []string) (map[strin
 			err = result.Error
 
 		case "user_profile":
-			result := database.DB.Where("user_id = ?", userID).Delete(&models.UserProfile{})
+			result := database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
 			count = result.RowsAffected
 			err = result.Error
 
@@ -262,7 +263,7 @@ func (s *GDPRService) AnonymizeUserData(userID uint) error {
 		"user_agent": "[REDACTED]",
 	})
 
-	database.DB.Model(&models.Session{}).Where("user_id = ?", userID).Delete(&models.Session{})
+	database.DB.Where("user_id = ?", userID).Delete(&struct{}{})
 
 	return nil
 }

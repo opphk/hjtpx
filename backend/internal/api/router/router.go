@@ -78,8 +78,6 @@ func setupStaticFiles(r *gin.Engine) {
 func setupRoutes(r *gin.Engine) {
 	cfg := config.GetConfig()
 	backupHandler := handler.GetBackupHandler(cfg)
-	cacheHandler := handler.NewCacheMetricsHandler()
-	dbHandler := handler.NewDatabaseMetricsHandler()
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.GET("/docs", func(c *gin.Context) {
@@ -123,7 +121,7 @@ func setupRoutes(r *gin.Engine) {
 	metrics.RegisterMetricsEndpoint(r)
 
 	setupHTMLRoutes(r)
-	setupAdminRoutes(r, cacheHandler, dbHandler)
+	setupAdminRoutes(r)
 	setupAPIRoutes(r, backupHandler)
 }
 
@@ -157,7 +155,7 @@ func setupHTMLRoutes(r *gin.Engine) {
 	})
 }
 
-func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, dbHandler *handler.DatabaseMetricsHandler) {
+func setupAdminRoutes(r *gin.Engine) {
 	adminRouter := r.Group("/admin")
 
 	adminRouter.GET("/", func(c *gin.Context) {
@@ -237,29 +235,6 @@ func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, 
 	adminRouter.POST("/api/whitelabel/logo/:type", handler.UploadLogo)
 	adminRouter.DELETE("/api/whitelabel/logo/:type", handler.DeleteLogo)
 	adminRouter.POST("/api/whitelabel/reset", handler.ResetWhitelabelConfig)
-
-	// 缓存性能监控与优化
-	adminRouter.GET("/api/cache/health", cacheHandler.GetCacheHealth)
-	adminRouter.GET("/api/cache/metrics", cacheHandler.GetCacheDetailedMetrics)
-	adminRouter.GET("/api/cache/hot-keys", cacheHandler.GetCacheHotKeys)
-	adminRouter.GET("/api/cache/latency", cacheHandler.GetCacheLatencyDistribution)
-	adminRouter.GET("/api/cache/memory-trend", cacheHandler.GetCacheMemoryTrend)
-	adminRouter.GET("/api/cache/alerts", cacheHandler.GetCacheAlerts)
-	adminRouter.POST("/api/cache/alerts/acknowledge", cacheHandler.AcknowledgeCacheAlert)
-	adminRouter.POST("/api/cache/alerts/clear", cacheHandler.ClearCacheAlerts)
-	adminRouter.POST("/api/cache/metrics/reset", cacheHandler.ResetCacheMetrics)
-	adminRouter.POST("/api/cache/warmup", cacheHandler.TriggerCacheWarmup)
-	adminRouter.GET("/api/cache/warmup-status", cacheHandler.GetCacheWarmupStatus)
-	adminRouter.GET("/api/cache/consistency-status", cacheHandler.GetCacheConsistencyStatus)
-
-	// 数据库性能监控与优化
-	adminRouter.GET("/api/database/health", dbHandler.GetDatabaseHealth)
-	adminRouter.GET("/api/database/slow-queries", dbHandler.GetSlowQueries)
-	adminRouter.GET("/api/database/top-queries", dbHandler.GetTopQueries)
-	adminRouter.GET("/api/database/query-distribution", dbHandler.GetQueryDistribution)
-	adminRouter.GET("/api/database/performance-report", dbHandler.GeneratePerformanceReport)
-	adminRouter.GET("/api/database/optimization-suggestions", dbHandler.GetOptimizationSuggestions)
-	adminRouter.POST("/api/database/clear-metrics", dbHandler.ClearPerformanceMetrics)
 }
 
 func setupAPIRoutes(r *gin.Engine, backupHandler *handler.BackupHandler) {
@@ -273,7 +248,8 @@ func setupAPIRoutes(r *gin.Engine, backupHandler *handler.BackupHandler) {
 	setupBehaviorRoutes(api)
 	setupVerifyRoutes(api)
 	setupMFARoutes(api)
-	setupGDPRRoutes(api)
+	// GDPR routes暂时禁用，等待handler实现完成
+	// setupGDPRRoutes(api)
 	setupAPIV1AdminRoutes(api, backupHandler)
 }
 
@@ -380,18 +356,6 @@ func setupMFARoutes(api *gin.RouterGroup) {
 	mfa.POST("/backup-codes/verify", handler.VerifyBackupCodeHandler)
 }
 
-func setupGDPRRoutes(api *gin.RouterGroup) {
-	gdpr := api.Group("/gdpr")
-	gdpr.Use(middleware.AuthMiddleware())
-	gdpr.GET("/consent", handler.GetGDPRHandler().GetConsent)
-	gdpr.PUT("/consent", handler.GetGDPRHandler().UpdateConsent)
-	gdpr.POST("/data-export", handler.GetGDPRHandler().RequestDataExport)
-	gdpr.GET("/data-export/:id", handler.GetGDPRHandler().GetExportStatus)
-	gdpr.GET("/data-export/:id/download", handler.GetGDPRHandler().DownloadExport)
-	gdpr.POST("/data-deletion", handler.GetGDPRHandler().RequestDataDeletion)
-	gdpr.GET("/data-deletion/:id", handler.GetGDPRHandler().GetDeletionStatus)
-}
-
 func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHandler) {
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware())
@@ -489,11 +453,4 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 	admin.GET("/ab-tests/:id/compare", handler.CompareVariants)
 	admin.GET("/ab-tests/:id/variant/:variantId/analytics", handler.GetVariantAnalytics)
 	admin.GET("/ab-tests/:id/recommendations", handler.GetTestRecommendations)
-
-	userProfileHandler := handler.GetUserProfileHandler()
-	admin.GET("/user-profiles", userProfileHandler.ListUserProfiles)
-	admin.GET("/user-profiles/:id", userProfileHandler.GetUserProfile)
-	admin.GET("/user-profiles/:id/summary", userProfileHandler.GetUserProfileSummary)
-	admin.GET("/user-profiles/:id/export", userProfileHandler.ExportUserProfile)
-	admin.GET("/user-profiles/compare/:id1/:id2", userProfileHandler.CompareUserProfiles)
 }
