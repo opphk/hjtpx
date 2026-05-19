@@ -1,0 +1,132 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: serverless-prewarm
+  namespace: serverless
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: serverless-prewarm
+        spec:
+          serviceAccountName: serverless-controller
+          containers:
+          - name: prewarm
+            image: serverless/runtime:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting pre-warming process..."
+              for function in $(kubectl get functions -n serverless -o jsonpath='{.items[*].metadata.name}'); do
+                echo "Pre-warming function: $function"
+                curl -X POST "http://serverless-runtime.serverless.svc.cluster.local/invoke" \
+                  -H "X-Function-Name: $function" \
+                  -H "X-Prewarm: true" \
+                  -d '{"prewarm": true}'
+              done
+              echo "Pre-warming completed"
+            env:
+            - name: FUNCTION_REGISTRY
+              value: "http://serverless-manager.serverless.svc.cluster.local:8080"
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+          restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: serverless-metrics-collector
+  namespace: serverless
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: serverless-metrics-collector
+        spec:
+          serviceAccountName: serverless-controller
+          containers:
+          - name: collector
+            image: serverless/runtime:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Collecting metrics..."
+              curl -s "http://serverless-runtime.serverless.svc.cluster.local:9090/metrics" > /tmp/metrics.txt
+              echo "Metrics collected at $(date)"
+            env:
+            - name: METRICS_ENDPOINT
+              value: "http://prometheus:9090"
+            - name: METRICS_BUCKET
+              value: "gs://serverless-metrics"
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+          restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: serverless-cost-reporter
+  namespace: serverless
+spec:
+  schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: serverless-cost-reporter
+        spec:
+          serviceAccountName: serverless-controller
+          containers:
+          - name: reporter
+            image: serverless/runtime:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Generating cost report..."
+              curl -s "http://serverless-cost-optimizer.serverless.svc.cluster.local:8080/report" > /tmp/cost-report.json
+              echo "Cost report generated at $(date)"
+            env:
+            - name: COST_ALERT_EMAIL
+              value: "cost-alerts@example.com"
+            - name: BUDGET_LIMIT
+              value: "1000.00"
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+          restartPolicy: OnFailure

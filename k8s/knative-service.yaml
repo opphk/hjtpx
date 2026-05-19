@@ -1,0 +1,102 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: serverless-function
+  namespace: serverless
+  labels:
+    app: serverless-function
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/target: "70"
+        autoscaling.knative.dev/metric: "cpu"
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      containers:
+      - image: serverless/function:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: FUNCTION_NAME
+          value: "my-function"
+        - name: RUNTIME
+          value: "go1.20"
+        - name: HANDLER
+          value: "Handle"
+        - name: MEMORY_LIMIT
+          value: "256Mi"
+        - name: CPU_LIMIT
+          value: "100m"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+---
+apiVersion: serving.knative.dev/v1
+kind: Configuration
+metadata:
+  name: serverless-function
+  namespace: serverless
+spec:
+  template:
+    spec:
+      containers:
+      - image: serverless/function:latest
+---
+apiVersion: serving.knative.dev/v1
+kind: Revision
+metadata:
+  name: serverless-function-v1
+  namespace: serverless
+  labels:
+    serving.knative.dev/configuration: serverless-function
+spec:
+  containerConcurrency: 1
+  timeoutSeconds: 300
+  containers:
+  - image: serverless/function:v1
+    ports:
+    - containerPort: 8080
+    env:
+    - name: FUNCTION_VERSION
+      value: "v1"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+---
+apiVersion: networking.internal.knative.dev/v1alpha1
+kind: ServerlessService
+metadata:
+  name: serverless-function-svc
+  namespace: serverless
+spec:
+  protocolType: http1
+  porter:
+    port: 8080
+    protocol: h2c
+  pa死活:
+    revisionName: serverless-function-v1
+    protocolType: http1
