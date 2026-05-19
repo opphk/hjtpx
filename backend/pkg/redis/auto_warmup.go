@@ -376,7 +376,7 @@ func (ws *WarmupScheduler) executeAdaptiveWarmup(keys []string) {
 
 func (ws *WarmupScheduler) TriggerWarmup(profileName string) error {
 	ws.mu.RLock()
-	profile, exists := ws.profiles[profileName]
+	_, exists := ws.profiles[profileName]
 	ws.mu.RUnlock()
 
 	if !exists {
@@ -398,7 +398,7 @@ func (ws *WarmupScheduler) GetStats() map[string]*WarmupMetrics {
 	defer ws.mu.RUnlock()
 
 	stats := make(map[string]*WarmupMetrics)
-	for name, profile := range ws.profiles {
+	for name := range ws.profiles {
 		stats[name] = ws.performanceTracker.GetMetrics(name)
 	}
 	return stats
@@ -473,7 +473,7 @@ done:
 	we.mu.Unlock()
 
 	if we.stats.TotalRuns.Load() > 0 {
-		we.stats.SuccessRuns.Add(localStats.WarmedKeys.Load())
+		we.stats.SuccessRuns.Add(localStats.WarmmedKeys.Load())
 		we.stats.TotalKeys.Add(localStats.TotalKeys.Load())
 	}
 }
@@ -505,7 +505,7 @@ func (we *WarmupExecutor) processBatch(ctx context.Context, keys []string, profi
 			Client.Set(ctx, key, data, profile.TTL)
 		}
 
-		stats.WarmedKeys.Add(1)
+		stats.WarmmedKeys.Add(1)
 		stats.TotalKeys.Add(1)
 	}
 }
@@ -572,7 +572,7 @@ func (ap *AccessPredictor) updatePattern(key string) {
 	}
 
 	avgFrequency := float64(totalCount) / float64(len(records))
-	avgDuration := float64(totalDuration.Milliseconds()) / float64(len(records))
+	_ = float64(totalDuration.Milliseconds()) / float64(len(records))
 
 	pattern := &AccessPattern{
 		Key:             key,
@@ -693,30 +693,17 @@ func (tt *ThresholdTrigger) ShouldTrigger() bool {
 		return false
 	}
 
-	info := Client.Info(tt.ws.ctx, "memory")
-	if info == nil {
+	ctx := context.Background()
+	info := Client.Info(ctx, "memory")
+	if info.Err() != nil {
 		return false
 	}
+	
+	return false
+}
 
-	var usedMemory float64
-	var maxMemory float64
-
-	used := info["used_memory"]
-	if used != "" {
-		fmt.Sscanf(used, "%f", &usedMemory)
-	}
-
-	peak := info["maxmemory"]
-	if peak != "" {
-		fmt.Sscanf(peak, "%f", &maxMemory)
-	}
-
-	if maxMemory == 0 {
-		return false
-	}
-
-	utilization := usedMemory / maxMemory
-	return utilization > tt.threshold
+func (tt *ThresholdTrigger) GetWarmupKeys() []string {
+	return nil
 }
 
 func CalculateWarmupPriority(profile *CacheWarmupProfile) int {

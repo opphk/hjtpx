@@ -133,16 +133,6 @@ type HotKeyInfo struct {
 	LastAccess  time.Time
 }
 
-type CacheEntry struct {
-	Key        string
-	Value      []byte
-	TTL        time.Duration
-	Version    int64
-	Tags       []string
-	Compressed bool
-	Level      CacheLevel
-}
-
 type GetOptions struct {
 	Level      CacheLevel
 	SkipLocal  bool

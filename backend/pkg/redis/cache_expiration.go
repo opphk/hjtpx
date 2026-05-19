@@ -92,14 +92,6 @@ type PendingDelete struct {
 	Delay     time.Duration
 }
 
-type CacheConsistencyManager struct {
-	mu          sync.RWMutex
-	lockCache   map[string]*CacheLock
-	versionMap  map[string]int64
-	watchers    map[string][]chan struct{}
-	maxVersions int
-}
-
 type CacheLock struct {
 	Key        string
 	Version    int64
@@ -441,107 +433,6 @@ func (cim *CacheInvalidationManager) Stop() {
 	cim.wg.Wait()
 }
 
-func NewCacheConsistencyManager(maxVersions int) *CacheConsistencyManager {
-	if maxVersions <= 0 {
-		maxVersions = 100
-	}
-
-	return &CacheConsistencyManager{
-		lockCache:   make(map[string]*CacheLock),
-		versionMap:  make(map[string]int64),
-		watchers:    make(map[string][]chan struct{}),
-		maxVersions: maxVersions,
-	}
-}
-
-func (ccm *CacheConsistencyManager) AcquireLock(ctx context.Context, key string, ttl time.Duration) (bool, error) {
-	ccm.mu.Lock()
-	defer ccm.mu.Unlock()
-
-	if lock, exists := ccm.lockCache[key]; exists {
-		if time.Since(lock.AcquiredAt) < lock.TTL {
-			return false, nil
-		}
-	}
-
-	version := ccm.IncrementVersion(key)
-	ccm.lockCache[key] = &CacheLock{
-		Key:        key,
-		Version:    version,
-		AcquiredAt: time.Now(),
-		TTL:        ttl,
-	}
-
-	go ccm.notifyWatchers(key)
-
-	return true, nil
-}
-
-func (ccm *CacheConsistencyManager) ReleaseLock(key string) {
-	ccm.mu.Lock()
-	defer ccm.mu.Unlock()
-	delete(ccm.lockCache, key)
-}
-
-func (ccm *CacheConsistencyManager) IncrementVersion(key string) int64 {
-	version := ccm.versionMap[key] + 1
-	ccm.versionMap[key] = version
-
-	if len(ccm.versionMap) > ccm.maxVersions {
-		ccm.cleanupOldVersions()
-	}
-
-	return version
-}
-
-func (ccm *CacheConsistencyManager) GetVersion(key string) int64 {
-	ccm.mu.RLock()
-	defer ccm.mu.RUnlock()
-	return ccm.versionMap[key]
-}
-
-func (ccm *CacheConsistencyManager) Watch(key string, ch chan struct{}) {
-	ccm.mu.Lock()
-	defer ccm.mu.Unlock()
-	ccm.watchers[key] = append(ccm.watchers[key], ch)
-}
-
-func (ccm *CacheConsistencyManager) Unwatch(key string, ch chan struct{}) {
-	ccm.mu.Lock()
-	defer ccm.mu.Unlock()
-
-	if watchers, ok := ccm.watchers[key]; ok {
-		for i, watcher := range watchers {
-			if watcher == ch {
-				ccm.watchers[key] = append(watchers[:i], watchers[i+1:]...)
-				break
-			}
-		}
-	}
-}
-
-func (ccm *CacheConsistencyManager) notifyWatchers(key string) {
-	ccm.mu.RLock()
-	watchers := ccm.watchers[key]
-	ccm.mu.RUnlock()
-
-	for _, ch := range watchers {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}
-}
-
-func (ccm *CacheConsistencyManager) cleanupOldVersions() {
-	for key := range ccm.versionMap {
-		delete(ccm.versionMap, key)
-		if len(ccm.versionMap) <= ccm.maxVersions/2 {
-			break
-		}
-	}
-}
-
 type AdaptiveExpirationPolicy struct {
 	mu            sync.RWMutex
 	accessCounts  map[string]int64
@@ -732,7 +623,6 @@ func (ceo *CacheExpirationOptimizer) OptimizeTTL(key string, policyName string) 
 var (
 	globalExpirationManager   *CacheExpirationManager
 	globalInvalidationManager *CacheInvalidationManager
-	globalConsistencyManager *CacheConsistencyManager
 	managersOnce             sync.Once
 )
 
@@ -740,7 +630,6 @@ func InitCacheManagers(expirationConfig *CacheExpirationConfig, invalidationConf
 	managersOnce.Do(func() {
 		globalExpirationManager = NewCacheExpirationManager(expirationConfig)
 		globalInvalidationManager = NewCacheInvalidationManager(invalidationConfig)
-		globalConsistencyManager = NewCacheConsistencyManager(1000)
 	})
 }
 
@@ -756,11 +645,4 @@ func GetInvalidationManager() *CacheInvalidationManager {
 		InitCacheManagers(nil, nil)
 	}
 	return globalInvalidationManager
-}
-
-func GetConsistencyManager() *CacheConsistencyManager {
-	if globalConsistencyManager == nil {
-		InitCacheManagers(nil, nil)
-	}
-	return globalConsistencyManager
 }

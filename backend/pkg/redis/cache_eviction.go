@@ -174,7 +174,7 @@ func newLRUCache(maxSize int) *lruCache {
 
 func newLFUCache(maxSize int) *lfuCache {
 	return &lfuCache{
-		items: newLFUFrequencyList(),
+		items: make(map[string]*lfuEntry),
 		freq:  newLFUFrequencyList(),
 		maxSize: maxSize,
 	}
@@ -300,12 +300,12 @@ func (fc *lfuCache) Add(key string, value []byte, ttl time.Duration) {
 	}
 
 	fc.items[key] = entry
-	fc.buckets[1] = append(fc.buckets[1], entry)
-	if fc.minFreq == 0 {
-		fc.minFreq = 1
+	fc.freq.buckets[1] = append(fc.freq.buckets[1], entry)
+	if fc.freq.minFreq == 0 {
+		fc.freq.minFreq = 1
 	}
-	if 1 > fc.maxFreq {
-		fc.maxFreq = 1
+	if 1 > fc.freq.maxFreq {
+		fc.freq.maxFreq = 1
 	}
 
 	if len(fc.items) > fc.maxSize {
@@ -344,10 +344,10 @@ func (fc *lfuCache) remove(key string) {
 }
 
 func (fc *lfuCache) evict() {
-	if fc.minFreq > 0 {
-		if entries, ok := fc.buckets[fc.minFreq]; ok && len(entries) > 0 {
+	if fc.freq.minFreq > 0 {
+		if entries, ok := fc.freq.buckets[fc.freq.minFreq]; ok && len(entries) > 0 {
 			entry := entries[0]
-			fc.buckets[fc.minFreq] = entries[1:]
+			fc.freq.buckets[fc.freq.minFreq] = entries[1:]
 			delete(fc.items, entry.key)
 			fc.evictions++
 		}
@@ -380,7 +380,7 @@ func (ece *EnhancedCacheEvictor) Evict(policy EvictionPolicy) int {
 
 	switch policy {
 	case EvictionPolicyLRU:
-		evicted = ece.l1Cache.evictions
+		evicted = int(ece.l1Cache.evictions)
 	case EvictionPolicyLFU:
 		evicted = int(ece.lfuCache.evictions)
 	case EvictionPolicyTTL:
@@ -390,8 +390,11 @@ func (ece *EnhancedCacheEvictor) Evict(policy EvictionPolicy) int {
 		bestPolicy := ece.adaptive.GetBestPolicy()
 		evicted = ece.Evict(bestPolicy)
 	default:
-		evicted = ece.l1Cache.evictions
+		evicted = int(ece.l1Cache.evictions)
 	}
+
+	ece.stats.LRUEvictions.Store(int64(ece.l1Cache.evictions))
+	ece.stats.LFUEvictions.Store(int64(ece.lfuCache.evictions))
 
 	ece.stats.TotalEvictions.Add(int64(evicted))
 	ece.stats.LastEvictionTime.Store(time.Now())
@@ -449,12 +452,12 @@ func (ece *EnhancedCacheEvictor) Close() {
 
 type AdaptiveEvictionPolicy struct {
 	mu             sync.RWMutex
-	accessPatterns map[string]*AccessPattern
+	accessPatterns map[string]*EvictionAccessPattern
 	metrics        *PolicyMetrics
 	bestPolicy     EvictionPolicy
 }
 
-type AccessPattern struct {
+type EvictionAccessPattern struct {
 	Key           string
 	AccessCount   int64
 	LastAccess    time.Time
@@ -472,7 +475,7 @@ type PolicyMetrics struct {
 
 func NewAdaptiveEvictionPolicy() *AdaptiveEvictionPolicy {
 	return &AdaptiveEvictionPolicy{
-		accessPatterns: make(map[string]*AccessPattern),
+		accessPatterns: make(map[string]*EvictionAccessPattern),
 		metrics:        &PolicyMetrics{},
 		bestPolicy:     EvictionPolicyLRU,
 	}
@@ -484,7 +487,7 @@ func (aep *AdaptiveEvictionPolicy) RecordAccess(key string) {
 
 	pattern, exists := aep.accessPatterns[key]
 	if !exists {
-		pattern = &AccessPattern{
+		pattern = &EvictionAccessPattern{
 			Key:        key,
 			LastAccess: time.Now(),
 		}
@@ -531,7 +534,7 @@ func (aep *AdaptiveEvictionPolicy) ShouldEvict(key string) bool {
 	return true
 }
 
-func (aep *AdaptiveEvictionPolicy) GetPattern(key string) *AccessPattern {
+func (aep *AdaptiveEvictionPolicy) GetPattern(key string) *EvictionAccessPattern {
 	aep.mu.RLock()
 	defer aep.mu.RUnlock()
 	return aep.accessPatterns[key]

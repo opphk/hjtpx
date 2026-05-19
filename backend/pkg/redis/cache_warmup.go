@@ -91,15 +91,6 @@ var DefaultWarmupConfig = &WarmupConfig{
 	Enabled:     true,
 }
 
-type WarmupMetrics struct {
-	TotalWarmupTasks   int32
-	ActiveWarmupTasks  int32
-	CompletedWarmupTasks int32
-	FailedWarmupTasks  int32
-	LastWarmupTime     time.Time
-	AverageWarmupTime  time.Duration
-}
-
 type WarmupStatistics struct {
 	TotalRuns      atomic.Int64
 	SuccessCount   atomic.Int64
@@ -120,7 +111,7 @@ type ScheduledWarmupTask struct {
 	Enabled    bool
 }
 
-type WarmupScheduler struct {
+type CacheWarmupScheduler struct {
 	mu           sync.RWMutex
 	tasks        map[string]*ScheduledWarmupTask
 	running      bool
@@ -135,13 +126,13 @@ func NewWarmupStatistics() *WarmupStatistics {
 	return &WarmupStatistics{}
 }
 
-type WarmupSchedulerConfig struct {
+type CacheWarmupSchedulerConfig struct {
 	MaxWorkers   int
 	PriorityMode string
 	ScheduleEnabled bool
 }
 
-var DefaultWarmupSchedulerConfig = &WarmupSchedulerConfig{
+var DefaultCacheWarmupSchedulerConfig = &CacheWarmupSchedulerConfig{
 	MaxWorkers:      10,
 	PriorityMode:    "adaptive",
 	ScheduleEnabled: true,
@@ -767,14 +758,14 @@ func WarmupAllCache() error {
 	return GetCacheWarmupManager().WarmupAll(context.Background())
 }
 
-func NewWarmupScheduler(config *WarmupSchedulerConfig) *WarmupScheduler {
+func NewCacheWarmupScheduler(config *CacheWarmupSchedulerConfig) *CacheWarmupScheduler {
 	if config == nil {
-		config = DefaultWarmupSchedulerConfig
+		config = DefaultCacheWarmupSchedulerConfig
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &WarmupScheduler{
+	return &CacheWarmupScheduler{
 		tasks:        make(map[string]*ScheduledWarmupTask),
 		ctx:          ctx,
 		cancel:       cancel,
@@ -784,7 +775,7 @@ func NewWarmupScheduler(config *WarmupSchedulerConfig) *WarmupScheduler {
 	}
 }
 
-func (ws *WarmupScheduler) AddScheduledTask(task *CacheWarmupTask, schedule time.Duration) {
+func (ws *CacheWarmupScheduler) AddScheduledTask(task *CacheWarmupTask, schedule time.Duration) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -801,13 +792,13 @@ func (ws *WarmupScheduler) AddScheduledTask(task *CacheWarmupTask, schedule time
 	}
 }
 
-func (ws *WarmupScheduler) RemoveScheduledTask(name string) {
+func (ws *CacheWarmupScheduler) RemoveScheduledTask(name string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 	delete(ws.tasks, name)
 }
 
-func (ws *WarmupScheduler) Start() {
+func (ws *CacheWarmupScheduler) Start() {
 	ws.mu.Lock()
 	if ws.running {
 		ws.mu.Unlock()
@@ -823,7 +814,7 @@ func (ws *WarmupScheduler) Start() {
 	ws.mu.RUnlock()
 }
 
-func (ws *WarmupScheduler) Stop() {
+func (ws *CacheWarmupScheduler) Stop() {
 	ws.mu.Lock()
 	if !ws.running {
 		ws.mu.Unlock()
@@ -835,7 +826,7 @@ func (ws *WarmupScheduler) Stop() {
 	ws.cancel()
 }
 
-func (ws *WarmupScheduler) runScheduledTask(name string) {
+func (ws *CacheWarmupScheduler) runScheduledTask(name string) {
 	ws.mu.RLock()
 	task, exists := ws.tasks[name]
 	ws.mu.RUnlock()
@@ -857,7 +848,7 @@ func (ws *WarmupScheduler) runScheduledTask(name string) {
 	}
 }
 
-func (ws *WarmupScheduler) executeWithPriority(task *CacheWarmupTask) {
+func (ws *CacheWarmupScheduler) executeWithPriority(task *CacheWarmupTask) {
 	ws.workerPool <- struct{}{}
 	defer func() { <-ws.workerPool }()
 
@@ -865,7 +856,7 @@ func (ws *WarmupScheduler) executeWithPriority(task *CacheWarmupTask) {
 	cwm.executeTask(task)
 }
 
-func (ws *WarmupScheduler) GetScheduledTasks() []*ScheduledWarmupTask {
+func (ws *CacheWarmupScheduler) GetScheduledTasks() []*ScheduledWarmupTask {
 	ws.mu.RLock()
 	defer ws.mu.RUnlock()
 
@@ -876,7 +867,7 @@ func (ws *WarmupScheduler) GetScheduledTasks() []*ScheduledWarmupTask {
 	return tasks
 }
 
-func (ws *WarmupScheduler) PauseTask(name string) {
+func (ws *CacheWarmupScheduler) PauseTask(name string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -885,7 +876,7 @@ func (ws *WarmupScheduler) PauseTask(name string) {
 	}
 }
 
-func (ws *WarmupScheduler) ResumeTask(name string) {
+func (ws *CacheWarmupScheduler) ResumeTask(name string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -898,19 +889,19 @@ func (ws *WarmupScheduler) ResumeTask(name string) {
 }
 
 var (
-	globalWarmupScheduler *WarmupScheduler
+	globalCacheWarmupScheduler *CacheWarmupScheduler
 	globalSchedulerOnce  sync.Once
 )
 
-func InitWarmupScheduler(config *WarmupSchedulerConfig) {
+func InitCacheWarmupScheduler(config *CacheWarmupSchedulerConfig) {
 	globalSchedulerOnce.Do(func() {
-		globalWarmupScheduler = NewWarmupScheduler(config)
+		globalCacheWarmupScheduler = NewCacheWarmupScheduler(config)
 	})
 }
 
-func GetWarmupScheduler() *WarmupScheduler {
-	if globalWarmupScheduler == nil {
-		InitWarmupScheduler(nil)
+func GetCacheWarmupScheduler() *CacheWarmupScheduler {
+	if globalCacheWarmupScheduler == nil {
+		InitCacheWarmupScheduler(nil)
 	}
-	return globalWarmupScheduler
+	return globalCacheWarmupScheduler
 }

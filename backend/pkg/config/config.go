@@ -14,6 +14,7 @@ type Config struct {
 	Alert    AlertConfig
 	I18n     I18nConfig
 	Backup   BackupConfig
+	CDN      *CDNConfig
 }
 
 type DatabaseConfig struct {
