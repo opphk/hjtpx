@@ -6,16 +6,81 @@ import (
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
 )
 
+func SetupCDNRoutes(r *gin.Engine) {
+	api := r.Group("/api/v1/cdn")
+	{
+		// 区域管理
+		regions := api.Group("/regions")
+		{
+			regions.GET("", handler.GetRegions)
+			regions.GET("/:region_id", handler.GetRegion)
+			regions.POST("", handler.CreateRegion)
+			regions.PUT("/:region_id", handler.UpdateRegion)
+			regions.DELETE("/:region_id", handler.DeleteRegion)
+			regions.GET("/:region_id/stats", handler.GetRegionStats)
+		}
+
+		// 全局统计
+		api.GET("/stats/global", handler.GetGlobalStats)
+
+		// 节点管理
+		nodes := api.Group("/nodes")
+		{
+			nodes.GET("", handler.GetNodes)
+			nodes.GET("/:node_id", handler.GetNode)
+			nodes.POST("", handler.RegisterNode)
+			nodes.DELETE("/:node_id", handler.RemoveNode)
+			nodes.GET("/healthy", handler.GetHealthyNodes)
+			nodes.PUT("/:node_id/health", handler.UpdateNodeHealth)
+		}
+
+		// 边缘函数
+		api.POST("/edge-function/:function_name", handler.ExecuteEdgeFunction)
+
+		// 缓存管理
+		cache := api.Group("/cache")
+		{
+			cache.GET("/stats", handler.GetCacheStats)
+			cache.POST("/clear", handler.ClearCache)
+			cache.POST("/purge", handler.PurgeCache)
+			cache.POST("/warmup", handler.WarmupCache)
+		}
+
+		// 智能路由
+		routing := api.Group("/routing")
+		{
+			routing.GET("/location", handler.GetClientLocation)
+			routing.GET("/decision", handler.GetRoutingDecision)
+		}
+	}
+}
+
 func SetupRoutes(r *gin.Engine) {
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
+	r.Use(middleware.AuditLogMiddleware())
+
+	SetupCDNRoutes(r)
 
 	api := r.Group("/api/v1")
 	{
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{"status": "ok"})
 		})
+
+		// ============ SSO路由 ============
+		handler.RegisterSSORoutes(api)
+		handler.RegisterOIDCRoutes(api)
+
+		// ============ SCIM路由 ============
+		handler.RegisterSCIMRoutes(api)
+
+		// ============ 审计日志路由 ============
+		handler.RegisterAuditLogRoutes(api)
+
+		// ============ 合规报告路由 ============
+		handler.RegisterComplianceRoutes(api)
 
 		// 滑块验证码
 		api.POST("/captcha/slider/create", handler.CreateSliderCaptcha)
@@ -59,6 +124,55 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/combo/create", handler.CreateComboCaptcha)
 		api.POST("/captcha/combo/verify", handler.VerifyComboCaptcha)
 		api.GET("/captcha/combo/status/:session_id", handler.GetComboCaptchaStatus)
+
+		// 组合验证流程 API
+		combo := api.Group("/combo-verification")
+		{
+			// 验证流程管理
+			combo.POST("/flow", handler.CreateComboVerificationFlow)
+			combo.GET("/flow/:flow_id", handler.GetComboVerificationFlow)
+			combo.DELETE("/flow/:flow_id", handler.DeleteComboVerificationFlow)
+			
+			// 步骤验证
+			combo.POST("/verify/step", handler.VerifyComboVerificationStep)
+			combo.POST("/verify/all", handler.VerifyComboVerificationAll)
+		}
+
+		// 智能验证码选择 API
+		smart := api.Group("/smart-captcha")
+		{
+			smart.POST("/select", handler.SelectSmartCaptcha)
+			smart.POST("/select-multiple", handler.SelectMultipleCaptchas)
+			smart.GET("/capabilities", handler.GetAllCaptchaCapabilities)
+			smart.GET("/capabilities/:captcha_type", handler.GetCaptchaCapability)
+			smart.GET("/analyze/:user_id", handler.AnalyzeUserCaptchaHistory)
+		}
+
+		// 动态难度调整 API
+		difficulty := api.Group("/dynamic-difficulty")
+		{
+			difficulty.POST("/behavior", handler.UpdateBehaviorAndAdjustDifficulty)
+			difficulty.POST("/behavior/batch", handler.BatchUpdateBehavior)
+			difficulty.GET("/user/:user_id", handler.GetDynamicUserDifficulty)
+			difficulty.POST("/risk-score", handler.SetRiskScore)
+			difficulty.GET("/report/:user_id", handler.GetDifficultyAnalysisReport)
+			difficulty.GET("/stats", handler.GetGlobalDifficultyStats)
+			difficulty.POST("/session/refresh/:user_id", handler.RefreshDifficultySession)
+			difficulty.GET("/history/:user_id", handler.GetAdjustmentHistory)
+		}
+
+		// AR验证码
+		api.POST("/captcha/ar/create", handler.CreateARCaptcha)
+		api.POST("/captcha/ar/verify", handler.VerifyARCaptcha)
+		api.GET("/captcha/ar/status/:sessionID", handler.GetARCaptchaStatus)
+		api.GET("/captcha/ar/check/:sessionID", handler.CheckARCaptchaValid)
+		api.GET("/captcha/ar/webxr-support", handler.GetWebXRSupport)
+
+		// 视频验证码
+		api.POST("/captcha/video/create", handler.CreateVideoCaptcha)
+		api.POST("/captcha/video/verify", handler.VerifyVideoCaptcha)
+		api.GET("/captcha/video/status/:session_id", handler.GetVideoCaptchaStatus)
+		api.GET("/captcha/video/check/:session_id", handler.CheckVideoCaptchaValid)
 
 		// 统一验证码验证接口
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
@@ -140,6 +254,48 @@ func SetupRoutes(r *gin.Engine) {
 				abtest.GET("/:id/report", handler.GetTestReport)
 				abtest.GET("/active", handler.GetActiveTests)
 				abtest.GET("/summary", handler.GetABTestSummary)
+			}
+
+			// ============ 租户管理路由 ============
+			tenants := admin.Group("/tenants", middleware.AuthMiddleware())
+			{
+				tenants.GET("", handler.ListTenants)
+				tenants.POST("", handler.CreateTenant)
+				tenants.GET("/:id", handler.GetTenant)
+				tenants.PUT("/:id", handler.UpdateTenant)
+				tenants.DELETE("/:id", handler.DeleteTenant)
+
+				// 租户用户管理
+				tenants.GET("/:tenant_id/users", handler.ListTenantUsers)
+				tenants.POST("/:tenant_id/users", handler.AddTenantUser)
+				tenants.PUT("/:tenant_id/users/:user_id/role", handler.UpdateTenantUserRole)
+				tenants.DELETE("/:tenant_id/users/:user_id", handler.RemoveTenantUser)
+
+				// 租户邀请管理
+				tenants.POST("/:tenant_id/invitations", handler.CreateInvitation)
+				tenants.POST("/invitations/:token/accept", handler.AcceptInvitation)
+				tenants.POST("/invitations/:id/revoke", handler.RevokeInvitation)
+
+				// 租户配额管理
+				tenants.GET("/:tenant_id/quotas", handler.ListTenantQuotas)
+				tenants.GET("/:tenant_id/quotas/detail", handler.GetTenantQuota)
+				tenants.PUT("/:tenant_id/quotas", handler.UpdateTenantQuota)
+
+				// 租户账单管理
+				tenants.GET("/:tenant_id/bills", handler.ListTenantBills)
+				tenants.GET("/bills/:bill_id", handler.GetTenantBill)
+				tenants.POST("/:tenant_id/bills/generate", handler.GenerateMonthlyBill)
+
+				// 租户支付管理
+				tenants.POST("/bills/:bill_id/payments", handler.CreatePayment)
+				tenants.PUT("/payments/:payment_id/status", handler.UpdatePaymentStatus)
+				tenants.GET("/:tenant_id/payments", handler.ListTenantPayments)
+			}
+
+			// ============ 账单管理路由（管理员） ============
+			billing := admin.Group("/billing", middleware.AuthMiddleware())
+			{
+				billing.GET("/bills", handler.ListAllBills)
 			}
 		}
 	}

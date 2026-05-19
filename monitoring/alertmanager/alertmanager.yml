@@ -17,9 +17,9 @@ templates:
   - '/etc/alertmanager/template/*.tmpl'
 
 route:
-  group_by: ['alertname', 'cluster', 'service', 'severity']
-  group_wait: 10s
-  group_interval: 10s
+  group_by: ['alertname', 'cluster', 'service', 'severity', 'instance']
+  group_wait: 30s
+  group_interval: 1m
   repeat_interval: 12h
   receiver: default
   routes:
@@ -77,7 +77,7 @@ inhibit_rules:
       severity: 'critical'
     target_match:
       severity: 'warning'
-    equal: ['alertname', 'cluster', 'service']
+    equal: ['alertname', 'cluster', 'service', 'instance']
 
   - source_match:
       alertname: 'HJTXPAppDown'
@@ -96,6 +96,18 @@ inhibit_rules:
     target_match_re:
       severity: 'warning'
     equal: ['instance']
+
+  - source_match:
+      alertname: 'NodeExporterDown'
+    target_match_re:
+      severity: 'warning'
+    equal: ['instance']
+
+  - source_match:
+      alertname: 'HighErrorRate'
+    target_match:
+      alertname: 'HighLatency'
+    equal: ['instance', 'service']
 
 receivers:
   - name: 'default'
@@ -153,6 +165,9 @@ receivers:
           alertname: '{{ .GroupLabels.alertname }}'
           severity: '{{ .GroupLabels.severity }}'
           description: '{{ .CommonAnnotations.description }}'
+          cluster: '{{ .GroupLabels.cluster }}'
+          service: '{{ .GroupLabels.service }}'
+          instance: '{{ .GroupLabels.instance }}'
         client: 'HJTPX'
         client_url: '{{ .ExternalURL }}'
         send_resolved: true
@@ -176,6 +191,12 @@ receivers:
           - title: Status
             value: '{{ .Status }}'
             short: true
+          - title: Service
+            value: '{{ .GroupLabels.service }}'
+            short: true
+          - title: Instance
+            value: '{{ .GroupLabels.instance }}'
+            short: true
         actions:
           - type: button
             text: 'View Dashboard'
@@ -183,6 +204,9 @@ receivers:
           - type: button
             text: 'View Runbook'
             url: '{{ .CommonAnnotations.runbook_url }}'
+          - type: button
+            text: 'View Traces'
+            url: '{{ .CommonAnnotations.trace_url }}'
     webhook_configs:
       - url: 'http://alertmanager-webhook:5001/webhook'
         send_resolved: true
@@ -199,6 +223,13 @@ receivers:
         text: 'Warning: {{ .GroupLabels.alertname }}'
         color: 'warning'
         footer: 'HJTPX Alertmanager'
+        fields:
+          - title: Service
+            value: '{{ .GroupLabels.service }}'
+            short: true
+          - title: Instance
+            value: '{{ .GroupLabels.instance }}'
+            short: true
 
   - name: 'info'
     email_configs:
@@ -221,6 +252,13 @@ receivers:
         title: 'Security Alert'
         text: ':rotating_light: Security: {{ .GroupLabels.alertname }}'
         color: 'danger'
+        fields:
+          - title: Instance
+            value: '{{ .GroupLabels.instance }}'
+            short: true
+          - title: Source
+            value: '{{ .GroupLabels.source }}'
+            short: true
 
   - name: 'dba-team'
     email_configs:
@@ -233,6 +271,13 @@ receivers:
         title: 'Database Alert'
         text: 'Database: {{ .GroupLabels.alertname }}'
         color: 'warning'
+        fields:
+          - title: Database
+            value: '{{ .GroupLabels.database }}'
+            short: true
+          - title: Query
+            value: '{{ .CommonAnnotations.query }}'
+            short: true
 
   - name: 'infra-team'
     email_configs:
@@ -245,6 +290,13 @@ receivers:
         title: 'Infrastructure Alert'
         text: 'Infrastructure: {{ .GroupLabels.alertname }}'
         color: 'warning'
+        fields:
+          - title: Host
+            value: '{{ .GroupLabels.instance }}'
+            short: true
+          - title: Metric
+            value: '{{ .CommonAnnotations.metric }}'
+            short: true
 
   - name: 'backend-team'
     email_configs:
@@ -257,6 +309,13 @@ receivers:
         title: 'Backend Alert'
         text: 'Backend: {{ .GroupLabels.alertname }}'
         color: 'warning'
+        fields:
+          - title: Service
+            value: '{{ .GroupLabels.service }}'
+            short: true
+          - title: Endpoint
+            value: '{{ .GroupLabels.endpoint }}'
+            short: true
 
   - name: 'product-team'
     email_configs:

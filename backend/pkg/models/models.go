@@ -433,6 +433,33 @@ func (VoiceCaptchaSession) TableName() string {
 	return "voice_captcha_sessions"
 }
 
+type VideoCaptchaSession struct {
+	ID            int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionID     string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
+	Type          string     `gorm:"size:50;not null" json:"type"`           // content, action, sequence
+	Question      string     `gorm:"type:text" json:"question"`              // 问题描述
+	CorrectAnswer string     `gorm:"type:text" json:"correct_answer"`       // 正确答案
+	Options       string     `gorm:"type:text" json:"options"`               // 选项（JSON数组）
+	ActionPattern string     `gorm:"type:text" json:"action_pattern"`       // 动作模式（JSON数组）
+	SequenceData  string     `gorm:"type:text" json:"sequence_data"`        // 序列数据（JSON数组）
+	Status        string     `gorm:"size:50;default:pending" json:"status"`
+	VerifyCount   int        `gorm:"default:0" json:"verify_count"`
+	MaxAttempts   int        `gorm:"default:3" json:"max_attempts"`
+	RiskScore     float64    `gorm:"default:0" json:"risk_score"`
+	TraceScore    float64    `gorm:"default:0" json:"trace_score"`
+	EnvScore      float64    `gorm:"default:0" json:"env_score"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiredAt     time.Time  `json:"expired_at"`
+	VerifiedAt    *time.Time `json:"verified_at"`
+	ClientIP      string     `gorm:"size:50" json:"client_ip"`
+	UserAgent     string     `gorm:"size:500" json:"user_agent"`
+	Fingerprint   string     `gorm:"size:255" json:"fingerprint"`
+}
+
+func (VideoCaptchaSession) TableName() string {
+	return "video_captcha_sessions"
+}
+
 // UserMFA 用户多因素认证配置
 type UserMFA struct {
 	gorm.Model

@@ -483,14 +483,6 @@ func (s *OAuth2Service) IsTokenExpired() bool {
 	return false
 }
 
-func generateRandomState() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
-}
-
 func (m *OAuth2ServiceManager) ListProviders() []OAuth2ProviderType {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

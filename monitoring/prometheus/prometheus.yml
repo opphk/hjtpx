@@ -4,7 +4,7 @@ global:
   external_labels:
     cluster: 'hjtpx'
     environment: 'production'
-  retention: 15d
+  retention: 30d
 
 alerting:
   alertmanagers:
@@ -44,7 +44,7 @@ scrape_configs:
         target_label: metrics_path
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_|websocket_|mfa_|bot_|trace_|fingerprint_|proxy_|environment_).*'
+        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_|websocket_|mfa_|bot_|trace_|fingerprint_|proxy_|environment_|profiling_).*'
         action: keep
       - source_labels: [__name__]
         regex: '.*_internal.*'
@@ -76,6 +76,36 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: 'hjtpx-health'
+
+  - job_name: 'hjtpx-tracing'
+    static_configs:
+      - targets: ['app:8080']
+    metrics_path: '/metrics/tracing'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'hjtpx-tracing'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'trace_.*'
+        action: keep
+
+  - job_name: 'hjtpx-profiling'
+    static_configs:
+      - targets: ['app:8080']
+    metrics_path: '/metrics/profiling'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'hjtpx-profiling'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'profiling_.*'
+        action: keep
 
   - job_name: 'nginx'
     static_configs:
@@ -174,4 +204,19 @@ scrape_configs:
     metric_relabel_configs:
       - source_labels: [__name__]
         regex: 'loki_.*'
+        action: keep
+
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:16686']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'jaeger'
+    metrics_path: '/metrics'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'jaeger_.*'
         action: keep

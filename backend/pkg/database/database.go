@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"golang.org/x/crypto/bcrypt"
@@ -113,8 +114,19 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 	InitQueryCache(cfg)
 	InitPerformanceMonitor(cfg)
 	InitConnectionPool(cfg)
-	// InitDataArchiving(cfg) // Temporarily disabled due to compilation issues
 	InitReadWriteSeparation(cfg)
+
+	if err := InitReadWriteSeparationV2(cfg); err != nil {
+		log.Printf("Warning: Failed to initialize enhanced read-write separation: %v", err)
+	}
+
+	if err := InitEnhancedConnectionPool(cfg); err != nil {
+		log.Printf("Warning: Failed to initialize enhanced connection pool: %v", err)
+	}
+
+	if err := InitMultiLevelCache(cfg); err != nil {
+		log.Printf("Warning: Failed to initialize multi-level cache: %v", err)
+	}
 
 	GormQueryCallback(DB)
 
@@ -125,6 +137,16 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 				log.Printf("Warning: Database optimization failed: %v", err)
 			} else {
 				log.Println("Database optimization completed successfully")
+			}
+		}
+
+		InitEnhancedIndexOptimizer(DB)
+		if enhancedOptimizer := GetEnhancedIndexOptimizer(); enhancedOptimizer != nil {
+			if err := enhancedOptimizer.Analyze(context.Background()); err != nil {
+				log.Printf("Warning: Enhanced index analysis failed: %v", err)
+			} else {
+				recommendations := enhancedOptimizer.GetRecommendations()
+				log.Printf("Enhanced index optimizer found %d recommendations", len(recommendations))
 			}
 		}
 
@@ -139,13 +161,9 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 		} else {
 			log.Println("Query optimization completed successfully")
 		}
-
-		// enhancedPoolOptimizer := NewEnhancedConnectionPoolOptimizer(DB, nil) // Temporarily disabled
-		// enhancedPoolOptimizer.Start() // Temporarily disabled
-		// if err := enhancedPoolOptimizer.WarmUpConnections(5); err != nil { // Temporarily disabled
-		// 	log.Printf("Warning: Connection pool warmup failed: %v", err) // Temporarily disabled
-		// } // Temporarily disabled
 	}
+
+	log.Println("All database optimization features v2 initialized successfully")
 	return nil
 }
 
@@ -167,6 +185,15 @@ func AutoMigrate() error {
 		&models.AlertHistory{},
 		&models.TraceRecord{},
 		&models.Config{},
+		// 租户相关模型
+		&model.Tenant{},
+		&model.TenantUser{},
+		&model.TenantQuota{},
+		&model.TenantBilling{},
+		&model.TenantPaymentRecord{},
+		&model.TenantFeature{},
+		&model.TenantUsage{},
+		&model.TenantInvitation{},
 	)
 }
 

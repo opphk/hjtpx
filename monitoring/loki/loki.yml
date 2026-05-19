@@ -21,8 +21,11 @@ common:
 limits_config:
   reject_old_samples: true
   reject_old_samples_max_age: 168h
-  ingestion_rate_mb: 50
-  ingestion_burst_size_mb: 100
+  ingestion_rate_mb: 100
+  ingestion_burst_size_mb: 200
+  max_entries_limit_per_query: 5000
+  max_query_lookback: 720h
+  max_query_length: 24h
 
 chunk_store_config:
   max_look_back_period: 720h
@@ -35,3 +38,49 @@ compactor:
   working_directory: /loki/compactor
   shared_store: filesystem
   retention_enabled: true
+
+query_scheduler:
+  max_outstanding_requests_per_tenant: 100
+  accept_ha_samples: true
+
+frontend:
+  max_outstanding_per_tenant: 200
+  compress_responses: true
+
+distributor:
+  ring:
+    kvstore:
+      store: inmemory
+    replication_factor: 1
+
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 15m
+  chunk_retain_period: 30s
+  max_transfer_retries: 0
+  wal:
+    dir: /loki/wal
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+logging:
+  level: info
+  format: json
+
+analytics:
+  reporting_enabled: false

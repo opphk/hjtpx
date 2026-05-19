@@ -23,7 +23,7 @@ func TestGetDefaultConfig(t *testing.T) {
 	assert.False(t, config.IsEnabled)
 }
 
-func TestValidateConfig(t *testing.T) {
+func TestWhitelabelValidateConfig(t *testing.T) {
 	service := NewWhitelabelService()
 
 	tests := []struct {

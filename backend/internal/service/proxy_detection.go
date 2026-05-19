@@ -138,3 +138,115 @@ func (s *ProxyDetectionService) ValidateHeaders(headers map[string]string) (bool
 
 	return len(flagged) > 0, flagged
 }
+
+func (s *ProxyDetectionService) DetectProxyWithHeaders(ip string, headers map[string]string) (*ProxyDetection, error) {
+	return s.DetectProxy(ip, headers)
+}
+
+func (s *ProxyDetectionService) IsProxy(ip string) (bool, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return false, err
+	}
+	return result.IsProxy, nil
+}
+
+func (s *ProxyDetectionService) GetProxyInfo(ip string) (*ProxyInfo, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	proxyType := ""
+	if result.IsVPN {
+		proxyType = "VPN"
+	} else if result.IsTor {
+		proxyType = "Tor"
+	} else if result.IsProxy {
+		proxyType = "Proxy"
+	}
+	
+	return &ProxyInfo{
+		IP:          ip,
+		Type:        proxyType,
+		Country:     result.Country,
+		ISP:         result.ISP,
+		LastChecked: result.LastChecked,
+	}, nil
+}
+
+func (s *ProxyDetectionService) CheckVPN(ip string) (bool, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return false, err
+	}
+	return result.IsVPN, nil
+}
+
+func (s *ProxyDetectionService) CheckTor(ip string) (bool, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return false, err
+	}
+	return result.IsTor, nil
+}
+
+func (s *ProxyDetectionService) CheckHosting(ip string) (bool, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return false, err
+	}
+	return result.Hosting, nil
+}
+
+func (s *ProxyDetectionService) GetIPReputation(ip string) (map[string]interface{}, error) {
+	result, err := s.DetectProxy(ip, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	return map[string]interface{}{
+		"ip":          ip,
+		"risk_score":  result.Score,
+		"risk_level":  result.RiskLevel,
+		"confidence":  result.Confidence,
+		"is_proxy":    result.IsProxy,
+		"is_vpn":      result.IsVPN,
+		"is_tor":      result.IsTor,
+		"country":     result.Country,
+		"isp":         result.ISP,
+	}, nil
+}
+
+func (s *ProxyDetectionService) UpdateIPCache(info *ProxyInfo) error {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	
+	isProxy := info.Type != ""
+	
+	s.cache[info.IP] = &ProxyDetection{
+		IPAddress:   info.IP,
+		IsProxy:     isProxy,
+		LastChecked: time.Now(),
+	}
+	return nil
+}
+
+func (s *ProxyDetectionService) ClearIPCache() error {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	
+	s.cache = make(map[string]*ProxyDetection)
+	return nil
+}
+
+func (s *ProxyDetectionService) GetDetectionStats() (map[string]interface{}, error) {
+	s.cacheMutex.RLock()
+	defer s.cacheMutex.RUnlock()
+	
+	return map[string]interface{}{
+		"cache_size":    len(s.cache),
+		"cache_ttl":     s.cacheTTL.String(),
+		"detection_count": 0,
+	}, nil
+}

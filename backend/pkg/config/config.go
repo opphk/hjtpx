@@ -14,6 +14,16 @@ type Config struct {
 	Alert    AlertConfig
 	I18n     I18nConfig
 	Backup   BackupConfig
+	Consul   ConsulConfig
+}
+
+type ConsulConfig struct {
+	Address             string `yaml:"address"`
+	Scheme              string `yaml:"scheme"`
+	Timeout             string `yaml:"timeout"`
+	HealthCheckInterval string `yaml:"health_check_interval"`
+	HealthCheckTimeout  string `yaml:"health_check_timeout"`
+	DeregisterAfter     string `yaml:"deregister_after"`
 }
 
 type DatabaseConfig struct {
@@ -273,6 +283,14 @@ func LoadConfig() *Config {
 			CompressionEnabled:      getEnvAsBool("BACKUP_COMPRESSION_ENABLED", true),
 			EncryptionEnabled:       getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
 			EncryptionKey:           getEnv("BACKUP_ENCRYPTION_KEY", ""),
+		},
+		Consul: ConsulConfig{
+			Address:             getEnv("CONSUL_ADDRESS", "localhost:8500"),
+			Scheme:              getEnv("CONSUL_SCHEME", "http"),
+			Timeout:             getEnv("CONSUL_TIMEOUT", "5s"),
+			HealthCheckInterval: getEnv("CONSUL_HEALTH_CHECK_INTERVAL", "10s"),
+			HealthCheckTimeout:  getEnv("CONSUL_HEALTH_CHECK_TIMEOUT", "5s"),
+			DeregisterAfter:     getEnv("CONSUL_DEREGISTER_AFTER", "30s"),
 		},
 	}
 }

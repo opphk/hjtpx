@@ -6,9 +6,13 @@ require (
 	github.com/gin-contrib/static v1.1.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-echarts/go-echarts/v2 v2.7.2
+	github.com/go-kratos/aegis v0.1.0
+	github.com/go-kratos/kratos/v2 v2.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
+	github.com/hashicorp/consul/api v1.27.0
 	github.com/jung-kurt/gofpdf/v2 v2.17.3
 	github.com/lib/pq v1.12.3
 	github.com/pquerna/otp v1.5.0
@@ -22,8 +26,14 @@ require (
 	github.com/swaggo/swag v1.16.6
 	github.com/tsenart/vegeta/v12 v12.13.0
 	github.com/xuri/excelize/v2 v2.10.1
+	go.opentelemetry.io/otel v1.27.0
+	go.opentelemetry.io/otel/exporters/jaeger v1.27.0
+	go.opentelemetry.io/otel/sdk v1.27.0
+	go.opentelemetry.io/otel/semconv v1.21.0
 	golang.org/x/crypto v0.51.0
 	golang.org/x/image v0.40.0
+	google.golang.org/grpc v1.68.0
+	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
 )

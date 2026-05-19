@@ -107,7 +107,7 @@ func TestClearLogs(t *testing.T) {
 func TestExportLogs(t *testing.T) {
 	logService := NewLogService()
 	
-	export, err := logService.ExportLogs("2024-01-01", "2024-12-31")
+	export, err := logService.ExportLogsForTest("2024-01-01", "2024-12-31")
 	if err != nil {
 		t.Errorf("导出日志失败: %v", err)
 	}

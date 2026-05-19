@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/repository"
@@ -13,8 +14,10 @@ import (
 )
 
 type ConfigService struct {
-	repo  *repository.ConfigRepo
-	cache *ConfigCache
+	repo    *repository.ConfigRepo
+	cache   *ConfigCache
+	inMemory map[string]interface{}
+	mu       sync.RWMutex
 }
 
 type ConfigCache struct {
@@ -26,6 +29,22 @@ func NewConfigCache(client *goredis.Client) *ConfigCache {
 	return &ConfigCache{
 		client: client,
 		ctx:    context.Background(),
+	}
+}
+
+func NewConfigService(repo *repository.ConfigRepo, cache *ConfigCache) *ConfigService {
+	return &ConfigService{
+		repo:      repo,
+		cache:     cache,
+		inMemory:  make(map[string]interface{}),
+	}
+}
+
+func NewConfigServiceForTest() *ConfigService {
+	return &ConfigService{
+		repo:      nil,
+		cache:     nil,
+		inMemory:  make(map[string]interface{}),
 	}
 }
 
@@ -61,13 +80,6 @@ func (c *ConfigCache) Clear() error {
 		return nil
 	}
 	return c.client.Del(c.ctx, "config:all").Err()
-}
-
-func NewConfigService(repo *repository.ConfigRepo, cache *ConfigCache) *ConfigService {
-	return &ConfigService{
-		repo:  repo,
-		cache: cache,
-	}
 }
 
 func (s *ConfigService) GetAll() (map[string]string, error) {
@@ -192,4 +204,78 @@ func (s *ConfigService) InitializeDefaults() error {
 	}
 
 	return s.cache.Clear()
+}
+
+func (s *ConfigService) GetConfig() (map[string]interface{}, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make(map[string]interface{})
+	for k, v := range s.inMemory {
+		result[k] = v
+	}
+	return result, nil
+}
+
+func (s *ConfigService) UpdateConfig(config map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range config {
+		s.inMemory[k] = v
+	}
+	return nil
+}
+
+func (s *ConfigService) GetConfigValue(key string) interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.inMemory[key]
+}
+
+func (s *ConfigService) SetConfigValue(key string, value interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inMemory[key] = value
+	return nil
+}
+
+func (s *ConfigService) ReloadConfig() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inMemory = make(map[string]interface{})
+	return nil
+}
+
+func (s *ConfigService) ValidateConfig(config map[string]interface{}) error {
+	for key, value := range config {
+		switch key {
+		case "app.port":
+			if _, ok := value.(int); !ok {
+				return errors.New("app.port must be an integer")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *ConfigService) ExportConfig() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	data, err := json.Marshal(s.inMemory)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (s *ConfigService) ImportConfig(configJSON string) error {
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range config {
+		s.inMemory[k] = v
+	}
+	return nil
 }

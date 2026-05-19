@@ -14,7 +14,7 @@ func TestNewProxyDetectionService(t *testing.T) {
 func TestDetectProxy(t *testing.T) {
 	proxyService := NewProxyDetectionService()
 	
-	result, err := proxyService.DetectProxy("192.168.1.1")
+	result, err := proxyService.DetectProxy("192.168.1.1", nil)
 	if err != nil {
 		t.Errorf("检测代理失败: %v", err)
 	}
@@ -43,12 +43,12 @@ func TestDetectProxy_WithHeaders(t *testing.T) {
 func TestIsProxy(t *testing.T) {
 	proxyService := NewProxyDetectionService()
 	
-	result, err := proxyService.DetectProxy("192.168.1.1")
+	result, err := proxyService.DetectProxy("192.168.1.1", nil)
 	if err != nil {
 		t.Skipf("检测失败: %v", err)
 	}
 	
-	isProxy, err := proxyService.IsProxy(result.IP)
+	isProxy, err := proxyService.IsProxy(result.IPAddress)
 	if err != nil {
 		t.Errorf("检查代理失败: %v", err)
 	}
@@ -121,9 +121,8 @@ func TestUpdateIPCache(t *testing.T) {
 	proxyService := NewProxyDetectionService()
 	
 	info := &ProxyInfo{
-		IP:       "192.168.1.1",
-		IsProxy:  true,
-		ProxyType: "HTTP",
+		IP:   "192.168.1.1",
+		Type: "HTTP",
 	}
 	
 	err := proxyService.UpdateIPCache(info)
@@ -144,7 +143,7 @@ func TestClearIPCache(t *testing.T) {
 func TestGetDetectionStats(t *testing.T) {
 	proxyService := NewProxyDetectionService()
 	
-	proxyService.DetectProxy("192.168.1.1")
+	proxyService.DetectProxy("192.168.1.1", nil)
 	
 	stats, err := proxyService.GetDetectionStats()
 	if err != nil {

@@ -272,6 +272,10 @@ func (s *RateLimitService) ShouldAutoBan(ctx context.Context, identifier string,
 	return count >= threshold, nil
 }
 
+func (s *RateLimitService) CheckRateLimit(key string, config *RateLimitConfig) (*RateLimitResult, error) {
+	return s.checkRateLimit(context.Background(), key, config)
+}
+
 func (s *RateLimitService) AutoBan(ctx context.Context, identifier string, banType string) error {
 	violationCount, _ := s.GetViolationCount(ctx, identifier, banType)
 	duration := s.CalculateBanDuration(violationCount)

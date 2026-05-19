@@ -237,8 +237,8 @@ func generatePredictionTestData(pointCount, spacing int) *model.TraceData {
 	baseTime := int64(4000000)
 	for i := 0; i < pointCount; i++ {
 		traceData.Points[i] = model.TracePoint{
-			X:         150 + i*spacing + (i%5)*10,
-			Y:         150 + (i/2)*spacing - (i%4)*spacing/3,
+			X:         float64(150 + i*spacing + (i%5)*10),
+			Y:         float64(150 + (i/2)*spacing - (i%4)*spacing/3),
 			Timestamp: baseTime + int64(i*14),
 			Pressure:  0.55 + float64(i%9)*0.04,
 			TouchSize: 11.0 + float64(i%7)*1.8,
