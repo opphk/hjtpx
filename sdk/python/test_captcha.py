@@ -1,820 +1,452 @@
-#!/usr/bin/env python3
 """
-行为验证系统 Python SDK 单元测试
+Python SDK 完整测试套件
 """
 
-import unittest
-from unittest import mock
+import pytest
+import asyncio
+from unittest.mock import Mock, patch, AsyncMock
 import sys
 import os
-import json
-import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from captcha import (
-    CaptchaClient,
-    CaptchaType,
-    ClickMode,
-    TrajectoryPoint,
-    JigsawPiece,
-    CaptchaError,
-    CaptchaAPIError,
-    CaptchaNetworkError,
-    CaptchaTimeoutError,
-    CaptchaValidationError,
-    CaptchaSessionExpiredError,
-    SliderCaptchaResponse,
-    ClickCaptchaResponse,
-    ImageCaptchaResponse,
-    RotationCaptchaResponse,
-    GestureCaptchaResponse,
-    JigsawCaptchaResponse,
-    VerifyResult,
-    LoginResponse,
-    UserAuth,
-    Environment,
+    CaptchaClient, CaptchaType, ClickMode, CaptchaError,
+    CaptchaAPIError, CaptchaNetworkError, CaptchaTimeoutError,
+    CaptchaValidationError, CaptchaSessionExpiredError,
+    SliderCaptchaResponse, ClickCaptchaResponse, VerifyResult,
+    TrajectoryPoint, JigsawPiece
+)
+from async_captcha import (
+    AsyncCaptchaClient, AsyncCaptchaType, AsyncClickMode,
+    AsyncCaptchaError, AsyncCaptchaAPIError, AsyncCaptchaNetworkError,
+    AsyncCaptchaTimeoutError, AsyncCaptchaValidationError,
+    AsyncSliderCaptchaResponse, AsyncTrajectoryPoint, AsyncVerifyResult
 )
 
 
-class TestTrajectoryPoint(unittest.TestCase):
-    """测试轨迹点类"""
+class TestCaptchaClient:
+    """测试同步CaptchaClient"""
 
-    def test_init(self):
-        """测试初始化"""
-        point = TrajectoryPoint(x=100, y=200, t=1000)
-        self.assertEqual(point.x, 100)
-        self.assertEqual(point.y, 200)
-        self.assertEqual(point.t, 1000)
-
-    def test_to_dict(self):
-        """测试转换为字典"""
-        point = TrajectoryPoint(x=100, y=200, t=1000)
-        data = point.to_dict()
-        self.assertEqual(data["x"], 100)
-        self.assertEqual(data["y"], 200)
-        self.assertEqual(data["t"], 1000)
-
-    def test_from_dict(self):
-        """测试从字典创建"""
-        data = {"x": 100, "y": 200, "t": 1000}
-        point = TrajectoryPoint.from_dict(data)
-        self.assertEqual(point.x, 100)
-        self.assertEqual(point.y, 200)
-        self.assertEqual(point.t, 1000)
-
-
-class TestJigsawPiece(unittest.TestCase):
-    """测试拼图碎片类"""
-
-    def test_init(self):
-        """测试初始化"""
-        piece = JigsawPiece(
-            index=0,
-            original_x=0,
-            original_y=0,
-            current_x=10,
-            current_y=10,
-            width=100,
-            height=100,
-            rotation=0,
-        )
-        self.assertEqual(piece.index, 0)
-        self.assertEqual(piece.original_x, 0)
-        self.assertEqual(piece.current_x, 10)
-
-    def test_to_dict(self):
-        """测试转换为字典"""
-        piece = JigsawPiece(
-            index=0,
-            original_x=0,
-            original_y=0,
-            current_x=10,
-            current_y=10,
-            width=100,
-            height=100,
-            rotation=90,
-        )
-        data = piece.to_dict()
-        self.assertEqual(data["index"], 0)
-        self.assertEqual(data["rotation"], 90)
-
-
-class TestExceptions(unittest.TestCase):
-    """测试异常类"""
-
-    def test_captcha_error(self):
-        """测试基础异常"""
-        error = CaptchaError("测试错误")
-        self.assertEqual(str(error), "测试错误")
-
-    def test_api_error(self):
-        """测试 API 错误"""
-        error = CaptchaAPIError("API 错误", code=400)
-        self.assertEqual(error.message, "API 错误")
-        self.assertEqual(error.code, 400)
-
-    def test_network_error(self):
-        """测试网络错误"""
-        error = CaptchaNetworkError("网络错误")
-        self.assertEqual(str(error), "网络错误")
-
-
-class TestCaptchaClient(unittest.TestCase):
-    """测试验证码客户端"""
-
-    def setUp(self):
+    def setup_method(self):
         """测试前准备"""
-        # 直接创建 client，但我们会在测试中 mock 它的 _request 方法
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
-        )
+        self.client = CaptchaClient("http://localhost:8080")
 
-    def tearDown(self):
+    def teardown_method(self):
         """测试后清理"""
         self.client.close()
 
-    def test_get_slider_captcha(self):
-        """测试获取滑块验证码"""
-        # 直接 mock _request 方法
-        mock_response_data = {
-            "session_id": "test-session",
-            "image_url": "http://test.example.com/image.jpg",
-            "puzzle_url": "http://test.example.com/puzzle.jpg",
-            "secret_y": 80,
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            captcha = self.client.get_slider_captcha()
+    def test_client_initialization(self):
+        """测试客户端初始化"""
+        assert self.client.base_url == "http://localhost:8080"
+        assert self.client.api_key is None
+        assert self.client.timeout == 30
 
-            self.assertIsInstance(captcha, SliderCaptchaResponse)
-            self.assertEqual(captcha.session_id, "test-session")
-            self.assertEqual(captcha.secret_y, 80)
+    def test_client_with_api_key(self):
+        """测试带API密钥的客户端"""
+        client = CaptchaClient("http://localhost:8080", api_key="test-key")
+        assert client.api_key == "test-key"
 
-    def test_verify_slider_captcha(self):
-        """测试验证滑块验证码"""
-        mock_response_data = {
-            "success": True,
-            "message": "验证成功",
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            result = self.client.verify_slider_captcha(
-                session_id="test-session",
-                x=150,
-                y=80,
-            )
+    def test_client_with_timeout(self):
+        """测试带超时的客户端"""
+        client = CaptchaClient("http://localhost:8080", timeout=60)
+        assert client.timeout == 60
 
-            self.assertIsInstance(result, VerifyResult)
-            self.assertTrue(result.success)
-            self.assertEqual(result.message, "验证成功")
+    def test_get_headers_without_token(self):
+        """测试无令牌的请求头"""
+        headers = self.client._get_headers()
+        assert headers['Content-Type'] == 'application/json'
+        assert 'Authorization' not in headers
 
-    def test_get_click_captcha(self):
-        """测试获取点击验证码"""
-        mock_response_data = {
-            "session_id": "test-click-session",
-            "image_url": "http://test.example.com/click.jpg",
-            "hint": "点击数字 1, 2, 3",
-            "hint_order": ["1", "2", "3"],
-            "max_points": 3,
-            "mode": "number",
-            "allow_shuffle": True,
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            captcha = self.client.get_click_captcha()
+    def test_get_headers_with_api_key(self):
+        """测试带API密钥的请求头"""
+        client = CaptchaClient("http://localhost:8080", api_key="test-key")
+        headers = client._get_headers()
+        assert headers['X-API-Key'] == 'test-key'
 
-            self.assertIsInstance(captcha, ClickCaptchaResponse)
-            self.assertEqual(captcha.session_id, "test-click-session")
+    def test_get_headers_with_token(self):
+        """测试带令牌的请求头"""
+        self.client._token = "test-token"
+        headers = self.client._get_headers()
+        assert headers['Authorization'] == 'Bearer test-token'
 
-    def test_get_image_captcha(self):
-        """测试获取图形验证码"""
-        mock_response_data = {
-            "challenge_id": "test-challenge",
-            "image": "base64-image-data",
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            captcha = self.client.get_image_captcha()
+    def test_trajectory_point_creation(self):
+        """测试轨迹点创建"""
+        point = TrajectoryPoint(100, 200, 1234567890)
+        assert point.x == 100
+        assert point.y == 200
+        assert point.t == 1234567890
 
-            self.assertIsInstance(captcha, ImageCaptchaResponse)
-            self.assertEqual(captcha.challenge_id, "test-challenge")
+    def test_trajectory_point_to_dict(self):
+        """测试轨迹点转字典"""
+        point = TrajectoryPoint(100, 200, 1234567890)
+        data = point.to_dict()
+        assert data['x'] == 100
+        assert data['y'] == 200
+        assert data['t'] == 1234567890
 
-    def test_get_gesture_captcha(self):
-        """测试获取手势验证码"""
-        mock_response_data = {
-            "session_id": "test-gesture-session",
-            "pattern": "1-2-3",
-            "grid_size": 3,
-            "hint": "按顺序连接",
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            captcha = self.client.get_gesture_captcha()
+    def test_trajectory_point_from_dict(self):
+        """测试从字典创建轨迹点"""
+        data = {'x': 100, 'y': 200, 't': 1234567890}
+        point = TrajectoryPoint.from_dict(data)
+        assert point.x == 100
+        assert point.y == 200
+        assert point.t == 1234567890
 
-            self.assertIsInstance(captcha, GestureCaptchaResponse)
-            self.assertEqual(captcha.session_id, "test-gesture-session")
+    def test_jigsaw_piece_creation(self):
+        """测试拼图碎片创建"""
+        piece = JigsawPiece(
+            index=0,
+            original_x=0,
+            original_y=0,
+            current_x=50,
+            current_y=50,
+            width=100,
+            height=100,
+            rotation=0
+        )
+        assert piece.index == 0
+        assert piece.current_x == 50
+        assert piece.current_y == 50
 
-    def test_get_jigsaw_captcha(self):
-        """测试获取拼图验证码"""
-        mock_response_data = {
-            "session_id": "test-jigsaw-session",
-            "grid_size": 3,
-            "pieces": [
-                {
-                    "index": 0,
-                    "original_x": 0,
-                    "original_y": 0,
-                    "current_x": 100,
-                    "current_y": 100,
-                    "width": 100,
-                    "height": 100,
-                    "rotation": 0,
-                }
-            ],
-            "piece_images": [],
-            "piece_width": 100,
-            "piece_height": 100,
-            "image_width": 300,
-            "image_height": 300,
-        }
-        
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response_data
-            
-            captcha = self.client.get_jigsaw_captcha()
-
-            self.assertIsInstance(captcha, JigsawCaptchaResponse)
-            self.assertEqual(captcha.session_id, "test-jigsaw-session")
-            self.assertEqual(len(captcha.pieces), 1)
-
-    def test_api_error(self):
-        """测试 API 错误处理"""
-        # 模拟抛出 API 错误
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.side_effect = CaptchaAPIError("Bad Request", code=400)
-            
-            with self.assertRaises(CaptchaAPIError) as context:
-                self.client.get_slider_captcha()
-
-            self.assertEqual(context.exception.code, 400)
-
-    def test_network_error(self):
-        """测试网络错误处理"""
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.side_effect = CaptchaNetworkError("Connection refused")
-            
-            with self.assertRaises(CaptchaNetworkError):
-                self.client.get_slider_captcha()
+    def test_jigsaw_piece_to_dict(self):
+        """测试拼图碎片转字典"""
+        piece = JigsawPiece(0, 0, 0, 50, 50, 100, 100, 0)
+        data = piece.to_dict()
+        assert data['index'] == 0
+        assert data['current_x'] == 50
 
     def test_context_manager(self):
         """测试上下文管理器"""
-        with CaptchaClient(base_url="http://test.example.com") as client:
-            self.assertIsNotNone(client)
+        with CaptchaClient("http://localhost:8080") as client:
+            assert client.base_url == "http://localhost:8080"
+
+    @patch('captcha.requests.Session.request')
+    def test_get_slider_captcha_success(self, mock_request):
+        """测试获取滑块验证码成功"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'code': 0,
+            'message': 'success',
+            'data': {
+                'session_id': 'test-session-123',
+                'image_url': 'http://example.com/image.png',
+                'puzzle_url': 'http://example.com/puzzle.png',
+                'secret_y': 80,
+                'image_width': 320,
+                'image_height': 160
+            }
+        }
+        mock_request.return_value = mock_response
+
+        result = self.client.get_slider_captcha(320, 160, 8)
+        assert isinstance(result, SliderCaptchaResponse)
+        assert result.session_id == 'test-session-123'
+        assert result.secret_y == 80
+
+    @patch('captcha.requests.Session.request')
+    def test_verify_slider_captcha_success(self, mock_request):
+        """测试验证滑块验证码成功"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'code': 0,
+            'message': 'success',
+            'data': {
+                'success': True,
+                'message': 'Verification successful',
+                'remaining_attempts': 3,
+                'risk_score': 0.95
+            }
+        }
+        mock_request.return_value = mock_response
+
+        result = self.client.verify_slider_captcha('test-session', 150, 80)
+        assert isinstance(result, VerifyResult)
+        assert result.success is True
+        assert result.risk_score == 0.95
+
+    @patch('captcha.requests.Session.request')
+    def test_verify_slider_captcha_with_trajectory(self, mock_request):
+        """测试带轨迹的验证"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'code': 0,
+            'message': 'success',
+            'data': {'success': True, 'message': 'success'}
+        }
+        mock_request.return_value = mock_response
+
+        trajectory = [
+            TrajectoryPoint(0, 80, 1000),
+            TrajectoryPoint(75, 82, 500),
+            TrajectoryPoint(150, 80, 0)
+        ]
+
+        result = self.client.verify_slider_captcha('test-session', 150, 80, trajectory)
+        assert result.success is True
+
+    @patch('captcha.requests.Session.request')
+    def test_api_error_handling(self, mock_request):
+        """测试API错误处理"""
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            'code': 400,
+            'message': 'Invalid parameters'
+        }
+        mock_response.raise_for_status.side_effect = Exception("HTTP 400")
+        mock_request.return_value = mock_response
+
+        with pytest.raises(CaptchaAPIError) as exc_info:
+            self.client.get_slider_captcha(320, 160, 8)
+        assert exc_info.value.code == 400
+
+    def test_captcha_type_enum(self):
+        """测试验证码类型枚举"""
+        assert CaptchaType.SLIDER.value == "slider"
+        assert CaptchaType.CLICK.value == "click"
+        assert CaptchaType.IMAGE.value == "image"
+
+    def test_click_mode_enum(self):
+        """测试点击模式枚举"""
+        assert ClickMode.NUMBER.value == "number"
+        assert ClickMode.LETTER.value == "letter"
+        assert ClickMode.CHINESE.value == "chinese"
 
 
-class TestCaptchaTypes(unittest.TestCase):
-    """测试验证码类型枚举"""
+class TestAsyncCaptchaClient:
+    """测试异步CaptchaClient"""
 
-    def test_slider(self):
-        """测试滑块类型"""
-        self.assertEqual(CaptchaType.SLIDER.value, "slider")
-
-    def test_click(self):
-        """测试点击类型"""
-        self.assertEqual(CaptchaType.CLICK.value, "click")
-
-    def test_image(self):
-        """测试图形类型"""
-        self.assertEqual(CaptchaType.IMAGE.value, "image")
-
-    def test_rotation(self):
-        """测试旋转类型"""
-        self.assertEqual(CaptchaType.ROTATION.value, "rotation")
-
-    def test_gesture(self):
-        """测试手势类型"""
-        self.assertEqual(CaptchaType.GESTURE.value, "gesture")
-
-    def test_jigsaw(self):
-        """测试拼图类型"""
-        self.assertEqual(CaptchaType.JIGSAW.value, "jigsaw")
-
-
-class TestClickMode(unittest.TestCase):
-    """测试点击模式枚举"""
-
-    def test_number(self):
-        """测试数字模式"""
-        self.assertEqual(ClickMode.NUMBER.value, "number")
-
-    def test_letter(self):
-        """测试字母模式"""
-        self.assertEqual(ClickMode.LETTER.value, "letter")
-
-    def test_chinese(self):
-        """测试中文模式"""
-        self.assertEqual(ClickMode.CHINESE.value, "chinese")
-
-    def test_mixed(self):
-        """测试混合模式"""
-        self.assertEqual(ClickMode.MIXED.value, "mixed")
-
-    def test_icon(self):
-        """测试图标模式"""
-        self.assertEqual(ClickMode.ICON.value, "icon")
-
-
-class TestVerifyResult(unittest.TestCase):
-    """测试验证结果类"""
-
-    def test_verify_result_success(self):
-        """测试成功结果"""
-        result = VerifyResult(
-            success=True,
-            message="验证成功",
-            remaining_attempts=3,
-            risk_score=0.1,
-        )
-        self.assertTrue(result.success)
-        self.assertEqual(result.message, "验证成功")
-        self.assertEqual(result.remaining_attempts, 3)
-        self.assertEqual(result.risk_score, 0.1)
-
-    def test_verify_result_failure(self):
-        """测试失败结果"""
-        result = VerifyResult(
-            success=False,
-            message="验证失败",
-            captcha_pass=False,
-            fail_reason="轨迹异常",
-        )
-        self.assertFalse(result.success)
-        self.assertFalse(result.captcha_pass)
-        self.assertEqual(result.fail_reason, "轨迹异常")
-
-
-class TestLoginResponse(unittest.TestCase):
-    """测试登录响应类"""
-
-    def test_login_response_init(self):
-        """测试登录响应初始化"""
-        response = LoginResponse(
-            access_token="token123",
-            refresh_token="refresh123",
-            expires_in=3600,
-            user={"id": 1, "username": "test"},
-        )
-        self.assertEqual(response.access_token, "token123")
-        self.assertEqual(response.refresh_token, "refresh123")
-        self.assertEqual(response.expires_in, 3600)
-        self.assertEqual(response.user["username"], "test")
-
-
-class TestUserAuth(unittest.TestCase):
-    """测试用户认证类"""
-
-    def setUp(self):
+    def setup_method(self):
         """测试前准备"""
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
-        )
-        self.auth = UserAuth(self.client)
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
 
-    def tearDown(self):
+    def teardown_method(self):
         """测试后清理"""
-        self.client.close()
-
-    def test_login(self):
-        """测试登录"""
-        mock_response = {
-            "access_token": "token123",
-            "refresh_token": "refresh123",
-            "expires_in": 3600,
-            "user": {"id": 1, "username": "testuser"},
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.auth.login(username="testuser", password="password")
-
-            self.assertIsInstance(result, LoginResponse)
-            self.assertEqual(result.access_token, "token123")
-            self.assertEqual(self.client._token, "token123")
-            self.assertEqual(self.client._refresh_token, "refresh123")
-
-    def test_logout(self):
-        """测试登出"""
-        self.client._token = "token123"
-        self.client._refresh_token = "refresh123"
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            self.auth.logout()
-
-            self.assertIsNone(self.client._token)
-            self.assertIsNone(self.client._refresh_token)
-
-
-class TestEnvironment(unittest.TestCase):
-    """测试环境检测类"""
-
-    def setUp(self):
-        """测试前准备"""
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
-        )
-        self.env = Environment(self.client)
-
-    def tearDown(self):
-        """测试后清理"""
-        self.client.close()
-
-    def test_submit_detection(self):
-        """测试提交检测数据"""
-        mock_response = {
-            "success": True,
-            "risk_level": "low",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.env.submit_detection({
-                "fingerprint": "hash",
-                "canvas_hash": "canvas",
-            })
-
-            self.assertTrue(result["success"])
-
-    def test_check_environment(self):
-        """测试环境检测"""
-        mock_response = {
-            "success": True,
-            "risk_score": 0.1,
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.env.check_environment({
-                "fingerprint": "hash",
-            })
-
-            self.assertTrue(result["success"])
-
-
-class TestCaptchaClientAdvanced(unittest.TestCase):
-    """测试高级验证码功能"""
-
-    def setUp(self):
-        """测试前准备"""
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
-            max_retries=3,
-        )
-
-    def tearDown(self):
-        """测试后清理"""
-        self.client.close()
-
-    def test_verify_rotation_captcha(self):
-        """测试验证旋转验证码"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_rotation_captcha(
-                challenge_id="test-id",
-                angle=90,
-            )
-
-            self.assertTrue(result.success)
-
-    def test_verify_gesture_captcha(self):
-        """测试验证手势验证码"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_gesture_captcha(
-                session_id="test-session",
-                pattern=[1, 2, 3, 4],
-            )
-
-            self.assertTrue(result.success)
-
-    def test_verify_image_captcha(self):
-        """测试验证图形验证码"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_image_captcha(
-                challenge_id="test-id",
-                answer="ABCD",
-            )
-
-            self.assertTrue(result.success)
-
-    def test_verify_click_captcha(self):
-        """测试验证点击验证码"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-            "remaining_attempts": 3,
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_click_captcha(
-                session_id="test-session",
-                points=[[100, 100], [200, 200]],
-            )
-
-            self.assertTrue(result.success)
-            self.assertEqual(result.remaining_attempts, 3)
-
-    def test_verify_captcha_generic(self):
-        """测试通用验证方法"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_captcha(
-                captcha_type=CaptchaType.SLIDER,
-                session_id="test-session",
-                x=150,
-            )
-
-            self.assertTrue(result.success)
-
-    def test_verify_captcha_with_string_type(self):
-        """测试使用字符串类型验证"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            result = self.client.verify_captcha(
-                captcha_type="click",
-                session_id="test-session",
-                points=[[100, 100]],
-            )
-
-            self.assertTrue(result.success)
-
-    def test_get_rotation_captcha(self):
-        """测试获取旋转验证码"""
-        mock_response = {
-            "challenge_id": "rotation-test",
-            "image": "data:image/png;base64,abc",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            captcha = self.client.get_rotation_captcha()
-
-            self.assertIsInstance(captcha, RotationCaptchaResponse)
-            self.assertEqual(captcha.challenge_id, "rotation-test")
-
-
-class TestCaptchaClientWithTrajectory(unittest.TestCase):
-    """测试带轨迹数据的验证码"""
-
-    def setUp(self):
-        """测试前准备"""
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
-        )
-
-    def tearDown(self):
-        """测试后清理"""
-        self.client.close()
-
-    def test_verify_slider_with_trajectory(self):
-        """测试带轨迹的滑块验证"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-            "trajectory_result": {
-                "score": 0.95,
-                "passed": True,
-            },
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            trajectory = [
-                TrajectoryPoint(x=0, y=80, t=0),
-                TrajectoryPoint(x=50, y=85, t=200),
-                TrajectoryPoint(x=100, y=77, t=400),
-                TrajectoryPoint(x=150, y=80, t=800),
-            ]
-
-            result = self.client.verify_slider_captcha(
-                session_id="test-session",
-                x=150,
-                y=80,
-                trajectory=trajectory,
-            )
-
-            self.assertTrue(result.success)
-            self.assertIsNotNone(result.trajectory_result)
-            self.assertEqual(result.trajectory_result["score"], 0.95)
-
-    def test_verify_slider_with_behavior_data(self):
-        """测试带行为数据的滑块验证"""
-        mock_response = {
-            "success": True,
-            "message": "验证成功",
-        }
-
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.return_value = mock_response
-
-            behavior_data = [
-                {"type": "move", "x": 50, "y": 80},
-                {"type": "move", "x": 100, "y": 80},
-            ]
-
-            result = self.client.verify_slider_captcha(
-                session_id="test-session",
-                x=150,
-                behavior_data=behavior_data,
-            )
-
-            self.assertTrue(result.success)
-
-
-class TestClientConfiguration(unittest.TestCase):
-    """测试客户端配置"""
-
-    def test_default_configuration(self):
-        """测试默认配置"""
-        client = CaptchaClient(base_url="http://test.example.com")
-
-        self.assertEqual(client.base_url, "http://test.example.com")
-        self.assertEqual(client.timeout, 30)
-        self.assertIsNone(client.api_key)
-
-        client.close()
-
-    def test_custom_configuration(self):
-        """测试自定义配置"""
-        client = CaptchaClient(
-            base_url="http://test.example.com",
+        self.loop.close()
+
+    def test_async_client_initialization(self):
+        """测试异步客户端初始化"""
+        client = AsyncCaptchaClient("http://localhost:8080")
+        assert client.base_url == "http://localhost:8080"
+        assert client.timeout.total == 30
+
+    def test_async_client_with_config(self):
+        """测试异步客户端配置"""
+        client = AsyncCaptchaClient(
+            "http://localhost:8080",
             api_key="test-key",
             timeout=60,
-            max_retries=5,
-            retry_backoff_factor=0.3,
-            pool_connections=20,
-            pool_maxsize=20,
+            max_connections=100
         )
+        assert client.api_key == "test-key"
+        assert client.timeout.total == 60
+        assert client.max_connections == 100
 
-        self.assertEqual(client.api_key, "test-key")
-        self.assertEqual(client.timeout, 60)
+    @pytest.mark.asyncio
+    async def test_async_get_slider_captcha(self):
+        """测试异步获取滑块验证码"""
+        client = AsyncCaptchaClient("http://localhost:8080")
 
-        client.close()
+        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {
+                'session_id': 'test-session-async',
+                'image_url': 'http://example.com/image.png',
+                'puzzle_url': 'http://example.com/puzzle.png',
+                'secret_y': 80,
+                'image_width': 320,
+                'image_height': 160
+            }
 
-    def test_headers_with_api_key(self):
-        """测试带API密钥的请求头"""
-        client = CaptchaClient(
-            base_url="http://test.example.com",
-            api_key="test-key",
-        )
+            result = await client.get_slider_captcha(320, 160, 8)
+            assert isinstance(result, AsyncSliderCaptchaResponse)
+            assert result.session_id == 'test-session-async'
+            assert result.secret_y == 80
 
-        headers = client._get_headers()
+        await client.close()
 
-        self.assertEqual(headers["X-API-Key"], "test-key")
-        self.assertEqual(headers["Content-Type"], "application/json")
+    @pytest.mark.asyncio
+    async def test_async_verify_slider_captcha(self):
+        """测试异步验证滑块验证码"""
+        client = AsyncCaptchaClient("http://localhost:8080")
 
-        client.close()
+        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {
+                'success': True,
+                'message': 'Verification successful',
+                'remaining_attempts': 3,
+                'risk_score': 0.95
+            }
 
-    def test_headers_with_token(self):
-        """测试带令牌的请求头"""
-        client = CaptchaClient(base_url="http://test.example.com")
-        client._token = "bearer-token"
+            result = await client.verify_slider_captcha('test-session', 150, 80)
+            assert isinstance(result, AsyncVerifyResult)
+            assert result.success is True
+            assert result.risk_score == 0.95
 
-        headers = client._get_headers()
+        await client.close()
 
-        self.assertEqual(headers["Authorization"], "Bearer bearer-token")
+    @pytest.mark.asyncio
+    async def test_async_verify_with_trajectory(self):
+        """测试异步验证带轨迹"""
+        client = AsyncCaptchaClient("http://localhost:8080")
 
-        client.close()
+        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {
+                'success': True,
+                'message': 'success'
+            }
+
+            trajectory = [
+                AsyncTrajectoryPoint(0, 80, 1000),
+                AsyncTrajectoryPoint(75, 82, 500),
+                AsyncTrajectoryPoint(150, 80, 0)
+            ]
+
+            result = await client.verify_slider_captcha('test-session', 150, 80, trajectory)
+            assert result.success is True
+
+        await client.close()
+
+    def test_async_trajectory_point(self):
+        """测试异步轨迹点"""
+        point = AsyncTrajectoryPoint(100, 200, 1234567890)
+        assert point.x == 100
+        assert point.y == 200
+        assert point.t == 1234567890
+
+        data = point.to_dict()
+        assert data['x'] == 100
+        assert data['y'] == 200
+
+    def test_async_context_manager(self):
+        """测试异步上下文管理器"""
+        async def test():
+            async with AsyncCaptchaClient("http://localhost:8080") as client:
+                assert client.base_url == "http://localhost:8080"
+
+        self.loop.run_until_complete(test())
 
 
-class TestErrorHandling(unittest.TestCase):
+class TestErrorHandling:
     """测试错误处理"""
 
-    def setUp(self):
-        """测试前准备"""
-        self.client = CaptchaClient(
-            base_url="http://test.example.com",
-            timeout=5,
+    def test_captcha_error(self):
+        """测试基础错误"""
+        error = CaptchaError("Test error")
+        assert str(error) == "Test error"
+
+    def test_captcha_api_error(self):
+        """测试API错误"""
+        error = CaptchaAPIError("API error", code=400, data={'key': 'value'})
+        assert error.message == "API error"
+        assert error.code == 400
+        assert error.data == {'key': 'value'}
+
+    def test_captcha_network_error(self):
+        """测试网络错误"""
+        error = CaptchaNetworkError("Network error")
+        assert "Network error" in str(error)
+
+    def test_captcha_timeout_error(self):
+        """测试超时错误"""
+        error = CaptchaTimeoutError()
+        assert "timed out" in str(error)
+
+    def test_captcha_validation_error(self):
+        """测试验证错误"""
+        error = CaptchaValidationError("Validation failed")
+        assert "Validation failed" in str(error)
+
+    def test_captcha_session_expired_error(self):
+        """测试会话过期错误"""
+        error = CaptchaSessionExpiredError()
+        assert "expired" in str(error)
+
+    def test_async_captcha_error(self):
+        """测试异步基础错误"""
+        error = AsyncCaptchaError("Async error")
+        assert str(error) == "Async error"
+
+    def test_async_captcha_api_error(self):
+        """测试异步API错误"""
+        error = AsyncCaptchaAPIError("Async API error", code=500)
+        assert error.message == "Async API error"
+        assert error.code == 500
+
+
+class TestDataModels:
+    """测试数据模型"""
+
+    def test_slider_captcha_response(self):
+        """测试滑块验证码响应"""
+        response = SliderCaptchaResponse(
+            session_id='test-123',
+            image_url='http://example.com/image.png',
+            puzzle_url='http://example.com/puzzle.png',
+            hint_url='http://example.com/hint.png',
+            shape=1,
+            secret_y=80,
+            image_width=320,
+            image_height=160,
+            tolerance=8
         )
 
-    def tearDown(self):
-        """测试后清理"""
-        self.client.close()
+        assert response.session_id == 'test-123'
+        assert response.image_width == 320
+        assert response.secret_y == 80
 
-    def test_api_error_with_code(self):
-        """测试带错误码的API错误"""
-        error = CaptchaAPIError("Bad Request", code=400)
-        self.assertEqual(error.code, 400)
-        self.assertIn("400", str(error))
+    def test_click_captcha_response(self):
+        """测试点击验证码响应"""
+        response = ClickCaptchaResponse(
+            session_id='test-123',
+            image_url='http://example.com/image.png',
+            hint='Click the numbers 1, 2, 3',
+            hint_order=[1, 2, 3],
+            max_points=3,
+            mode='number',
+            allow_shuffle=True,
+            points=[[100, 100], [200, 200]]
+        )
 
-    def test_session_expired_error(self):
-        """测试会话过期错误"""
-        mock_response = {
-            "code": 404,
-            "message": "会话不存在",
-        }
+        assert response.session_id == 'test-123'
+        assert response.max_points == 3
+        assert len(response.hint_order) == 3
 
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.side_effect = CaptchaSessionExpiredError("会话不存在")
+    def test_verify_result(self):
+        """测试验证结果"""
+        result = VerifyResult(
+            success=True,
+            message='Verification successful',
+            remaining_attempts=3,
+            trajectory_result={'score': 0.95, 'passed': True},
+            risk_score=0.95,
+            captcha_pass=True,
+            fail_reason=None
+        )
 
-            with self.assertRaises(CaptchaSessionExpiredError):
-                self.client.get_slider_captcha()
+        assert result.success is True
+        assert result.risk_score == 0.95
+        assert result.trajectory_result is not None
 
-    def test_validation_error(self):
-        """测试验证失败错误"""
-        mock_response = {
-            "code": 400,
-            "message": "参数错误",
-        }
+    def test_login_response(self):
+        """测试登录响应"""
+        from captcha import LoginResponse
 
-        with mock.patch.object(self.client, '_request') as mock_request:
-            mock_request.side_effect = CaptchaValidationError("参数错误")
+        response = LoginResponse(
+            access_token='access-token-123',
+            refresh_token='refresh-token-456',
+            expires_in=3600,
+            user={'id': 1, 'username': 'testuser', 'email': 'test@example.com'}
+        )
 
-            with self.assertRaises(CaptchaValidationError):
-                self.client.get_slider_captcha()
-
-
-def run_tests():
-    """运行所有测试"""
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-
-    suite.addTests(loader.loadTestsFromTestCase(TestTrajectoryPoint))
-    suite.addTests(loader.loadTestsFromTestCase(TestJigsawPiece))
-    suite.addTests(loader.loadTestsFromTestCase(TestExceptions))
-    suite.addTests(loader.loadTestsFromTestCase(TestCaptchaClient))
-    suite.addTests(loader.loadTestsFromTestCase(TestCaptchaTypes))
-    suite.addTests(loader.loadTestsFromTestCase(TestClickMode))
-    suite.addTests(loader.loadTestsFromTestCase(TestVerifyResult))
-    suite.addTests(loader.loadTestsFromTestCase(TestLoginResponse))
-    suite.addTests(loader.loadTestsFromTestCase(TestUserAuth))
-    suite.addTests(loader.loadTestsFromTestCase(TestEnvironment))
-    suite.addTests(loader.loadTestsFromTestCase(TestCaptchaClientAdvanced))
-    suite.addTests(loader.loadTestsFromTestCase(TestCaptchaClientWithTrajectory))
-    suite.addTests(loader.loadTestsFromTestCase(TestClientConfiguration))
-    suite.addTests(loader.loadTestsFromTestCase(TestErrorHandling))
-
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-
-    return result
+        assert response.access_token == 'access-token-123'
+        assert response.expires_in == 3600
+        assert response.user['username'] == 'testuser'
 
 
-if __name__ == "__main__":
-    result = run_tests()
-    sys.exit(0 if result.wasSuccessful() else 1)
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])

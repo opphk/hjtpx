@@ -1,0 +1,989 @@
+openapi: 3.1.0
+info:
+  title: 行为验证系统 API
+  description: |
+    行为验证系统API文档 v3.1
+    
+    提供多种验证码类型、用户认证、环境检测、风险分析等功能。
+    
+    ## 主要功能
+    - 多种验证码类型：滑块、点击、图形、旋转、手势、拼图、语音、3D、连连看
+    - 用户认证：注册、登录、令牌刷新
+    - 环境检测：浏览器指纹、环境安全检测
+    - 风险分析：轨迹分析、行为分析、风险评分
+    - 应用管理：创建、管理验证码应用
+    - 统计分析：验证码使用统计
+  version: 3.1.0
+  contact:
+    name: API Support
+    email: support@example.com
+    url: https://example.com/support
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.example.com/api/v1
+    description: 生产环境
+  - url: https://staging-api.example.com/api/v1
+    description: 预发布环境
+  - url: http://localhost:8080/api/v1
+    description: 开发环境
+
+tags:
+  - name: captcha
+    description: 验证码相关接口
+  - name: auth
+    description: 用户认证接口
+  - name: user
+    description: 用户资料接口
+  - name: detect
+    description: 环境检测接口
+  - name: admin-auth
+    description: 管理端认证接口
+  - name: admin-stats
+    description: 管理端统计接口
+  - name: admin-applications
+    description: 管理端应用管理接口
+  - name: admin-logs
+    description: 管理端日志接口
+  - name: admin-blacklist
+    description: 管理端黑名单接口
+  - name: admin-risk-rules
+    description: 管理端风控规则接口
+  - name: admin-analytics
+    description: 高级分析接口
+
+paths:
+  /captcha/slider:
+    get:
+      tags:
+        - captcha
+      summary: 获取滑块验证码
+      description: |
+        生成滑块验证码，返回会话ID和图片数据。
+        
+        ## 参数说明
+        - width: 图片宽度，默认320
+        - height: 图片高度，默认160
+        - tolerance: 容差值，默认8
+        
+        ## 返回数据
+        返回背景图URL、拼图URL、会话ID等信息。
+      operationId: getSliderCaptcha
+      parameters:
+        - $ref: '#/components/parameters/Width'
+        - $ref: '#/components/parameters/Height'
+        - $ref: '#/components/parameters/Tolerance'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SliderCaptchaResponse'
+              example:
+                code: 0
+                message: success
+                data:
+                  session_id: slider_abc123def456
+                  image_url: http://example.com/bg.png
+                  puzzle_url: http://example.com/puzzle.png
+                  hint_url: http://example.com/hint.png
+                  shape: 1
+                  secret_y: 80
+                  image_width: 320
+                  image_height: 160
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /captcha/click:
+    get:
+      tags:
+        - captcha
+      summary: 获取点击验证码
+      description: |
+        生成点击验证码，用户需要点击指定顺序的图标。
+      operationId: getClickCaptcha
+      parameters:
+        - name: mode
+          in: query
+          description: 验证码模式
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, chinese, mixed, icon]
+            default: number
+        - name: points
+          in: query
+          description: 最大点击点数
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9
+            default: 3
+        - name: shuffle
+          in: query
+          description: 是否允许打乱顺序
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClickCaptchaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /captcha/image:
+    get:
+      tags:
+        - captcha
+      summary: 获取图形验证码
+      description: |
+        生成传统图形验证码，用户需要输入显示的字符。
+      operationId: getImageCaptcha
+      parameters:
+        - name: type
+          in: query
+          description: 验证码类型
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, chinese, mixed]
+            default: mixed
+        - name: count
+          in: query
+          description: 字符数量
+          required: false
+          schema:
+            type: integer
+            minimum: 2
+            maximum: 8
+            default: 4
+        - name: noise_mode
+          in: query
+          description: 噪音模式
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10
+            default: 0
+        - name: line_mode
+          in: query
+          description: 干扰线模式
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10
+            default: 0
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageCaptchaResponse'
+
+  /captcha/rotation:
+    get:
+      tags:
+        - captcha
+      summary: 获取旋转验证码
+      description: |
+        生成旋转验证码，用户需要将图片旋转到正确角度。
+      operationId: getRotationCaptcha
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotationCaptchaResponse'
+
+  /captcha/gesture:
+    get:
+      tags:
+        - captcha
+      summary: 获取手势验证码
+      description: |
+        生成手势验证码，用户需要在网格中绘制指定图案。
+      operationId: getGestureCaptcha
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GestureCaptchaResponse'
+
+  /captcha/jigsaw:
+    get:
+      tags:
+        - captcha
+      summary: 获取拼图验证码
+      description: |
+        生成拼图验证码，用户需要将碎片拼到正确位置。
+      operationId: getJigsawCaptcha
+      parameters:
+        - $ref: '#/components/parameters/Width'
+        - $ref: '#/components/parameters/Height'
+        - name: grid_size
+          in: query
+          description: 网格大小
+          required: false
+          schema:
+            type: integer
+            enum: [2, 3, 4]
+            default: 3
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JigsawCaptchaResponse'
+
+  /captcha/voice:
+    get:
+      tags:
+        - captcha
+      summary: 获取语音验证码
+      description: |
+        生成语音验证码，用户需要听取并输入播放的数字。
+      operationId: getVoiceCaptcha
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoiceCaptchaResponse'
+
+  /captcha/3d:
+    get:
+      tags:
+        - captcha
+      summary: 获取3D验证码
+      description: |
+        生成3D验证码，用户需要旋转3D物体到正确角度。
+      operationId: get3DCaptcha
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreeDCaptchaResponse'
+
+  /captcha/lianliankan:
+    get:
+      tags:
+        - captcha
+      summary: 获取连连看验证码
+      description: |
+        生成连连看验证码，用户需要按正确顺序连接图标。
+      operationId: getLianLianKanCaptcha
+      parameters:
+        - name: grid_size
+          in: query
+          description: 网格大小
+          required: false
+          schema:
+            type: integer
+            enum: [4, 6, 8]
+            default: 6
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LianLianKanCaptchaResponse'
+
+  /captcha/verify:
+    post:
+      tags:
+        - captcha
+      summary: 验证验证码
+      description: |
+        验证用户提交的验证码答案。
+        
+        ## 请求体
+        根据验证码类型不同，请求体内容有所差异。
+        
+        ## 返回数据
+        返回验证结果、风险评分、剩余尝试次数等信息。
+      operationId: verifyCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCaptchaRequest'
+            example:
+              session_id: slider_abc123def456
+              type: slider
+              x: 150
+              y: 80
+              trajectory:
+                - x: 0
+                  y: 80
+                  t: 1700000000000
+                - x: 75
+                  y: 82
+                  t: 1700000000500
+                - x: 150
+                  y: 80
+                  t: 1700000001000
+      responses:
+        '200':
+          description: 验证结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/register:
+    post:
+      tags:
+        - auth
+      summary: 用户注册
+      description: |
+        创建新用户账号。
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 用户已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: 用户登录
+      description: |
+        用户登录，获取访问令牌。
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - auth
+      summary: 用户登出
+      description: |
+        使当前访问令牌失效。
+      operationId: logout
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+
+  /auth/refresh:
+    post:
+      tags:
+        - auth
+      summary: 刷新令牌
+      description: |
+        使用刷新令牌获取新的访问令牌。
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  description: 刷新令牌
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /detect/script:
+    get:
+      tags:
+        - detect
+      summary: 获取检测脚本
+      description: |
+        获取环境检测JavaScript脚本。
+      operationId: getDetectionScript
+      parameters:
+        - name: callback
+          in: query
+          description: JSONP回调函数名
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            text/javascript:
+              schema:
+                type: string
+
+  /detect/submit:
+    post:
+      tags:
+        - detect
+      summary: 提交检测数据
+      description: |
+        提交浏览器环境检测数据。
+      operationId: submitDetection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fingerprint:
+                  type: object
+                  description: 浏览器指纹信息
+                environment:
+                  type: object
+                  description: 环境检测结果
+                behaviors:
+                  type: array
+                  description: 用户行为数据
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  risk_score:
+                    type: number
+                    format: float
+                  risk_level:
+                    type: string
+                    enum: [low, medium, high, critical]
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT访问令牌
+
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API密钥
+
+  parameters:
+    Width:
+      name: width
+      in: query
+      description: 图片宽度
+      required: false
+      schema:
+        type: integer
+        minimum: 100
+        maximum: 1000
+        default: 320
+
+    Height:
+      name: height
+      in: query
+      description: 图片高度
+      required: false
+      schema:
+        type: integer
+        minimum: 50
+        maximum: 500
+        default: 160
+
+    Tolerance:
+      name: tolerance
+      in: query
+      description: 容差值
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 8
+
+  schemas:
+    SliderCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - image_url
+        - puzzle_url
+      properties:
+        session_id:
+          type: string
+          description: 会话ID
+        image_url:
+          type: string
+          format: uri
+          description: 背景图片URL
+        puzzle_url:
+          type: string
+          format: uri
+          description: 拼图图片URL
+        hint_url:
+          type: string
+          format: uri
+          description: 提示图片URL
+        shape:
+          type: integer
+          description: 拼图形状类型
+        secret_y:
+          type: integer
+          description: 正确Y坐标
+        image_width:
+          type: integer
+          description: 图片宽度
+        image_height:
+          type: integer
+          description: 图片高度
+
+    ClickCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - image_url
+        - hint
+      properties:
+        session_id:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        hint:
+          type: string
+        hint_order:
+          type: array
+          items:
+            type: integer
+        max_points:
+          type: integer
+        mode:
+          type: string
+        allow_shuffle:
+          type: boolean
+        points:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+
+    ImageCaptchaResponse:
+      type: object
+      required:
+        - challenge_id
+        - image
+      properties:
+        challenge_id:
+          type: string
+        image:
+          type: string
+          format: byte
+          description: Base64编码的图片
+
+    RotationCaptchaResponse:
+      type: object
+      required:
+        - challenge_id
+        - image
+      properties:
+        challenge_id:
+          type: string
+        image:
+          type: string
+          format: byte
+
+    GestureCaptchaResponse:
+      type: object
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+        pattern:
+          type: string
+        grid_size:
+          type: integer
+        hint:
+          type: string
+
+    JigsawCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - image_url
+        - pieces
+      properties:
+        session_id:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        pieces:
+          type: array
+          items:
+            $ref: '#/components/schemas/JigsawPiece'
+        piece_images:
+          type: array
+          items:
+            type: string
+            format: uri
+        grid_size:
+          type: integer
+        piece_width:
+          type: integer
+        piece_height:
+          type: integer
+        image_width:
+          type: integer
+        image_height:
+          type: integer
+
+    JigsawPiece:
+      type: object
+      required:
+        - index
+        - original_x
+        - original_y
+      properties:
+        index:
+          type: integer
+        original_x:
+          type: integer
+        original_y:
+          type: integer
+        current_x:
+          type: integer
+        current_y:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        rotation:
+          type: integer
+
+    VoiceCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - audio_url
+      properties:
+        session_id:
+          type: string
+        audio_url:
+          type: string
+          format: uri
+        audio_data:
+          type: string
+          format: byte
+        hint:
+          type: string
+
+    ThreeDCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - image_url
+      properties:
+        session_id:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        angle:
+          type: integer
+        hint:
+          type: string
+
+    LianLianKanCaptchaResponse:
+      type: object
+      required:
+        - session_id
+        - image_url
+      properties:
+        session_id:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        grid_size:
+          type: integer
+        paths:
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: integer
+
+    VerifyCaptchaRequest:
+      type: object
+      required:
+        - session_id
+        - type
+      properties:
+        session_id:
+          type: string
+          description: 会话ID
+        type:
+          type: string
+          enum: [slider, click, image, rotation, gesture, jigsaw, voice, 3d, lianliankan]
+        x:
+          type: integer
+          description: X坐标（滑块验证）
+        y:
+          type: integer
+          description: Y坐标
+        angle:
+          type: integer
+          description: 旋转角度
+        points:
+          type: array
+          description: 点击坐标列表
+          items:
+            type: array
+            items:
+              type: integer
+        click_sequence:
+          type: array
+          description: 点击顺序
+          items:
+            type: integer
+        trajectory:
+          type: array
+          description: 滑动轨迹
+          items:
+            $ref: '#/components/schemas/TrajectoryPoint'
+        answer:
+          type: string
+          description: 图形验证码答案
+
+    TrajectoryPoint:
+      type: object
+      required:
+        - x
+        - y
+        - t
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+        t:
+          type: integer
+          format: int64
+          description: 时间戳（毫秒）
+
+    VerifyResult:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        remaining_attempts:
+          type: integer
+        trajectory_result:
+          $ref: '#/components/schemas/TrajectoryResult'
+        risk_score:
+          type: number
+          format: float
+        captcha_pass:
+          type: boolean
+        fail_reason:
+          type: string
+
+    TrajectoryResult:
+      type: object
+      properties:
+        score:
+          type: number
+          format: float
+        passed:
+          type: boolean
+        reasons:
+          type: array
+          items:
+            type: string
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        captcha_token:
+          type: string
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - expires_in
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: Invalid parameters
+
+    Unauthorized:
+      description: 未授权
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: Unauthorized
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: Resource not found
+
+    InternalServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 500
+            message: Internal server error
