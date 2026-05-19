@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/config"
+	"gorm.io/gorm"
 )
 
 type AdvancedDataArchiver struct {
@@ -39,6 +40,15 @@ type ArchiveStrategy interface {
 	GetName() string
 	GetStatus() string
 	GetPriority() int
+}
+
+type ArchiveStats struct {
+	TotalArchivedRecords  int64
+	TotalCleanedRecords   int64
+	ArchiveErrors         int64
+	CleanupErrors         int64
+	LastArchiveTime       time.Time
+	LastCleanupTime       time.Time
 }
 
 type ArchiveOperationRecord struct {
