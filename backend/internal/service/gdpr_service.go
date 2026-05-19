@@ -142,7 +142,7 @@ func (s *GDPRService) ExportUserData(userID uint) (map[string]interface{}, error
 		Provider string    `json:"provider"`
 		CreatedAt time.Time `json:"created_at"`
 	}
-	database.DB.Model(&OAuth2Token{}).Where("user_id = ?", userID).Select("provider, created_at").Find(&oauth2Tokens)
+	database.DB.Model(&GDPRTokenRecord{}).Where("user_id = ?", userID).Select("provider, created_at").Find(&oauth2Tokens)
 
 	var sessions []struct {
 		ID        uint      `json:"id"`
@@ -203,7 +203,7 @@ func (s *GDPRService) DeleteUserData(userID uint, dataTypes []string) (map[strin
 			err = result.Error
 
 		case "oauth2_tokens":
-			result := database.DB.Where("user_id = ?", userID).Delete(&OAuth2Token{})
+			result := database.DB.Where("user_id = ?", userID).Delete(&GDPRTokenRecord{})
 			count = result.RowsAffected
 			err = result.Error
 
@@ -459,7 +459,7 @@ func (s *GDPRService) ProcessPortabilityRequest(requestID uint, reviewerID uint)
 	return json.MarshalIndent(portabilityFormat, "", "  ")
 }
 
-type OAuth2Token struct {
+type GDPRTokenRecord struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
 	UserID       uint      `json:"user_id"`
 	Provider     string    `json:"provider"`

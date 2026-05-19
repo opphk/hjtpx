@@ -21,19 +21,19 @@ const (
 	ChannelSMS        NotificationChannel = "sms"
 )
 
-type NotificationSeverity string
+type NotificationLevel string
 
 const (
-	SeverityInfo     NotificationSeverity = "info"
-	SeverityWarning  NotificationSeverity = "warning"
-	SeverityError    NotificationSeverity = "error"
-	SeverityCritical NotificationSeverity = "critical"
+	LevelInfo     NotificationLevel = "info"
+	LevelWarning  NotificationLevel = "warning"
+	LevelError    NotificationLevel = "error"
+	LevelCritical NotificationLevel = "critical"
 )
 
 type NotificationMessage struct {
 	ID        string                 `json:"id"`
 	Channel   NotificationChannel    `json:"channel"`
-	Severity  NotificationSeverity  `json:"severity"`
+	Severity  NotificationLevel  `json:"severity"`
 	Title     string                `json:"title"`
 	Content   string                `json:"content"`
 	Data      map[string]interface{} `json:"data,omitempty"`
@@ -170,22 +170,22 @@ func (s *SlackService) buildSlackPayload(msg NotificationMessage, config *SlackC
 		slackMsg["icon_emoji"] = config.IconEmoji
 	}
 	
-	if msg.Severity == SeverityCritical || config.IsAtAll {
+	if msg.Severity == LevelCritical || config.IsAtAll {
 		slackMsg["text"] = "<!channel>"
 	}
 	
 	return slackMsg
 }
 
-func (s *SlackService) getSeverityColor(severity NotificationSeverity) string {
+func (s *SlackService) getSeverityColor(severity NotificationLevel) string {
 	switch severity {
-	case SeverityInfo:
+	case LevelInfo:
 		return "#36a64f"
-	case SeverityWarning:
+	case LevelWarning:
 		return "#ff9800"
-	case SeverityError:
+	case LevelError:
 		return "#f44336"
-	case SeverityCritical:
+	case LevelCritical:
 		return "#b71c1c"
 	default:
 		return "#36a64f"
@@ -229,11 +229,11 @@ func (s *SlackService) SendBlockKit(name string, blocks []map[string]interface{}
 }
 
 func (s *SlackService) BuildVerificationAlertBlock(msg NotificationMessage) []map[string]interface{} {
-	severityEmoji := map[NotificationSeverity]string{
-		SeverityInfo:     ":information_source:",
-		SeverityWarning:  ":warning:",
-		SeverityError:    ":x:",
-		SeverityCritical: ":fire:",
+	severityEmoji := map[NotificationLevel]string{
+		LevelInfo:     ":information_source:",
+		LevelWarning:  ":warning:",
+		LevelError:    ":x:",
+		LevelCritical: ":fire:",
 	}
 	
 	emoji, ok := severityEmoji[msg.Severity]
@@ -434,7 +434,7 @@ func GetNotificationManager() *NotificationManager {
 	return defaultNotificationManager
 }
 
-func SendVerificationAlert(severity NotificationSeverity, title, content string, data map[string]interface{}) {
+func SendVerificationAlert(severity NotificationLevel, title, content string, data map[string]interface{}) {
 	msg := NotificationMessage{
 		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		Channel:   ChannelSlack,
@@ -455,7 +455,7 @@ func SendVerificationAlert(severity NotificationSeverity, title, content string,
 	}
 }
 
-func SendSecurityAlert(severity NotificationSeverity, alertType string, details map[string]interface{}) {
+func SendSecurityAlert(severity NotificationLevel, alertType string, details map[string]interface{}) {
 	content := fmt.Sprintf("*Security Alert: %s*\n\n", alertType)
 	
 	for key, value := range details {
@@ -465,7 +465,7 @@ func SendSecurityAlert(severity NotificationSeverity, alertType string, details 
 	SendVerificationAlert(severity, "Security Alert", content, details)
 }
 
-func SendSystemNotification(severity NotificationSeverity, title, content string) {
+func SendSystemNotification(severity NotificationLevel, title, content string) {
 	SendVerificationAlert(severity, title, content, nil)
 }
 
@@ -501,7 +501,7 @@ func SendVerificationStats(stats map[string]interface{}) {
 	
 	msg := NotificationMessage{
 		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-		Severity:  SeverityInfo,
+		Severity:  LevelInfo,
 		Title:     "Verification Statistics",
 		Content:   "Statistics update",
 		Data:      stats,

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -443,7 +444,7 @@ func CreateSSOConfigHandler(c *gin.Context) {
 		config.SAMLConfig = string(samlConfigJSON)
 		
 		if err := InitSAMLService(*req.SAMLConfig); err != nil {
-			response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to initialize SAML service: %v", err))
+			response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to initialize SAML service: %v", err))
 			return
 		}
 		
@@ -456,13 +457,13 @@ func CreateSSOConfigHandler(c *gin.Context) {
 		config.LDAPConfig = string(ldapConfigJSON)
 		
 		if err := InitLDAPService(*req.LDAPConfig); err != nil {
-			response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to initialize LDAP service: %v", err))
+			response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to initialize LDAP service: %v", err))
 			return
 		}
 	}
 	
 	if err := database.DB.Create(config).Error; err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to create SSO configuration")
+		response.Fail(c, response.CodeServerError, "failed to create SSO configuration")
 		return
 	}
 	
@@ -511,7 +512,7 @@ func UpdateSSOConfigHandler(c *gin.Context) {
 	}
 	
 	if err := database.DB.Save(&config).Error; err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to update SSO configuration")
+		response.Fail(c, response.CodeServerError, "failed to update SSO configuration")
 		return
 	}
 	
@@ -530,7 +531,7 @@ func DeleteSSOConfigHandler(c *gin.Context) {
 	fmt.Sscanf(id, "%d", &idNum)
 	
 	if err := database.DB.Delete(&SSOConfig{}, idNum).Error; err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to delete SSO configuration")
+		response.Fail(c, response.CodeServerError, "failed to delete SSO configuration")
 		return
 	}
 	
@@ -559,20 +560,20 @@ func SAMLSSOInitiateHandler(c *gin.Context) {
 		var samlCfg SAMLConfig
 		json.Unmarshal([]byte(config.SAMLConfig), &samlCfg)
 		if err := InitSAMLService(samlCfg); err != nil {
-			response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to initialize SAML: %v", err))
+			response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to initialize SAML: %v", err))
 			return
 		}
 	}
 	
 	authnRequest, err := samlService.GenerateAuthnRequest()
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to generate authn request: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to generate authn request: %v", err))
 		return
 	}
 	
 	redirectURL, err := samlService.BuildAuthnRequestRedirect(authnRequest)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to build redirect URL: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to build redirect URL: %v", err))
 		return
 	}
 	
@@ -616,7 +617,7 @@ func SAMLSSOCallbackHandler(c *gin.Context) {
 	}
 	
 	if samlService == nil {
-		response.Fail(c, response.CodeInternalError, "SAML service not initialized")
+		response.Fail(c, response.CodeServerError, "SAML service not initialized")
 		return
 	}
 	
@@ -656,13 +657,13 @@ func SAMLSSOCallbackHandler(c *gin.Context) {
 	
 	user, err := findOrCreateSSOUser(email, username, string(SSOProviderSAML))
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to process user: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to process user: %v", err))
 		return
 	}
 	
 	token, refreshToken, err := generateSSOTokens(user)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to generate token")
+		response.Fail(c, response.CodeServerError, "failed to generate token")
 		return
 	}
 	
@@ -711,7 +712,7 @@ func LDAPLoginHandler(c *gin.Context) {
 	
 	if ldapService == nil {
 		if err := InitLDAPService(*ldapConfig); err != nil {
-			response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to initialize LDAP: %v", err))
+			response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to initialize LDAP: %v", err))
 			return
 		}
 	}
@@ -724,13 +725,13 @@ func LDAPLoginHandler(c *gin.Context) {
 	
 	user, err := findOrCreateSSOUser(ldapUser.Email, ldapUser.Username, string(SSOProviderLDAP))
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("failed to process user: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("failed to process user: %v", err))
 		return
 	}
 	
 	token, refreshToken, err := generateSSOTokens(user)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to generate token")
+		response.Fail(c, response.CodeServerError, "failed to generate token")
 		return
 	}
 	
@@ -826,17 +827,17 @@ func findOrCreateSSOUser(email, username, provider string) (*models.User, error)
 }
 
 func generateSSOTokens(user *models.User) (string, string, error) {
-	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role)
+	token, err := jwt.GenerateToken(user.ID, user.Username)
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	refreshToken := uuid.New().String()
-	
+
 	if redisClient := redis.GetClient(); redisClient != nil {
 		key := fmt.Sprintf("sso_refresh:%d", user.ID)
-		redisClient.Set(key, refreshToken, 7*24*time.Hour)
+		redisClient.Set(context.Background(), key, refreshToken, 7*24*time.Hour)
 	}
-	
+
 	return token, refreshToken, nil
 }

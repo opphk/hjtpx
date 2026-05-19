@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -419,13 +420,13 @@ func OAuth2Callback(c *gin.Context) {
 	
 	token, err := manager.ExchangeCode(provider, req.Code, client.ClientID, client.ClientSecret, client.RedirectURL)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("token exchange failed: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("token exchange failed: %v", err))
 		return
 	}
-	
+
 	userInfo, err := manager.GetUserInfo(provider, token.AccessToken)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("get user info failed: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("get user info failed: %v", err))
 		return
 	}
 	
@@ -433,17 +434,18 @@ func OAuth2Callback(c *gin.Context) {
 	
 	user, err := findOrCreateOAuth2User(oauth2UserInfo)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, fmt.Sprintf("user processing failed: %v", err))
+		response.Fail(c, response.CodeServerError, fmt.Sprintf("user processing failed: %v", err))
 		return
 	}
 	
-	if err := SaveOAuth2Token(user.ID, string(provider), token, strings.Join(client.Scopes, " ")); err != nil {
+	scopes := strings.Split(client.Scopes, ",")
+	if err := SaveOAuth2Token(user.ID, string(provider), token, strings.Join(scopes, " ")); err != nil {
 		fmt.Printf("Failed to save OAuth2 token: %v\n", err)
 	}
 	
 	jwtToken, refreshToken, err := generateJWTTokens(user)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to generate token")
+		response.Fail(c, response.CodeServerError, "failed to generate token")
 		return
 	}
 	
@@ -490,7 +492,7 @@ func OAuth2Revoke(c *gin.Context) {
 	}
 	
 	if err := DeleteOAuth2Token(userID.(uint), req.Provider); err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to revoke token")
+		response.Fail(c, response.CodeServerError, "failed to revoke token")
 		return
 	}
 	
@@ -500,7 +502,7 @@ func OAuth2Revoke(c *gin.Context) {
 	})
 }
 
-func OAuth2UserInfo(c *gin.Context) {
+func OAuth2UserInfoHandler(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		response.Fail(c, response.CodeUnauthorized, "user not authenticated")
@@ -524,7 +526,7 @@ func OAuth2UserInfo(c *gin.Context) {
 	manager := GetOAuth2ProviderManager()
 	userInfo, err := manager.GetUserInfo(OAuth2Provider(req.Provider), token.AccessToken)
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to get user info")
+		response.Fail(c, response.CodeServerError, "failed to get user info")
 		return
 	}
 	
@@ -546,7 +548,7 @@ func OAuth2UserInfo(c *gin.Context) {
 func ListOAuth2Clients(c *gin.Context) {
 	clients, err := GetOAuth2Clients()
 	if err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to get OAuth2 clients")
+		response.Fail(c, response.CodeServerError, "failed to get OAuth2 clients")
 		return
 	}
 	
@@ -585,7 +587,7 @@ func CreateOAuth2ClientHandler(c *gin.Context) {
 	}
 	
 	if err := CreateOAuth2Client(client); err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to create OAuth2 client")
+		response.Fail(c, response.CodeServerError, "failed to create OAuth2 client")
 		return
 	}
 	
@@ -657,7 +659,7 @@ func UpdateOAuth2ClientHandler(c *gin.Context) {
 	}
 	
 	if err := UpdateOAuth2Client(client); err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to update OAuth2 client")
+		response.Fail(c, response.CodeServerError, "failed to update OAuth2 client")
 		return
 	}
 	
@@ -673,7 +675,7 @@ func DeleteOAuth2ClientHandler(c *gin.Context) {
 	fmt.Sscanf(id, "%d", &idNum)
 	
 	if err := DeleteOAuth2Client(idNum); err != nil {
-		response.Fail(c, response.CodeInternalError, "failed to delete OAuth2 client")
+		response.Fail(c, response.CodeServerError, "failed to delete OAuth2 client")
 		return
 	}
 	
@@ -801,17 +803,17 @@ func findOrCreateOAuth2User(oauth2Info OAuth2UserInfo) (*models.User, error) {
 }
 
 func generateJWTTokens(user *models.User) (string, string, error) {
-	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role)
+	token, err := jwt.GenerateToken(user.ID, user.Username)
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	refreshToken := uuid.New().String()
-	
+
 	if redisClient := redis.GetClient(); redisClient != nil {
 		key := fmt.Sprintf("refresh_token:%d", user.ID)
-		redisClient.Set(key, refreshToken, 7*24*time.Hour)
+		redisClient.Set(context.Background(), key, refreshToken, 7*24*time.Hour)
 	}
-	
+
 	return token, refreshToken, nil
 }
