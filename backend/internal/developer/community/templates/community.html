@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt me-2"></i>HJTPX 开发者社区
+            </a>
+        </div>
+    </nav>
+
+    <div class="hero text-center py-5 bg-primary text-white">
+        <div class="container">
+            <h1 class="display-4">{{.Title}}</h1>
+            <p class="lead">与全球开发者一起成长</p>
+        </div>
+    </div>
+
+    <div class="container my-5">
+        {{if .Announcements}}
+        <div class="alert alert-info">
+            <h5><i class="fas fa-bullhorn me-2"></i>最新公告</h5>
+            <p class="mb-0">{{index .Announcements 0}}.Title</p>
+        </div>
+        {{end}}
+
+        <div class="row">
+            {{range .FeaturedSnippets}}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{.Title}}</h5>
+                        <p class="card-text text-muted">{{.Description}}</p>
+                        <small class="text-muted">
+                            <i class="fas fa-star text-warning me-1"></i>{{.Stars}}
+                            <i class="fas fa-code-branch ms-3 me-1"></i>{{.Forks}}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <footer class="bg-dark text-white py-4 text-center">
+        <p class="mb-0">&copy; 2026 HJTPX</p>
+    </footer>
+</body>
+</html>
