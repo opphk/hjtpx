@@ -1,5 +1,6 @@
-/* HJTPX Unified Captcha UI Styles */
+/* HJTPX Unified Captcha UI Styles v20.0 */
 @import url('https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css');
+@import url('https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css');
 
 :root {
     --captcha-primary: #c9a96e;
@@ -20,6 +21,7 @@
     --captcha-text-primary: #1a1a2e;
     --captcha-text-secondary: #6c757d;
     --captcha-border-color: #dee2e6;
+    --captcha-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 [data-bs-theme="dark"] {
@@ -31,7 +33,7 @@
     --captcha-border-color: #4d4d6c;
 }
 
-/* ==================== Loading Animations ==================== */
+/* ==================== Advanced Loading Animations ==================== */
 .captcha-loading-spinner {
     width: 48px;
     height: 48px;
@@ -124,7 +126,7 @@
     background: rgba(26, 26, 46, 0.95);
 }
 
-/* Enhanced Skeleton Screens */
+/* ==================== Enhanced Skeleton Screens v2 ==================== */
 .captcha-skeleton {
     position: relative;
     overflow: hidden;
@@ -201,7 +203,7 @@
 .captcha-skeleton-paragraph span:nth-child(3) { width: 95%; }
 .captcha-skeleton-paragraph span:nth-child(4) { width: 80%; }
 
-/* Advanced Loading Dots */
+/* ==================== Advanced Loading Dots v2 ==================== */
 .captcha-loading-dots {
     display: inline-flex;
     gap: 4px;
@@ -224,7 +226,7 @@
     40% { transform: scale(1); }
 }
 
-/* Gradient Loading Bar */
+/* ==================== Gradient Loading Bar v2 ==================== */
 .captcha-loading-bar {
     width: 200px;
     height: 4px;
@@ -251,7 +253,7 @@
     100% { left: 100%; }
 }
 
-/* Pulsing Circle */
+/* ==================== Pulsing Circle v2 ==================== */
 .captcha-loading-circle {
     width: 48px;
     height: 48px;
@@ -283,7 +285,64 @@
     100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
 }
 
-/* ==================== Toast Notifications ==================== */
+/* ==================== Advanced Loading Animation: Morphing Blob ==================== */
+.captcha-loading-blob {
+    width: 60px;
+    height: 60px;
+    background: var(--captcha-primary);
+    border-radius: 50%;
+    animation: captcha-blob-morph 2s ease-in-out infinite;
+    filter: blur(0);
+}
+
+@keyframes captcha-blob-morph {
+    0%, 100% { border-radius: 50%; transform: scale(1); }
+    25% { border-radius: 45% 55% 50% 50%; transform: scale(1.1); }
+    50% { border-radius: 55% 45% 45% 55%; transform: scale(0.95); }
+    75% { border-radius: 45% 55% 50% 50%; transform: scale(1.05); }
+}
+
+/* ==================== Advanced Loading Animation: Rotating Rings ==================== */
+.captcha-loading-rings {
+    position: relative;
+    width: 60px;
+    height: 60px;
+}
+
+.captcha-loading-rings div {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 4px solid transparent;
+    border-top-color: var(--captcha-primary);
+    border-radius: 50%;
+    animation: captcha-ring-spin 1.2s linear infinite;
+}
+
+.captcha-loading-rings div:nth-child(2) {
+    width: 80%;
+    height: 80%;
+    top: 10%;
+    left: 10%;
+    border-top-color: var(--captcha-primary-light);
+    animation-delay: 0.1s;
+    animation-direction: reverse;
+}
+
+.captcha-loading-rings div:nth-child(3) {
+    width: 60%;
+    height: 60%;
+    top: 20%;
+    left: 20%;
+    border-top-color: var(--captcha-primary-dark);
+    animation-delay: 0.2s;
+}
+
+@keyframes captcha-ring-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==================== Toast Notifications v2 ==================== */
 .captcha-toast-container {
     position: fixed;
     top: 20px;
@@ -413,7 +472,7 @@
     color: #f8f9fa;
 }
 
-/* Auto Theme Detection */
+/* ==================== Auto Theme Detection v2 ==================== */
 @media (prefers-color-scheme: dark) {
     :root:not([data-bs-theme="light"]) {
         --captcha-light: #2d2d44;
@@ -425,7 +484,7 @@
     }
 }
 
-/* High Contrast Dark Theme */
+/* ==================== High Contrast Dark Theme v2 ==================== */
 [data-bs-theme="dark"][data-contrast="high"] {
     --captcha-light: #000000;
     --captcha-dark: #ffffff;
@@ -435,7 +494,7 @@
     --captcha-border-color: #ffffff;
 }
 
-/* Smooth Theme Transitions */
+/* ==================== Smooth Theme Transitions v2 ==================== */
 [data-bs-theme] {
     transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -444,7 +503,7 @@
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
 }
 
-/* ==================== Success/Error Animations ==================== */
+/* ==================== Success/Error Animations v2 ==================== */
 .captcha-success-animation {
     animation: captcha-success-bounce 0.6s ease-out;
 }
@@ -473,7 +532,7 @@
     90% { transform: translateX(-1px); }
 }
 
-/* Unified Error Message Styles */
+/* ==================== Enhanced Error Messages v2 ==================== */
 .captcha-error-message {
     display: flex;
     align-items: flex-start;
@@ -552,7 +611,7 @@
     color: #adb5bd;
 }
 
-/* Enhanced Error Messages with Suggestions */
+/* ==================== Enhanced Error Messages with Suggestions v2 ==================== */
 .captcha-error-message-suggestion {
     margin-top: 0.5rem;
     padding: 0.5rem;
@@ -581,7 +640,7 @@
     color: #adb5bd;
 }
 
-/* Error Recovery Actions */
+/* ==================== Error Recovery Actions v2 ==================== */
 .captcha-error-actions {
     display: flex;
     gap: 0.5rem;
@@ -614,7 +673,7 @@
     border: 1px solid var(--captcha-primary);
 }
 
-/* Error Severity Levels */
+/* ==================== Error Severity Levels v2 ==================== */
 .captcha-error-message.warning {
     background: rgba(255, 193, 7, 0.08);
     border-color: rgba(255, 193, 7, 0.2);
@@ -641,7 +700,7 @@
     color: var(--captcha-info);
 }
 
-/* Inline Error Messages */
+/* ==================== Inline Error Messages v2 ==================== */
 .captcha-inline-error {
     display: flex;
     align-items: center;
@@ -671,7 +730,7 @@
     justify-content: center;
 }
 
-/* Unified Success Message Styles */
+/* ==================== Enhanced Success Messages v2 ==================== */
 .captcha-success-message {
     display: flex;
     align-items: flex-start;
@@ -731,6 +790,7 @@
     color: #adb5bd;
 }
 
+/* ==================== Confetti Animation v2 ==================== */
 .captcha-confetti {
     position: fixed;
     top: 0;
@@ -760,7 +820,7 @@
     }
 }
 
-/* ==================== Button Styles ==================== */
+/* ==================== Button Styles v2 ==================== */
 .captcha-btn {
     padding: 0.5rem 1.25rem;
     border: none;
@@ -774,6 +834,7 @@
     gap: 0.5rem;
     position: relative;
     overflow: hidden;
+    font-family: var(--captcha-font-family);
 }
 
 .captcha-btn::before {
@@ -847,13 +908,14 @@
     transform: none !important;
 }
 
-/* ==================== Card Styles ==================== */
+/* ==================== Card Styles v2 ==================== */
 .captcha-card {
     background: white;
     border-radius: var(--captcha-radius);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     overflow: hidden;
     transition: var(--captcha-transition);
+    font-family: var(--captcha-font-family);
 }
 
 .captcha-card:hover {
@@ -876,7 +938,7 @@
     padding: 1.5rem;
 }
 
-/* ==================== Form Controls ==================== */
+/* ==================== Form Controls v2 ==================== */
 .captcha-input {
     width: 100%;
     padding: 0.75rem 1rem;
@@ -885,6 +947,7 @@
     font-size: 1rem;
     transition: var(--captcha-transition);
     background: white;
+    font-family: var(--captcha-font-family);
 }
 
 .captcha-input:focus {
@@ -912,7 +975,7 @@
     border-color: var(--captcha-success);
 }
 
-/* ==================== Result Banners ==================== */
+/* ==================== Result Banners v2 ==================== */
 .captcha-result-banner {
     display: flex;
     align-items: center;
@@ -957,7 +1020,7 @@
     100% { transform: translateY(0); opacity: 1; }
 }
 
-/* ==================== Hint Messages ==================== */
+/* ==================== Hint Messages v2 ==================== */
 .captcha-hint {
     padding: 0.75rem 1rem;
     border-radius: var(--captcha-radius-sm);
@@ -1015,7 +1078,7 @@
     color: #adb5bd;
 }
 
-/* ==================== Refresh Button ==================== */
+/* ==================== Refresh Button v2 ==================== */
 .captcha-refresh-btn {
     position: absolute;
     top: 0.5rem;
@@ -1057,7 +1120,7 @@
     background: white;
 }
 
-/* ==================== Progress Bar ==================== */
+/* ==================== Progress Bar v2 ==================== */
 .captcha-progress-container {
     width: 100%;
     margin: 1rem 0;
@@ -1103,7 +1166,7 @@
     margin-top: 0.5rem;
 }
 
-/* ==================== Page Transitions ==================== */
+/* ==================== Page Transitions v2 ==================== */
 .captcha-page-fade {
     animation: captcha-page-fadeIn 0.4s ease-out;
 }
@@ -1134,7 +1197,7 @@
     }
 }
 
-/* ==================== Responsive Design ==================== */
+/* ==================== Enhanced Responsive Design v2 ==================== */
 @media (max-width: 576px) {
     .captcha-toast-container {
         top: 10px;
@@ -1185,7 +1248,7 @@
     }
 }
 
-/* Touch Device Optimization */
+/* ==================== Touch Device Optimization v2 ==================== */
 @media (hover: none) and (pointer: coarse) {
     .captcha-btn:hover {
         transform: none;
@@ -1196,7 +1259,7 @@
     }
 }
 
-/* High Contrast Mode */
+/* ==================== High Contrast Mode v2 ==================== */
 @media (prefers-contrast: high) {
     :root {
         --captcha-primary: #ffd700;
@@ -1216,7 +1279,7 @@
     }
 }
 
-/* Reduced Motion */
+/* ==================== Reduced Motion v2 ==================== */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -1227,7 +1290,7 @@
     }
 }
 
-/* ==================== Accessibility Enhancements ==================== */
+/* ==================== Accessibility Enhancements v2 ==================== */
 
 /* Skip to Main Content Link */
 .captcha-skip-link {
@@ -1613,4 +1676,203 @@
     [aria-hidden="true"] {
         display: none !important;
     }
+}
+
+/* ==================== v20.0 New Features ==================== */
+
+/* Glassmorphism Effects */
+.captcha-glass {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="dark"] .captcha-glass {
+    background: rgba(45, 45, 68, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Micro-interactions */
+.captcha-micro-bounce {
+    transition: transform 0.1s ease;
+}
+
+.captcha-micro-bounce:active {
+    transform: scale(0.95);
+}
+
+/* Neon Glow Effects */
+.captcha-neon-primary {
+    box-shadow: 0 0 5px var(--captcha-primary),
+                0 0 10px var(--captcha-primary),
+                0 0 20px var(--captcha-primary);
+}
+
+.captcha-neon-success {
+    box-shadow: 0 0 5px var(--captcha-success),
+                0 0 10px var(--captcha-success),
+                0 0 20px var(--captcha-success);
+}
+
+/* Animated Gradient Border */
+.captcha-gradient-border {
+    position: relative;
+    background: linear-gradient(var(--captcha-card-bg), var(--captcha-card-bg)) padding-box,
+                linear-gradient(135deg, var(--captcha-primary), var(--captcha-primary-light), var(--captcha-primary)) border-box;
+    border: 2px solid transparent;
+    background-size: 200% 200%;
+    animation: captcha-gradient-shift 3s ease infinite;
+}
+
+@keyframes captcha-gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+/* Smart Loading States */
+.captcha-loading-smart {
+    position: relative;
+}
+
+.captcha-loading-smart::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: inherit;
+    border-radius: inherit;
+    transform: translate(-50%, -50%);
+    animation: captcha-smart-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes captcha-smart-pulse {
+    0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* Status Indicator Pills */
+.captcha-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.captcha-status-pill.success {
+    background: rgba(40, 167, 69, 0.1);
+    color: var(--captcha-success);
+}
+
+.captcha-status-pill.warning {
+    background: rgba(255, 193, 7, 0.1);
+    color: var(--captcha-warning);
+}
+
+.captcha-status-pill.error {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--captcha-danger);
+}
+
+.captcha-status-pill.info {
+    background: rgba(13, 202, 240, 0.1);
+    color: var(--captcha-info);
+}
+
+/* Animated Counters */
+.captcha-counter {
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s ease;
+}
+
+.captcha-counter.counting {
+    animation: captcha-counter-flash 0.3s ease;
+}
+
+@keyframes captcha-counter-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+/* Virtual Keyboard Support Indicators */
+.captcha-keyboard-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 0.5rem 1rem;
+    background: var(--captcha-card-bg);
+    border-radius: var(--captcha-radius-sm);
+    box-shadow: var(--captcha-shadow);
+    font-size: 0.875rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: var(--captcha-transition);
+    z-index: 1000;
+}
+
+.captcha-keyboard-indicator.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Swipe Gesture Indicators */
+.captcha-swipe-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    color: var(--captcha-text-secondary);
+}
+
+.captcha-swipe-hint-icon {
+    animation: captcha-swipe-bounce 1.5s ease-in-out infinite;
+}
+
+@keyframes captcha-swipe-bounce {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(10px); }
+}
+
+/* Voice Feedback Indicator */
+.captcha-voice-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(13, 202, 240, 0.1);
+    border: 1px solid rgba(13, 202, 240, 0.2);
+    border-radius: var(--captcha-radius-sm);
+    color: var(--captcha-info);
+}
+
+.captcha-voice-wave {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 20px;
+}
+
+.captcha-voice-wave span {
+    width: 3px;
+    background: var(--captcha-info);
+    border-radius: 2px;
+    animation: captcha-voice-bar 0.5s ease-in-out infinite alternate;
+}
+
+.captcha-voice-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
+.captcha-voice-wave span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+.captcha-voice-wave span:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+.captcha-voice-wave span:nth-child(4) { height: 20px; animation-delay: 0.3s; }
+.captcha-voice-wave span:nth-child(5) { height: 14px; animation-delay: 0.4s; }
+
+@keyframes captcha-voice-bar {
+    to { transform: scaleY(0.5); }
 }
