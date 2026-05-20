@@ -176,7 +176,7 @@ type lowCodePlatformService struct {
 
 var (
 	ErrIntegrationNotFound = errors.New("integration not found")
-	ErrInvalidConfig      = errors.New("invalid integration configuration")
+	ErrInvalidConfigV2     = errors.New("invalid integration configuration")
 	ErrExecutionFailed    = errors.New("execution failed")
 )
 

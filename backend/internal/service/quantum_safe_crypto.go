@@ -1165,7 +1165,7 @@ func (s *QuantumSafeCryptoSystem) DecryptQuantumSafe(ctx context.Context, cipher
 		return nil, err
 	}
 
-	result, err := s.hybridEngine.Decrypt(ciphertext, quantumKey, iv)
+	result, err := s.hybridEngine.Decrypt(ciphertext, []byte{}, quantumKey, iv)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,329 @@
+{{define "content"}}
+<div class="section-title">交互式 API 文档</div>
+<p class="section-desc">探索和测试 HJTPX 的所有 API 端点</p>
+
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="list-group" id="apiEndpoints">
+            <a href="#" class="list-group-item list-group-item-action active" data-endpoint="captcha.generate">
+                <i class="bi bi-shield-check"></i> 验证码生成
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-endpoint="captcha.verify">
+                <i class="bi bi-check-circle"></i> 验证码验证
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-endpoint="auth.login">
+                <i class="bi bi-box-arrow-in-right"></i> 用户登录
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-endpoint="auth.logout">
+                <i class="bi bi-box-arrow-left"></i> 用户登出
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-endpoint="stats.verification">
+                <i class="bi bi-graph-up"></i> 验证统计
+            </a>
+            <a href="#" class="list-group-item list-group-item-action" data-endpoint="admin.applications">
+                <i class="bi bi-gear"></i> 应用管理
+            </a>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span id="endpointName" class="h5 mb-0">验证码生成</span>
+                    <span id="endpointMethod" class="badge bg-primary ms-2">GET</span>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm me-2" id="copyEndpoint">
+                        <i class="bi bi-clipboard"></i> 复制
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="sendRequest">
+                        <i class="bi bi-play"></i> 发送请求
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>请求信息</h6>
+                        <div class="mb-3">
+                            <label class="form-label">URL</label>
+                            <input type="text" class="form-control" id="requestUrl"
+                                   value="https://api.hjtpx.com/v1/captcha/slider" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">请求方法</label>
+                            <select class="form-select" id="requestMethod">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Headers</label>
+                            <div id="headersEditor" style="height: 150px; border: 1px solid #ddd; border-radius: 4px;"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">请求体 (JSON)</label>
+                            <div id="bodyEditor" style="height: 250px; border: 1px solid #ddd; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>响应信息</h6>
+                        <div class="mb-3">
+                            <label class="form-label">状态码</label>
+                            <input type="text" class="form-control" id="responseStatus" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">响应时间</label>
+                            <input type="text" class="form-control" id="responseTime" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">响应 Headers</label>
+                            <div id="responseHeaders" style="height: 100px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow: auto;"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">响应体 (JSON)</label>
+                            <div id="responseBody" style="height: 350px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow: auto; font-family: 'Courier New', monospace; font-size: 13px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">API 文档</h6>
+            </div>
+            <div class="card-body">
+                <div id="apiDocs">
+                    <h5>生成滑块验证码</h5>
+                    <p>生成一个新的滑块验证码实例。</p>
+
+                    <h6>请求参数</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>参数名</th>
+                                <th>类型</th>
+                                <th>必填</th>
+                                <th>描述</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>appId</code></td>
+                                <td>string</td>
+                                <td>是</td>
+                                <td>应用ID</td>
+                            </tr>
+                            <tr>
+                                <td><code>width</code></td>
+                                <td>integer</td>
+                                <td>否</td>
+                                <td>验证码宽度，默认 300</td>
+                            </tr>
+                            <tr>
+                                <td><code>height</code></td>
+                                <td>integer</td>
+                                <td>否</td>
+                                <td>验证码高度，默认 150</td>
+                            </tr>
+                            <tr>
+                                <td><code>difficulty</code></td>
+                                <td>string</td>
+                                <td>否</td>
+                                <td>难度等级: easy, medium, hard</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>响应示例</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>{
+  "success": true,
+  "data": {
+    "captchaId": "cap_abc123def456",
+    "backgroundImage": "data:image/png;base64,...",
+    "sliderImage": "data:image/png;base64,...",
+    "targetX": 150,
+    "targetY": 75,
+    "expiresIn": 300
+  }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.api-interactive {
+    border-left: 3px solid #667eea;
+    background: linear-gradient(90deg, rgba(102,126,234,0.1) 0%, transparent 100%);
+}
+.endpoint-item {
+    transition: all 0.3s;
+}
+.endpoint-item:hover {
+    background: rgba(102,126,234,0.1);
+    transform: translateX(5px);
+}
+.endpoint-item.active {
+    background: rgba(102,126,234,0.2);
+    border-left: 3px solid #667eea;
+}
+</style>
+{{end}}
+
+{{define "scripts"}}
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.34.0/min/vs/loader.js"></script>
+<script>
+let headersEditor, bodyEditor;
+let currentEndpoint = 'captcha.generate';
+
+const endpoints = {
+    'captcha.generate': {
+        name: '验证码生成',
+        method: 'GET',
+        url: '/api/v1/captcha/slider',
+        params: { appId: 'string', width: 'number', height: 'number', difficulty: 'string' }
+    },
+    'captcha.verify': {
+        name: '验证码验证',
+        method: 'POST',
+        url: '/api/v1/captcha/verify',
+        params: { captchaId: 'string', answer: 'object' }
+    },
+    'auth.login': {
+        name: '用户登录',
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        params: { username: 'string', password: 'string' }
+    },
+    'auth.logout': {
+        name: '用户登出',
+        method: 'POST',
+        url: '/api/v1/auth/logout'
+    },
+    'stats.verification': {
+        name: '验证统计',
+        method: 'GET',
+        url: '/api/v1/stats/verification'
+    },
+    'admin.applications': {
+        name: '应用管理',
+        method: 'GET',
+        url: '/api/v1/admin/applications'
+    }
+};
+
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+    headersEditor = monaco.editor.create(document.getElementById('headersEditor'), {
+        value: JSON.stringify({
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer YOUR_TOKEN',
+            'X-API-Key': 'YOUR_API_KEY'
+        }, null, 2),
+        language: 'json',
+        theme: 'vs',
+        minimap: { enabled: false },
+        fontSize: 12
+    });
+
+    bodyEditor = monaco.editor.create(document.getElementById('bodyEditor'), {
+        value: '{\n  \n}',
+        language: 'json',
+        theme: 'vs',
+        minimap: { enabled: false },
+        fontSize: 12
+    });
+});
+
+document.querySelectorAll('#apiEndpoints a').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('#apiEndpoints a').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+
+        const endpoint = this.dataset.endpoint;
+        currentEndpoint = endpoint;
+        loadEndpoint(endpoint);
+    });
+});
+
+function loadEndpoint(endpoint) {
+    const ep = endpoints[endpoint];
+    if (!ep) return;
+
+    document.getElementById('endpointName').textContent = ep.name;
+    document.getElementById('endpointMethod').textContent = ep.method;
+    document.getElementById('requestUrl').value = ep.url;
+    document.getElementById('requestMethod').value = ep.method;
+
+    if (ep.method === 'GET') {
+        bodyEditor.setValue('// GET 请求通常不需要请求体');
+        bodyEditor.updateOptions({ readOnly: true });
+    } else {
+        bodyEditor.setValue(JSON.stringify({
+            appId: 'your_app_id',
+            width: 300,
+            height: 150,
+            difficulty: 'medium'
+        }, null, 2));
+        bodyEditor.updateOptions({ readOnly: false });
+    }
+}
+
+document.getElementById('sendRequest').addEventListener('click', async function() {
+    const url = document.getElementById('requestUrl').value;
+    const method = document.getElementById('requestMethod').value;
+    const startTime = Date.now();
+
+    try {
+        const headers = JSON.parse(headersEditor.getValue());
+        const body = method !== 'GET' ? bodyEditor.getValue() : null;
+
+        const options = {
+            method: method,
+            headers: headers
+        };
+
+        if (body) {
+            options.body = body;
+        }
+
+        const response = await fetch(url, options);
+        const data = await response.json();
+
+        document.getElementById('responseStatus').value = response.status + ' ' + response.statusText;
+        document.getElementById('responseStatus').className = 'form-control ' + (response.ok ? 'border-success' : 'border-danger');
+
+        const responseTime = Date.now() - startTime;
+        document.getElementById('responseTime').value = responseTime + 'ms';
+
+        document.getElementById('responseHeaders').innerHTML = Object.entries(response.headers)
+            .map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`)
+            .join('');
+
+        document.getElementById('responseBody').innerHTML = JSON.stringify(data, null, 2);
+    } catch (error) {
+        document.getElementById('responseBody').innerHTML = '<span style="color: red;">Error: ' + error.message + '</span>';
+    }
+});
+
+document.getElementById('copyEndpoint').addEventListener('click', function() {
+    const code = `${document.getElementById('requestMethod').value} ${document.getElementById('requestUrl').value}`;
+    navigator.clipboard.writeText(code).then(() => {
+        const originalText = this.innerHTML;
+        this.innerHTML = '<i class="bi bi-check"></i> 已复制';
+        setTimeout(() => {
+            this.innerHTML = originalText;
+        }, 2000);
+    });
+});
+
+loadEndpoint('captcha.generate');
+</script>
+{{end}}

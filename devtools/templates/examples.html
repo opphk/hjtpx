@@ -1,13 +1,21 @@
 {{define "content"}}
 <div class="section-title">集成示例</div>
-<p class="section-desc">各种编程语言的完整集成代码示例</p>
+<p class="section-desc">各种编程语言的完整集成代码示例，支持最新功能和最佳实践</p>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> <strong>快速入门:</strong> 选择您的编程语言，复制示例代码，替换 APP_ID 和 API_KEY 即可开始使用！
+        </div>
+    </div>
+</div>
 
 <ul class="nav nav-tabs mb-4" id="examplesTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="python-tab" data-bs-toggle="tab" data-bs-target="#python" type="button">Python</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="javascript-tab" data-bs-toggle="tab" data-bs-target="#javascript" type="button">JavaScript</button>
+        <button class="nav-link" id="javascript-tab" data-bs-toggle="tab" data-bs-target="#javascript" type="button">JavaScript/TypeScript</button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="go-tab" data-bs-toggle="tab" data-bs-target="#go" type="button">Go</button>
@@ -22,144 +30,601 @@
 
 <div class="tab-content" id="examplesTabsContent">
     <div class="tab-pane fade show active" id="python">
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-filetype-py"></i> Python 完整集成示例</span>
+                <span><i class="bi bi-filetype-py"></i> Python SDK 集成示例</span>
                 <button class="btn btn-outline-primary btn-sm copy-code" data-target="python-code">
                     <i class="bi bi-clipboard"></i> 复制
                 </button>
             </div>
             <div class="card-body">
-                <pre class="code-block" id="python-code">import requests
-import json
+                <pre class="code-block" id="python-code">#!/usr/bin/env python3
+"""
+HJTPX Python SDK 完整集成示例
+支持: Python 3.8+
+"""
 
-class HJTPXCaptcha:
-    def __init__(self, api_url, app_id, app_key):
-        self.api_url = api_url
+import os
+import time
+import json
+import asyncio
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass
+import base64
+import hashlib
+
+try:
+    import httpx
+except ImportError:
+    print("请安装 httpx: pip install httpx")
+    httpx = None
+
+try:
+    from PIL import Image
+    import io
+except ImportError:
+    Image = None
+
+
+@dataclass
+class CaptchaResult:
+    """验证码结果"""
+    captcha_id: str
+    session_id: str
+    background_image: str
+    slider_image: str
+    target_x: int
+    target_y: int
+    expires_in: int
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'CaptchaResult':
+        return cls(
+            captcha_id=data.get('captchaId', ''),
+            session_id=data.get('sessionId', ''),
+            background_image=data.get('backgroundImage', ''),
+            slider_image=data.get('sliderImage', ''),
+            target_x=data.get('targetX', 0),
+            target_y=data.get('targetY', 0),
+            expires_in=data.get('expiresIn', 300)
+        )
+
+
+class HJTPXClient:
+    """HJTPX Python 客户端"""
+
+    def __init__(
+        self,
+        api_url: str = "http://localhost:8080",
+        app_id: str = "",
+        api_key: str = "",
+        timeout: int = 30
+    ):
+        self.api_url = api_url.rstrip('/')
         self.app_id = app_id
-        self.app_key = app_key
-    
-    def get_slider_captcha(self):
+        self.api_key = api_key
+        self.timeout = timeout
+        self._client = None
+
+    @property
+    def client(self) -> httpx.Client:
+        """懒加载 HTTP 客户端"""
+        if self._client is None:
+            self._client = httpx.Client(timeout=self.timeout)
+        return self._client
+
+    def _get_headers(self) -> Dict[str, str]:
+        """获取请求头"""
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.api_key}',
+            'X-App-ID': self.app_id,
+        }
+
+    def generate_slider(self, **kwargs) -> CaptchaResult:
+        """生成滑块验证码"""
         url = f"{self.api_url}/api/v1/captcha/slider"
-        response = requests.get(url)
+        params = {'appId': self.app_id, **kwargs}
+
+        response = self.client.get(url, params=params, headers=self._get_headers())
         response.raise_for_status()
-        return response.json()
-    
-    def verify_slider_captcha(self, session_id, x):
-        url = f"{self.api_url}/api/v1/captcha/verify"
-        data = {
-            "session_id": session_id,
-            "answer": {"x": x}
+
+        data = response.json()
+        if data.get('success'):
+            return CaptchaResult.from_dict(data['data'])
+        raise ValueError(f"生成验证码失败: {data.get('error')}")
+
+    def verify_slider(
+        self,
+        captcha_id: str,
+        session_id: str,
+        x: int,
+        track: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """验证滑块验证码"""
+        url = f"{self.api_url}/api/v1/captcha/slider/verify"
+        payload = {
+            'captchaId': captcha_id,
+            'sessionId': session_id,
+            'answer': {
+                'x': x,
+                'track': track or []
+            }
         }
-        response = requests.post(url, json=data)
+
+        response = self.client.post(url, json=payload, headers=self._get_headers())
         response.raise_for_status()
         return response.json()
-    
-    def get_click_captcha(self):
+
+    def generate_click(self, count: int = 4) -> Dict[str, Any]:
+        """生成点击验证码"""
         url = f"{self.api_url}/api/v1/captcha/click"
-        response = requests.get(url)
+        params = {'appId': self.app_id, 'count': count}
+
+        response = self.client.get(url, params=params, headers=self._get_headers())
         response.raise_for_status()
         return response.json()
-    
-    def verify_click_captcha(self, session_id, points):
-        url = f"{self.api_url}/api/v1/captcha/verify"
-        data = {
-            "session_id": session_id,
-            "answer": {"points": points}
+
+    def verify_click(
+        self,
+        captcha_id: str,
+        session_id: str,
+        points: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """验证点击验证码"""
+        url = f"{self.api_url}/api/v1/captcha/click/verify"
+        payload = {
+            'captchaId': captcha_id,
+            'sessionId': session_id,
+            'answer': {'points': points}
         }
-        response = requests.post(url, json=data)
+
+        response = self.client.post(url, json=payload, headers=self._get_headers())
         response.raise_for_status()
         return response.json()
+
+    def get_statistics(self, days: int = 7) -> Dict[str, Any]:
+        """获取验证统计"""
+        url = f"{self.api_url}/api/v1/stats/verification"
+        params = {'days': days}
+
+        response = self.client.get(url, params=params, headers=self._get_headers())
+        response.raise_for_status()
+        return response.json()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._client:
+            self._client.close()
+
+
+async def async_example():
+    """异步使用示例"""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        captcha = HJTPXClient(api_url="http://localhost:8080", app_id="your_app_id")
+
+        # 生成验证码
+        result = captcha.generate_slider()
+        print(f"验证码 ID: {result.captcha_id}")
+
+        # 模拟验证
+        await asyncio.sleep(1)
+        verification = captcha.verify_slider(result.captcha_id, result.session_id, result.target_x)
+        print(f"验证结果: {verification}")
+
+
+def image_processing_example(captcha_result: CaptchaResult):
+    """图片处理示例"""
+    if Image is None:
+        print("Pillow 未安装，跳过图片处理示例")
+        return
+
+    # 解码 Base64 图片
+    bg_data = base64.b64decode(captcha_result.background_image.split(',')[1])
+    slider_data = base64.b64decode(captcha_result.slider_image.split(',')[1])
+
+    bg_image = Image.open(io.BytesIO(bg_data))
+    slider_image = Image.open(io.BytesIO(slider_data))
+
+    print(f"背景图尺寸: {bg_image.size}")
+    print(f"滑块图尺寸: {slider_image.size}")
+
+    return bg_image, slider_image
+
+
+def main():
+    """主函数"""
+    captcha = HJTPXClient(
+        api_url="http://localhost:8080",
+        app_id="your_app_id",
+        api_key="your_api_key"
+    )
+
+    try:
+        # 生成滑块验证码
+        print("正在生成滑块验证码...")
+        slider = captcha.generate_slider(width=300, height=150, difficulty='medium')
+        print(f"验证码 ID: {slider.captcha_id}")
+        print(f"目标位置: ({slider.target_x}, {slider.target_y})")
+
+        # 模拟用户操作（实际使用时需要在前端采集轨迹）
+        user_x = slider.target_x + 5  # 模拟用户输入（略有误差）
+        track = [i * 2 for i in range(user_x // 2)]  # 模拟滑动轨迹
+
+        # 验证
+        print("\n正在验证...")
+        result = captcha.verify_slider(
+            slider.captcha_id,
+            slider.session_id,
+            user_x,
+            track
+        )
+
+        if result.get('success'):
+            print("✅ 验证成功!")
+        else:
+            print(f"❌ 验证失败: {result.get('error')}")
+
+        # 获取统计
+        print("\n获取统计信息...")
+        stats = captcha.get_statistics(days=7)
+        print(f"总验证次数: {stats.get('totalVerifications', 0)}")
+
+    except Exception as e:
+        print(f"错误: {e}")
+        raise
 
 
 if __name__ == "__main__":
-    captcha = HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key")
-    
-    try:
-        slider_data = captcha.get_slider_captcha()
-        print(f"滑动验证码: {slider_data}")
-        
-        result = captcha.verify_slider_captcha(slider_data["session_id"], 50)
-        print(f"验证结果: {result}")
-    except Exception as e:
-        print(f"错误: {e}")
-</pre>
-            </div>
-        </div>
-    </div>
+    main()
 
     <div class="tab-pane fade" id="javascript">
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-filetype-js"></i> JavaScript 完整集成示例</span>
+                <span><i class="bi bi-filetype-js"></i> JavaScript/TypeScript SDK 完整示例</span>
                 <button class="btn btn-outline-primary btn-sm copy-code" data-target="javascript-code">
                     <i class="bi bi-clipboard"></i> 复制
                 </button>
             </div>
             <div class="card-body">
-                <pre class="code-block" id="javascript-code">class HJTPXCaptcha {
-    constructor(apiUrl, appId, appKey) {
-        this.apiUrl = apiUrl;
-        this.appId = appId;
-        this.appKey = appKey;
-    }
-    
-    async getSliderCaptcha() {
-        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/slider\`);
-        if (!response.ok) throw new Error('Request failed');
-        return await response.json();
-    }
-    
-    async verifySliderCaptcha(sessionId, x) {
-        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                session_id: sessionId,
-                answer: { x: x }
-            })
-        });
-        if (!response.ok) throw new Error('Request failed');
-        return await response.json();
-    }
-    
-    async getClickCaptcha() {
-        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/click\`);
-        if (!response.ok) throw new Error('Request failed');
-        return await response.json();
-    }
-    
-    async verifyClickCaptcha(sessionId, points) {
-        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                session_id: sessionId,
-                answer: { points: points }
-            })
-        });
-        if (!response.ok) throw new Error('Request failed');
-        return await response.json();
-    }
+                <pre class="code-block" id="javascript-code">/**
+ * HJTPX JavaScript/TypeScript SDK
+ * 支持: Node.js 16+, 浏览器
+ */
+
+import https from 'https';
+import http from 'http';
+
+interface CaptchaConfig {
+  appId: string;
+  apiKey?: string;
+  apiUrl?: string;
+  timeout?: number;
 }
 
+interface SliderCaptchaResult {
+  captchaId: string;
+  sessionId: string;
+  backgroundImage: string;
+  sliderImage: string;
+  targetX: number;
+  targetY: number;
+  expiresIn: number;
+}
 
+interface VerifyResult {
+  success: boolean;
+  score?: number;
+  confidence?: number;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+class HJTPXClient {
+  private appId: string;
+  private apiKey?: string;
+  private apiUrl: string;
+  private timeout: number;
+
+  constructor(config: CaptchaConfig) {
+    this.appId = config.appId;
+    this.apiKey = config.apiKey;
+    this.apiUrl = config.apiUrl || 'http://localhost:8080';
+    this.timeout = config.timeout || 30000;
+  }
+
+  private async request<T>(
+    method: string,
+    endpoint: string,
+    data?: any
+  ): Promise<T> {
+    const url = new URL(endpoint, this.apiUrl);
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname + url.search,
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+        'X-App-ID': this.appId,
+      },
+      timeout: this.timeout,
+    };
+
+    return new Promise((resolve, reject) => {
+      const protocol = url.protocol === 'https:' ? https : http;
+
+      const req = protocol.request(options, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(body);
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(result);
+            } else {
+              reject(new Error(result.error?.message || 'Request failed'));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      if (data) {
+        req.write(JSON.stringify(data));
+      }
+      req.end();
+    });
+  }
+
+  async generateSlider(
+    width: number = 300,
+    height: number = 150,
+    difficulty: 'easy' | 'medium' | 'hard' = 'medium'
+  ): Promise<SliderCaptchaResult> {
+    const response = await this.request<any>(
+      'GET',
+      `/api/v1/captcha/slider`,
+      { width, height, difficulty }
+    );
+
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.error?.message || 'Failed to generate captcha');
+  }
+
+  async verifySlider(
+    captchaId: string,
+    sessionId: string,
+    x: number,
+    track: number[] = []
+  ): Promise<VerifyResult> {
+    return this.request<VerifyResult>(
+      'POST',
+      '/api/v1/captcha/slider/verify',
+      {
+        captchaId,
+        sessionId,
+        answer: { x, track },
+      }
+    );
+  }
+
+  async generateClick(count: number = 4): Promise<any> {
+    return this.request(
+      'GET',
+      `/api/v1/captcha/click?count=${count}`
+    );
+  }
+
+  async verifyClick(
+    captchaId: string,
+    sessionId: string,
+    points: Array<{ x: number; y: number; word: string }>
+  ): Promise<VerifyResult> {
+    return this.request(
+      'POST',
+      '/api/v1/captcha/click/verify',
+      {
+        captchaId,
+        sessionId,
+        answer: { points },
+      }
+    );
+  }
+
+  async getStatistics(days: number = 7): Promise<any> {
+    return this.request(
+      'GET',
+      `/api/v1/stats/verification?days=${days}`
+    );
+  }
+}
+
+// 前端集成示例（浏览器）
+class HJTPXFrontend {
+  private appId: string;
+  private container: HTMLElement | string;
+  private onSuccess?: (token: string) => void;
+  private onError?: (error: Error) => void;
+
+  constructor(appId: string, container: HTMLElement | string) {
+    this.appId = appId;
+    this.container = typeof container === 'string'
+      ? document.querySelector(container) as HTMLElement
+      : container;
+  }
+
+  onVerifySuccess(callback: (token: string) => void): this {
+    this.onSuccess = callback;
+    return this;
+  }
+
+  onVerifyError(callback: (error: Error) => void): this {
+    this.onError = callback;
+    return this;
+  }
+
+  async render(): Promise<void> {
+    // 动态加载验证码组件
+    const script = document.createElement('script');
+    script.src = 'https://cdn.hjtpx.com/captcha.min.js';
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      const captcha = new (window as any).HJTPX.Captcha({
+        appId: this.appId,
+        container: this.container,
+        mode: 'inline',
+        theme: 'light',
+      });
+
+      captcha.render();
+
+      captcha.on('verifySuccess', (result: any) => {
+        if (this.onSuccess) {
+          this.onSuccess(result.token);
+        }
+      });
+
+      captcha.on('verifyFail', (error: Error) => {
+        if (this.onError) {
+          this.onError(error);
+        }
+      });
+    };
+  }
+}
+
+// 事件驱动集成示例
+class HJTPXEventEmitter {
+  private listeners: Map<string, Function[]>;
+
+  constructor() {
+    this.listeners = new Map();
+  }
+
+  on(event: string, handler: Function): void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event)!.push(handler);
+  }
+
+  off(event: string, handler: Function): void {
+    const handlers = this.listeners.get(event);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  }
+
+  emit(event: string, ...args: any[]): void {
+    const handlers = this.listeners.get(event);
+    if (handlers) {
+      handlers.forEach((handler) => {
+        try {
+          handler(...args);
+        } catch (e) {
+          console.error(`Error in event handler for ${event}:`, e);
+        }
+      });
+    }
+  }
+}
+
+// 批量验证示例
+class BatchVerification {
+  private client: HJTPXClient;
+
+  constructor(client: HJTPXClient) {
+    this.client = client;
+  }
+
+  async verifyAll(
+    verifications: Array<{
+      captchaId: string;
+      sessionId: string;
+      x: number;
+    }>
+  ): Promise<VerifyResult[]> {
+    const promises = verifications.map((v) =>
+      this.client.verifySlider(v.captchaId, v.sessionId, v.x)
+    );
+
+    return Promise.allSettled(promises).then((results) =>
+      results.map((result) =>
+        result.status === 'fulfilled'
+          ? result.value
+          : { success: false, error: { message: result.reason.message } }
+      )
+    );
+  }
+}
+
+// 使用示例
 async function main() {
-    const captcha = new HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key");
-    
-    try {
-        const sliderData = await captcha.getSliderCaptcha();
-        console.log("滑动验证码:", sliderData);
-        
-        const result = await captcha.verifySliderCaptcha(sliderData.session_id, 50);
-        console.log("验证结果:", result);
-    } catch (e) {
-        console.error("错误:", e);
+  const client = new HJTPXClient({
+    appId: 'your_app_id',
+    apiKey: 'your_api_key',
+    apiUrl: 'http://localhost:8080',
+  });
+
+  try {
+    // 生成滑块验证码
+    console.log('生成滑块验证码...');
+    const slider = await client.generateSlider(300, 150, 'medium');
+    console.log('验证码ID:', slider.captchaId);
+    console.log('目标位置:', slider.targetX, slider.targetY);
+
+    // 模拟用户滑动
+    const userX = slider.targetX + 3;
+    const track = Array.from({ length: userX }, (_, i) => i * 2);
+
+    // 验证
+    console.log('验证中...');
+    const result = await client.verifySlider(
+      slider.captchaId,
+      slider.sessionId,
+      userX,
+      track
+    );
+
+    if (result.success) {
+      console.log('✅ 验证成功!');
+      console.log('评分:', result.score);
+    } else {
+      console.log('❌ 验证失败:', result.error?.message);
     }
+
+    // 获取统计
+    const stats = await client.getStatistics(7);
+    console.log('统计信息:', stats);
+
+  } catch (error) {
+    console.error('错误:', error);
+  }
 }
 
-main();
-</pre>
+// 导出
+export { HJTPXClient, HJTPXFrontend, HJTPXEventEmitter, BatchVerification };
+export default HJTPXClient;</pre>
             </div>
         </div>
     </div>

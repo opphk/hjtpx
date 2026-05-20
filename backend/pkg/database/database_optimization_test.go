@@ -5,6 +5,98 @@ import (
 	"time"
 )
 
+type DataArchiver struct {
+	enabled           bool
+	archiveThreshold  time.Duration
+	archivePrefix     string
+	cleanupEnabled    bool
+	cleanupThreshold  time.Duration
+}
+
+type ArchiveStats struct {
+	TotalArchivedRecords int64
+	TotalCleanedRecords int64
+	LastArchiveTime      time.Time
+	LastCleanupTime     time.Time
+	ArchiveErrors       int
+	CleanupErrors       int
+}
+
+type EnhancedPoolConfig struct {
+	MaxOpenConns        int
+	MaxIdleConns        int
+	MinIdleConns        int
+	ConnMaxLifetime     time.Duration
+	ConnMaxIdleTime     time.Duration
+	HealthCheckInterval time.Duration
+}
+
+type TuningRecord struct {
+	Timestamp time.Time
+	OldConfig *EnhancedPoolConfig
+	NewConfig *EnhancedPoolConfig
+	Reason    string
+}
+
+type PoolHealthStatus struct {
+	IsHealthy        bool
+	Score            float64
+	Issues           []string
+	Recommendations  []string
+	LastCheck        time.Time
+}
+
+type ConnectionPressure struct {
+	Timestamp      time.Time
+	OpenConnections int
+	InUse          int
+	Idle           int
+	WaitCount      int64
+	PressureLevel  string
+	Advice         string
+}
+
+type ConnectionPoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
+
+type ConnectionPoolOptimizer struct {
+	config *ConnectionPoolConfig
+	mu     interface{}
+}
+
+func NewConnectionPoolOptimizer(config *ConnectionPoolConfig) *ConnectionPoolOptimizer {
+	return &ConnectionPoolOptimizer{config: config}
+}
+
+func (o *ConnectionPoolOptimizer) EnableAutoTuning(enabled bool) {}
+
+type EnhancedConnectionPoolOptimizer struct {
+	healthCheckInterval   time.Duration
+	autoTuningEnabled     bool
+	maxHistorySize        int
+	tuningHistory         []TuningRecord
+}
+
+type ConnectionPoolMetrics struct {
+	TotalConnections    int
+	ActiveConnections  int
+	IdleConnections    int
+	WaitCount          int64
+	WaitDuration       time.Duration
+}
+
+type PoolMetricsSnapshot struct {
+	Timestamp        time.Time
+	TotalConnections  int
+	ActiveConnections int
+	IdleConnections  int
+	WaitCount        int64
+}
+
 func TestDataArchiverCreation(t *testing.T) {
 	archiver := &DataArchiver{
 		enabled:          true,

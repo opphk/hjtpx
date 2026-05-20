@@ -864,7 +864,7 @@ func TestDebugDetectorAnalyzeSessionPattern(t *testing.T) {
 		{
 			name: "Escalating with multiple types",
 			detections: []model.DebugDetectionEvent{
-				{Type: model.DebugTypeDevTools, Severity: model.SeverityLow},
+				{Type: model.DebugTypeDevTools, Severity: model.SeverityInfo},
 				{Type: model.DebugTypeDebugger, Severity: model.SeverityMedium},
 				{Type: model.DebugTypeBreakpoint, Severity: model.SeverityHigh},
 				{Type: model.DebugTypeConsoleActivity, Severity: model.SeverityMedium},
@@ -874,7 +874,7 @@ func TestDebugDetectorAnalyzeSessionPattern(t *testing.T) {
 		{
 			name: "Normal pattern",
 			detections: []model.DebugDetectionEvent{
-				{Type: model.DebugTypeDevTools, Severity: model.SeverityLow},
+				{Type: model.DebugTypeDevTools, Severity: model.SeverityInfo},
 				{Type: model.DebugTypeDebugger, Severity: model.SeverityMedium},
 			},
 			expectSuspicious: false,
@@ -984,7 +984,7 @@ func TestDebugDetectionResultGetMostSevere(t *testing.T) {
 	}
 
 	events := []model.DebugDetectionEvent{
-		{Type: model.DebugTypeDevTools, Severity: model.SeverityLow},
+		{Type: model.DebugTypeDevTools, Severity: model.SeverityInfo},
 		{Type: model.DebugTypeDebugger, Severity: model.SeverityCritical},
 		{Type: model.DebugTypeBreakpoint, Severity: model.SeverityMedium},
 	}

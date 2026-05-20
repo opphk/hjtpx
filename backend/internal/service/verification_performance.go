@@ -68,7 +68,7 @@ const (
 	ProfileUltraLight      PerformanceProfile = "ultra_light"
 )
 
-type OptimizationConfig struct {
+type OptimizationConfigV2 struct {
 	Profile          PerformanceProfile   `json:"profile"`
 	ImageOptim       ImageOptimization    `json:"image_optimization"`
 	MemOptim         MemoryOptimization   `json:"memory_optimization"`
@@ -109,7 +109,7 @@ func NewVerificationPerformanceOptimizer() *VerificationPerformanceOptimizer {
 
 	vpo.pool = &sync.Pool{
 		New: func() interface{} {
-			return &VerificationContext{}
+			return &VerificationContextV2{}
 		},
 	}
 

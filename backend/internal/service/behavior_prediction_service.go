@@ -707,7 +707,6 @@ func (pra *ProactiveRiskAssessor) isNewDevice(fingerprint string) bool {
 
 func (pra *ProactiveRiskAssessor) identifyThreats(score float64, factors []PredictionRiskFactor) []ThreatInfo {
 	threats := []ThreatInfo{}
-	
 	if score > pra.globalThresholds.HighRiskThreshold {
 		threats = append(threats, ThreatInfo{
 			ThreatType:    "high_risk_activity",

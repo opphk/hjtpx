@@ -23,16 +23,16 @@ type DilithiumConfig struct {
 	Level DilithiumLevel
 }
 
-// DilithiumPublicKey Dilithium 公钥
-type DilithiumPublicKey struct {
+// DilithiumPublicKeyV2 Dilithium 公钥
+type DilithiumPublicKeyV2 struct {
 	Rho []byte   // 随机种子
 	T1  [][]int16 // 多项式矩阵
 	T2  [][]int16 // 多项式矩阵
 }
 
-// DilithiumPrivateKey Dilithium 私钥
-type DilithiumPrivateKey struct {
-	PublicKey DilithiumPublicKey
+// DilithiumPrivateKeyV2 Dilithium 私钥
+type DilithiumPrivateKeyV2 struct {
+	PublicKey DilithiumPublicKeyV2
 	Rho1      []byte   // 第二个随机种子
 	K         int      // 维度参数
 	Tr        []byte   // 哈希种子
@@ -41,8 +41,8 @@ type DilithiumPrivateKey struct {
 	T0        [][]int16 // 多项式向量
 }
 
-// DilithiumSignature Dilithium 签名
-type DilithiumSignature struct {
+// DilithiumSignatureV2 Dilithium 签名
+type DilithiumSignatureV2 struct {
 	C  []byte     // 挑战值
 	Z  [][]int16 // 响应向量
 	H  []byte     // 提示向量的编码
@@ -65,7 +65,7 @@ func NewDilithiumService(config *DilithiumConfig) *DilithiumService {
 }
 
 // GenerateKeyPair 生成 Dilithium 密钥对
-func (ds *DilithiumService) GenerateKeyPair() (*DilithiumPublicKey, *DilithiumPrivateKey, error) {
+func (ds *DilithiumService) GenerateKeyPair() (*DilithiumPublicKeyV2, *DilithiumPrivateKeyV2, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -126,13 +126,13 @@ func (ds *DilithiumService) GenerateKeyPair() (*DilithiumPublicKey, *DilithiumPr
 		}
 	}
 
-	publicKey := &DilithiumPublicKey{
+	publicKey := &DilithiumPublicKeyV2{
 		Rho: rho,
 		T1:  t1,
 		T2:  t2,
 	}
 
-	privateKey := &DilithiumPrivateKey{
+	privateKey := &DilithiumPrivateKeyV2{
 		PublicKey: *publicKey,
 		Rho1:      rho1,
 		K:         k,
@@ -146,7 +146,7 @@ func (ds *DilithiumService) GenerateKeyPair() (*DilithiumPublicKey, *DilithiumPr
 }
 
 // Sign 使用私钥对消息进行签名
-func (ds *DilithiumService) Sign(privateKey *DilithiumPrivateKey, message []byte) (*DilithiumSignature, error) {
+func (ds *DilithiumService) Sign(privateKey *DilithiumPrivateKeyV2, message []byte) (*DilithiumSignatureV2, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -181,7 +181,7 @@ func (ds *DilithiumService) Sign(privateKey *DilithiumPrivateKey, message []byte
 		return nil, err
 	}
 
-	return &DilithiumSignature{
+	return &DilithiumSignatureV2{
 		C: sigC,
 		Z: z,
 		H: h,
@@ -189,7 +189,7 @@ func (ds *DilithiumService) Sign(privateKey *DilithiumPrivateKey, message []byte
 }
 
 // Verify 使用公钥验证签名
-func (ds *DilithiumService) Verify(publicKey *DilithiumPublicKey, message []byte, signature *DilithiumSignature) (bool, error) {
+func (ds *DilithiumService) Verify(publicKey *DilithiumPublicKeyV2, message []byte, signature *DilithiumSignatureV2) (bool, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -218,8 +218,8 @@ func (ds *DilithiumService) SerializePublicKey(publicKey *DilithiumPublicKey) ([
 }
 
 // DeserializePublicKey 反序列化公钥
-func (ds *DilithiumService) DeserializePublicKey(data []byte) (*DilithiumPublicKey, error) {
-	var pubKey DilithiumPublicKey
+func (ds *DilithiumService) DeserializePublicKey(data []byte) (*DilithiumPublicKeyV2, error) {
+	var pubKey DilithiumPublicKeyV2
 	if err := json.Unmarshal(data, &pubKey); err != nil {
 		return nil, err
 	}
@@ -227,13 +227,13 @@ func (ds *DilithiumService) DeserializePublicKey(data []byte) (*DilithiumPublicK
 }
 
 // SerializeSignature 序列化签名
-func (ds *DilithiumService) SerializeSignature(signature *DilithiumSignature) ([]byte, error) {
+func (ds *DilithiumService) SerializeSignature(signature *DilithiumSignatureV2) ([]byte, error) {
 	return json.Marshal(signature)
 }
 
 // DeserializeSignature 反序列化签名
-func (ds *DilithiumService) DeserializeSignature(data []byte) (*DilithiumSignature, error) {
-	var sig DilithiumSignature
+func (ds *DilithiumService) DeserializeSignature(data []byte) (*DilithiumSignatureV2, error) {
+	var sig DilithiumSignatureV2
 	if err := json.Unmarshal(data, &sig); err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (ds *DilithiumService) DeserializeSignature(data []byte) (*DilithiumSignatu
 }
 
 // BatchVerify 批量验证签名
-func (ds *DilithiumService) BatchVerify(publicKeys []*DilithiumPublicKey, messages [][]byte, signatures []*DilithiumSignature) (bool, error) {
+func (ds *DilithiumService) BatchVerify(publicKeys []*DilithiumPublicKeyV2, messages [][]byte, signatures []*DilithiumSignatureV2) (bool, error) {
 	if len(publicKeys) != len(messages) || len(messages) != len(signatures) {
 		return false, errors.New("invalid batch sizes")
 	}

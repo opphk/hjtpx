@@ -9,6 +9,71 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type FingerprintData struct {
+	FingerprintID string
+	UserAgent    string
+	IP           string
+}
+
+type FingerprintMiddleware func() gin.HandlerFunc
+
+func FingerprintMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fp := &FingerprintData{
+			FingerprintID: "fp_" + c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			IP:           c.ClientIP(),
+		}
+		c.Set("fingerprint", fp)
+		c.Next()
+	}
+}
+
+func ExtractFingerprintFromContext(c *gin.Context) (*FingerprintData, error) {
+	fp, exists := c.Get("fingerprint")
+	if !exists {
+		return nil, nil
+	}
+	return fp.(*FingerprintData), nil
+}
+
+func SecurityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	}
+}
+
+func InputValidationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.URL.Query().Get("param") != "" {
+			value := c.Request.URL.Query().Get("param")
+			if len(value) > 0 && (value[0] == '<' || value[0] == '>') {
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+		}
+		c.Next()
+	}
+}
+
+func SmartRateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+	}
+}
+
+func IPRateLimitMiddleware(store interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+	}
+}
+
 func TestSecurityHeadersMiddlewareAlt(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

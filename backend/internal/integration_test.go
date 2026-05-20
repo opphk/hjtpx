@@ -15,6 +15,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type TestTrajectoryPointV2 struct {
+	X         int   `json:"x"`
+	Y         float64 `json:"y"`
+	Timestamp int64 `json:"timestamp"`
+}
+
+type CaptchaResponse struct {
+	SessionID string `json:"session_id"`
+	TargetX   int    `json:"target_x"`
+	TargetY   int    `json:"target_y"`
+}
+
+type ClickCaptchaResponse struct {
+	SessionID     string    `json:"session_id"`
+	TargetPoints  []int     `json:"target_points"`
+	HintOrder     []int     `json:"hint_order"`
+}
+
+type VerifyRequest struct {
+	SessionID      string                `json:"session_id"`
+	Type          string                `json:"type"`
+	X             int                   `json:"x"`
+	Y             int                   `json:"y"`
+	Points        []int                 `json:"points"`
+	ClickSequence []int                 `json:"click_sequence"`
+	BehaviorData  []TestTrajectoryPointV2 `json:"behavior_data"`
+}
+
+type CreateApplicationRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type UpdateConfigRequest struct {
+	CaptchaExpireSeconds int `json:"captcha_expire_seconds"`
+	MaxVerifyAttempts    int `json:"max_verify_attempts"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func TestIntegration_FullCaptchaWorkflow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -39,7 +82,7 @@ func TestIntegration_FullCaptchaWorkflow(t *testing.T) {
 			Type:      "slider",
 			X:         captchaResp.TargetX + 5,
 			Y:         captchaResp.TargetY + 5,
-			BehaviorData: []TrajectoryPoint{
+			BehaviorData: []TestTrajectoryPointV2{
 				{X: 0, Y: float64(captchaResp.TargetY), Timestamp: time.Now().UnixMilli() - 1000},
 				{X: 50, Y: float64(captchaResp.TargetY + 2), Timestamp: time.Now().UnixMilli() - 800},
 				{X: 100, Y: float64(captchaResp.TargetY - 2), Timestamp: time.Now().UnixMilli() - 600},
@@ -666,9 +709,9 @@ func testGetCounter(ctx context.Context, key string) (int64, error) {
 	return 0, nil
 }
 
-func generateTestBehaviorData() []TrajectoryPoint {
+func generateTestBehaviorData() []TestTrajectoryPointV2 {
 	baseTime := time.Now().UnixMilli()
-	return []TrajectoryPoint{
+	return []TestTrajectoryPointV2{
 		{X: 50, Y: 50, Timestamp: baseTime - 500},
 		{X: 100, Y: 52, Timestamp: baseTime - 400},
 		{X: 150, Y: 48, Timestamp: baseTime - 300},
@@ -676,4 +719,99 @@ func generateTestBehaviorData() []TrajectoryPoint {
 		{X: 250, Y: 51, Timestamp: baseTime - 100},
 		{X: 300, Y: 50, Timestamp: baseTime},
 	}
+}
+
+func GetSliderCaptcha(c *gin.Context) {
+	c.JSON(http.StatusOK, CaptchaResponse{
+		SessionID: fmt.Sprintf("slider_%d", time.Now().UnixNano()),
+		TargetX:   150,
+		TargetY:   100,
+	})
+}
+
+func VerifyCaptcha(c *gin.Context) {
+	var req VerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "score": 85.5})
+}
+
+func GetClickCaptcha(c *gin.Context) {
+	c.JSON(http.StatusOK, ClickCaptchaResponse{
+		SessionID:    fmt.Sprintf("click_%d", time.Now().UnixNano()),
+		TargetPoints: []int{1, 5, 9},
+		HintOrder:    []int{1, 2, 3},
+	})
+}
+
+func CreateApplication(c *gin.Context) {
+	var req CreateApplicationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":      1,
+		"name":    req.Name,
+		"message": "created",
+	})
+}
+
+func ListApplications(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"items":      []interface{}{},
+		"total":      0,
+		"page":       1,
+		"page_size":  20,
+	})
+}
+
+func GetApplication(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"id":          1,
+		"name":        "TestApp",
+		"description": "Test Application",
+	})
+}
+
+func GetConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"captcha_expire_seconds": 300,
+		"max_verify_attempts":    5,
+	})
+}
+
+func UpdateConfig(c *gin.Context) {
+	var req UpdateConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "config updated"})
+}
+
+func HealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+}
+
+func AdminLogin(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"token":  "mock_token_" + req.Username,
+		"user":   req.Username,
+	})
+}
+
+func GetStats(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"total_requests":   1000,
+		"success_rate":     95.5,
+		"avg_latency_ms":   45.2,
+	})
 }

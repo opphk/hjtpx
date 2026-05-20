@@ -104,10 +104,10 @@ type ComplianceMetrics struct {
 	FailedControls int               `json:"failed_controls"`
 	ComplianceRate float64           `json:"compliance_rate"`
 	ByCategory     map[string]float64 `json:"by_category"`
-	Historical     []MetricSnapshot  `json:"historical"`
+	Historical     []MetricSnapshotV2  `json:"historical"`
 }
 
-type MetricSnapshot struct {
+type MetricSnapshotV2 struct {
 	Timestamp    time.Time `json:"timestamp"`
 	ComplianceRate float64 `json:"compliance_rate"`
 	Violations   int      `json:"violations"`
@@ -427,7 +427,7 @@ func (s *governanceService) GetComplianceMetrics(ctx context.Context, framework 
 			"audit_logging":       97.0,
 			"encryption":          90.0,
 		},
-		Historical: []MetricSnapshot{
+		Historical: []MetricSnapshotV2{
 			{Timestamp: time.Now().Add(-30 * 24 * time.Hour), ComplianceRate: 88.5, Violations: 8},
 			{Timestamp: time.Now().Add(-25 * 24 * time.Hour), ComplianceRate: 89.2, Violations: 7},
 			{Timestamp: time.Now().Add(-20 * 24 * time.Hour), ComplianceRate: 90.1, Violations: 5},
