@@ -630,5 +630,3 @@ func generateSessionID() string {
 	rand.Read(b)
 	return fmt.Sprintf("mpc-%x", b)
 }
-
-type big = big.Int

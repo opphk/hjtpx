@@ -4,436 +4,390 @@ import (
 	"context"
 	"log"
 	"runtime"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type ResourceEfficiencyOptimizer struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	mu          sync.RWMutex
-	isRunning   bool
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.RWMutex
+	isRunning     bool
+	config        *ResourceConfig
+	metrics       *ResourceMetrics
+	memoryManager *MemoryManager
+	cpuManager    *CPUMonitor
+	greenComputing *GreenComputing
+}
 
-	// 内存池
-	memoryPool *MemoryPool
+type ResourceConfig struct {
+	MaxMemoryMB       int
+	MaxCPUPercent     int
+	EnableGCOptimize  bool
+	EnableCPUPin      bool
+	EnableMemoryPool  bool
+	GreenMode        bool
+	AutoScale        bool
+}
 
-	// 对象复用
-	objectPool *ObjectPool
+type ResourceMetrics struct {
+	MemoryUsedMB     atomic.Int64
+	MemoryLimitMB    atomic.Int64
+	CPUPercent       atomic.Float64
+	CPUCores        atomic.Int64
+	Goroutines      atomic.Int64
+	GCCollections    atomic.Int64
+	GCLatencyMs     atomic.Int64
+	EnergyConsumption atomic.Int64
+	CarbonFootprint  atomic.Int64
+	LastUpdate       atomic.Value
+}
 
-	// GC 优化
-	gcOptimizer *GCOptimizer
-
-	// 绿色计算优化
-	greenCompute *GreenComputeOptimizer
-
-	// 统计信息
-	stats *ResourceEfficiencyStats
+type MemoryManager struct {
+	mu            sync.RWMutex
+	pools         map[string]*MemoryPool
+	maxSizeMB     int
+	currentUsageMB int64
+	allocationCount atomic.Int64
+	hitCount      atomic.Int64
+	missCount     atomic.Int64
 }
 
 type MemoryPool struct {
-	mu         sync.Mutex
-	pools      map[int]*PooledSlice
-	poolSizes  []int
+	Name       string
+	Size       int
+	FreeList   []byte
+	UsedCount  int32
+	TotalCount int32
 }
 
-type PooledSlice struct {
-	pool   chan []byte
-	size   int
+type CPUMonitor struct {
+	mu             sync.RWMutex
+	enabled        bool
+	affinityEnabled bool
+	cores          int
+	usageHistory   []float64
+	maxHistory     int
 }
 
-type ObjectPool struct {
-	mu         sync.RWMutex
-	pools      map[string]*GenericPool
-}
-
-type GenericPool struct {
-	pool       chan interface{}
-	newFn      func() interface{}
-	resetFn    func(interface{})
-}
-
-type GCOptimizer struct {
-	mu                sync.RWMutex
-	gcThreshold       float64
-	lastGC            time.Time
-	gcInterval        time.Duration
-	forceGCCount      atomic.Int64
-}
-
-type GreenComputeOptimizer struct {
-	mu               sync.RWMutex
-	lowPowerMode     bool
-	currentFrequency float64
-	loadHistory      []float64
-	lastAdjustment   time.Time
-}
-
-type ResourceEfficiencyStats struct {
-	MemoryAllocations  atomic.Int64
-	MemoryReuses       atomic.Int64
-	ObjectAllocations  atomic.Int64
-	ObjectReuses       atomic.Int64
-	GCForcedCount      atomic.Int64
-	PowerSavingMode    atomic.Bool
-	LastUpdate         atomic.Value
+type GreenComputing struct {
+	mu              sync.RWMutex
+	enabled         bool
+	energyUnits     float64
+	carbonGrams     float64
+	powerWatts      float64
+	lastMeasurement time.Time
 }
 
 func NewResourceEfficiencyOptimizer() *ResourceEfficiencyOptimizer {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &ResourceEfficiencyOptimizer{
 		ctx:            ctx,
 		cancel:         cancel,
-		memoryPool:     NewMemoryPool(),
-		objectPool:     NewObjectPool(),
-		gcOptimizer:    NewGCOptimizer(0.7, 5*time.Minute),
-		greenCompute:   NewGreenComputeOptimizer(),
-		stats:          &ResourceEfficiencyStats{},
+		config:         NewResourceConfig(),
+		metrics:        &ResourceMetrics{},
+		memoryManager:  NewMemoryManager(512),
+		cpuManager:    NewCPUMonitor(),
+		greenComputing: NewGreenComputing(),
 	}
 }
 
-func NewMemoryPool() *MemoryPool {
-	sizes := []int{64, 256, 1024, 4096, 16384, 65536}
-	pools := make(map[int]*PooledSlice)
-	for _, size := range sizes {
-		pools[size] = NewPooledSlice(size, 1000)
-	}
-	return &MemoryPool{
-		pools:     pools,
-		poolSizes: sizes,
-	}
-}
-
-func NewPooledSlice(size, count int) *PooledSlice {
-	pool := make(chan []byte, count)
-	for i := 0; i < count; i++ {
-		pool <- make([]byte, 0, size)
-	}
-	return &PooledSlice{
-		pool: pool,
-		size: size,
+func NewResourceConfig() *ResourceConfig {
+	return &ResourceConfig{
+		MaxMemoryMB:      1024,
+		MaxCPUPercent:    80,
+		EnableGCOptimize: true,
+		EnableCPUPin:     false,
+		EnableMemoryPool: true,
+		GreenMode:       true,
+		AutoScale:       true,
 	}
 }
 
-func NewObjectPool() *ObjectPool {
-	return &ObjectPool{
-		pools: make(map[string]*GenericPool),
+func NewMemoryManager(maxSizeMB int) *MemoryManager {
+	return &MemoryManager{
+		pools:     make(map[string]*MemoryPool),
+		maxSizeMB: maxSizeMB,
 	}
 }
 
-func NewGCOptimizer(threshold float64, interval time.Duration) *GCOptimizer {
-	return &GCOptimizer{
-		gcThreshold: threshold,
-		gcInterval:  interval,
+func NewCPUMonitor() *CPUMonitor {
+	return &CPUMonitor{
+		enabled:  true,
+		cores:    runtime.NumCPU(),
+		usageHistory: make([]float64, 0, 60),
+		maxHistory: 60,
 	}
 }
 
-func NewGreenComputeOptimizer() *GreenComputeOptimizer {
-	return &GreenComputeOptimizer{
-		currentFrequency: 1.0,
-		loadHistory:      make([]float64, 0, 60),
+func NewGreenComputing() *GreenComputing {
+	return &GreenComputing{
+		enabled:    true,
+		powerWatts: 50.0,
+		lastMeasurement: time.Now(),
 	}
 }
 
-func (r *ResourceEfficiencyOptimizer) Start(ctx context.Context) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (o *ResourceEfficiencyOptimizer) Start() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if r.isRunning {
+	if o.isRunning {
 		return nil
 	}
-	r.isRunning = true
 
-	go r.optimizeMemory()
-	go r.adaptiveGC()
-	go r.optimizeGreenCompute()
+	o.isRunning = true
+
+	if o.config.EnableGCOptimize {
+		go o.optimizeGC()
+	}
+
+	if o.config.EnableMemoryPool {
+		o.initializeMemoryPools()
+	}
+
+	go o.monitorResources()
+	go o.calculateGreenMetrics()
 
 	log.Println("[ResourceEfficiencyOptimizer] Started successfully")
 	return nil
 }
 
-func (r *ResourceEfficiencyOptimizer) Stop() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (o *ResourceEfficiencyOptimizer) Stop() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if !r.isRunning {
+	if !o.isRunning {
 		return
 	}
-	r.isRunning = false
-	r.cancel()
 
+	o.cancel()
+	o.isRunning = false
 	log.Println("[ResourceEfficiencyOptimizer] Stopped")
 }
 
-func (r *ResourceEfficiencyOptimizer) GetMemory(size int) []byte {
-	buf := r.memoryPool.get(size)
-	if buf != nil {
-		r.stats.MemoryReuses.Add(1)
-		return buf
+func (o *ResourceEfficiencyOptimizer) Optimize() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	o.metrics.MemoryUsedMB.Store(int64(m.Alloc / 1024 / 1024))
+	o.metrics.Goroutines.Store(int64(runtime.NumGoroutine()))
+
+	if o.config.EnableMemoryPool {
+		o.memoryManager.optimize()
 	}
-	r.stats.MemoryAllocations.Add(1)
-	return make([]byte, 0, size)
-}
 
-func (r *ResourceEfficiencyOptimizer) ReleaseMemory(buf []byte) {
-	r.memoryPool.put(buf)
-}
-
-func (r *ResourceEfficiencyOptimizer) RegisterObjectPool(name string, newFn func() interface{}, resetFn func(interface{})) {
-	r.objectPool.register(name, newFn, resetFn, 100)
-}
-
-func (r *ResourceEfficiencyOptimizer) GetObject(name string) interface{} {
-	obj := r.objectPool.get(name)
-	if obj != nil {
-		r.stats.ObjectReuses.Add(1)
-		return obj
-	}
-	r.stats.ObjectAllocations.Add(1)
-	return nil
-}
-
-func (r *ResourceEfficiencyOptimizer) ReleaseObject(name string, obj interface{}) {
-	r.objectPool.put(name, obj)
-}
-
-func (r *ResourceEfficiencyOptimizer) ForceGC() {
-	r.gcOptimizer.forceGC()
-	r.stats.GCForcedCount.Add(1)
-}
-
-func (r *ResourceEfficiencyOptimizer) SetLowPowerMode(enabled bool) {
-	r.greenCompute.setLowPowerMode(enabled)
-	r.stats.PowerSavingMode.Store(enabled)
-}
-
-func (r *ResourceEfficiencyOptimizer) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"memory_allocations": r.stats.MemoryAllocations.Load(),
-		"memory_reuses":      r.stats.MemoryReuses.Load(),
-		"object_allocations": r.stats.ObjectAllocations.Load(),
-		"object_reuses":      r.stats.ObjectReuses.Load(),
-		"gc_forced_count":    r.stats.GCForcedCount.Load(),
-		"power_saving_mode":  r.stats.PowerSavingMode.Load(),
-		"last_update":        r.stats.LastUpdate.Load(),
+	if o.config.GreenMode {
+		o.updateGreenMetrics()
 	}
 }
 
-func (r *ResourceEfficiencyOptimizer) optimizeMemory() {
+func (o *ResourceEfficiencyOptimizer) optimizeGC() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			r.stats.LastUpdate.Store(time.Now())
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			if m.Alloc > uint64(o.config.MaxMemoryMB)*1024*1024/2 {
+				runtime.GC()
+				o.metrics.GCCollections.Add(1)
+			}
 		}
 	}
 }
 
-func (r *ResourceEfficiencyOptimizer) adaptiveGC() {
-	ticker := time.NewTicker(30 * time.Second)
+func (o *ResourceEfficiencyOptimizer) initializeMemoryPools() {
+	poolNames := []string{"small", "medium", "large", "xlarge"}
+
+	for _, name := range poolNames {
+		var size int
+		switch name {
+		case "small":
+			size = 64
+		case "medium":
+			size = 256
+		case "large":
+			size = 1024
+		case "xlarge":
+			size = 4096
+		}
+
+		o.memoryManager.pools[name] = &MemoryPool{
+			Name:       name,
+			Size:       size,
+			FreeList:   make([]byte, 0),
+			TotalCount: 100,
+		}
+	}
+}
+
+func (o *ResourceEfficiencyOptimizer) monitorResources() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	var lastCPU float64
+
+	for {
+		select {
+		case <-o.ctx.Done():
+			return
+		case <-ticker.C:
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			o.metrics.MemoryUsedMB.Store(int64(m.Alloc / 1024 / 1024))
+			o.metrics.MemoryLimitMB.Store(int64(o.config.MaxMemoryMB))
+			o.metrics.Goroutines.Store(int64(runtime.NumGoroutine()))
+
+			o.cpuManager.mu.Lock()
+			cpuUsage := o.getCPUUsage()
+			o.cpuManager.usageHistory = append(o.cpuManager.usageHistory, cpuUsage)
+			if len(o.cpuManager.usageHistory) > o.cpuManager.maxHistory {
+				o.cpuManager.usageHistory = o.cpuManager.usageHistory[1:]
+			}
+			lastCPU = cpuUsage
+			o.cpuManager.mu.Unlock()
+
+			o.metrics.CPUPercent.Store(lastCPU)
+			o.metrics.CPUCores.Store(int64(runtime.NumCPU()))
+			o.metrics.LastUpdate.Store(time.Now())
+		}
+	}
+}
+
+func (o *ResourceEfficiencyOptimizer) getCPUUsage() float64 {
+	return 0.0
+}
+
+func (o *ResourceEfficiencyOptimizer) calculateGreenMetrics() {
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			r.gcOptimizer.checkAndRun()
+			o.updateGreenMetrics()
 		}
 	}
 }
 
-func (r *ResourceEfficiencyOptimizer) optimizeGreenCompute() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+func (o *ResourceEfficiencyOptimizer) updateGreenMetrics() {
+	o.greenComputing.mu.Lock()
+	defer o.greenComputing.mu.Unlock()
 
-	for {
-		select {
-		case <-r.ctx.Done():
-			return
-		case <-ticker.C:
-			r.greenCompute.adjustResources()
+	elapsed := time.Since(o.greenComputing.lastMeasurement).Seconds()
+	powerUsage := o.greenComputing.powerWatts * elapsed / 3600.0
+
+	o.greenComputing.energyUnits += powerUsage
+	o.greenComputing.carbonGrams = o.greenComputing.energyUnits * 0.4
+
+	o.metrics.EnergyConsumption.Store(int64(o.greenComputing.energyUnits * 1000))
+	o.metrics.CarbonFootprint.Store(int64(o.greenComputing.carbonGrams * 1000))
+
+	o.greenComputing.lastMeasurement = time.Now()
+}
+
+func (m *MemoryManager) Allocate(size int) []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	poolName := m.getPoolName(size)
+	if pool, exists := m.pools[poolName]; exists && len(pool.FreeList) > 0 {
+		m.hitCount.Add(1)
+		m.allocationCount.Add(1)
+		return pool.FreeList
+	}
+
+	m.missCount.Add(1)
+	m.allocationCount.Add(1)
+
+	return make([]byte, size)
+}
+
+func (m *MemoryManager) Release(data []byte, poolName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if pool, exists := m.pools[poolName]; exists {
+		pool.FreeList = append(pool.FreeList, data...)
+	}
+}
+
+func (m *MemoryManager) optimize() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	totalMB := int64(0)
+	for _, pool := range m.pools {
+		totalMB += int64(len(pool.FreeList) * int(pool.TotalCount))
+	}
+
+	if totalMB > int64(m.maxSizeMB)*1024*1024 {
+		for _, pool := range m.pools {
+			if len(pool.FreeList) > int(pool.TotalCount)/2 {
+				pool.FreeList = pool.FreeList[:len(pool.FreeList)/2]
+			}
 		}
 	}
 }
 
-func (mp *MemoryPool) get(size int) []byte {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	actualSize := mp.findNearestSize(size)
-	if pool, exists := mp.pools[actualSize]; exists {
-		select {
-		case buf := <-pool.pool:
-			return buf[:0]
-		default:
-		}
-	}
-	return nil
-}
-
-func (mp *MemoryPool) put(buf []byte) {
-	if buf == nil {
-		return
-	}
-
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	capacity := cap(buf)
-	if pool, exists := mp.pools[capacity]; exists {
-		select {
-		case pool.pool <- buf:
-		default:
-		}
-	}
-}
-
-func (mp *MemoryPool) findNearestSize(size int) int {
-	for _, s := range mp.poolSizes {
-		if s >= size {
-			return s
-		}
-	}
-	return mp.poolSizes[len(mp.poolSizes)-1]
-}
-
-func (op *ObjectPool) register(name string, newFn func() interface{}, resetFn func(interface{}), size int) {
-	op.mu.Lock()
-	defer op.mu.Unlock()
-
-	pool := &GenericPool{
-		pool:    make(chan interface{}, size),
-		newFn:   newFn,
-		resetFn: resetFn,
-	}
-
-	for i := 0; i < size/2; i++ {
-		pool.pool <- newFn()
-	}
-
-	op.pools[name] = pool
-}
-
-func (op *ObjectPool) get(name string) interface{} {
-	op.mu.RLock()
-	pool, exists := op.pools[name]
-	op.mu.RUnlock()
-
-	if !exists {
-		return nil
-	}
-
-	select {
-	case obj := <-pool.pool:
-		if pool.resetFn != nil {
-			pool.resetFn(obj)
-		}
-		return obj
+func (m *MemoryManager) getPoolName(size int) string {
+	switch {
+	case size <= 64:
+		return "small"
+	case size <= 256:
+		return "medium"
+	case size <= 1024:
+		return "large"
 	default:
-		if pool.newFn != nil {
-			return pool.newFn()
-		}
-		return nil
+		return "xlarge"
 	}
 }
 
-func (op *ObjectPool) put(name string, obj interface{}) {
-	op.mu.RLock()
-	pool, exists := op.pools[name]
-	op.mu.RUnlock()
+func (o *ResourceEfficiencyOptimizer) GetMetrics() map[string]interface{} {
+	var hitRate float64
+	hits := o.memoryManager.hitCount.Load()
+	misses := o.memoryManager.missCount.Load()
+	total := hits + misses
 
-	if !exists || obj == nil {
-		return
+	if total > 0 {
+		hitRate = float64(hits) / float64(total) * 100
 	}
 
-	select {
-	case pool.pool <- obj:
-	default:
-	}
-}
-
-func (gco *GCOptimizer) checkAndRun() {
-	gco.mu.RLock()
-	defer gco.mu.RUnlock()
-
-	if time.Since(gco.lastGC) < gco.gcInterval {
-		return
-	}
-
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
-	heapUsage := float64(memStats.HeapAlloc) / float64(memStats.HeapSys)
-	if heapUsage > gco.gcThreshold {
-		gco.forceGC()
+	return map[string]interface{}{
+		"memory_used_mb":       o.metrics.MemoryUsedMB.Load(),
+		"memory_limit_mb":      o.metrics.MemoryLimitMB.Load(),
+		"cpu_percent":          o.metrics.CPUPercent.Load(),
+		"cpu_cores":            o.metrics.CPUCores.Load(),
+		"goroutines":           o.metrics.Goroutines.Load(),
+		"gc_collections":       o.metrics.GCCollections.Load(),
+		"energy_consumption":   o.metrics.EnergyConsumption.Load(),
+		"carbon_footprint":    o.metrics.CarbonFootprint.Load(),
+		"pool_hit_rate_pct":    hitRate,
+		"last_update":          o.metrics.LastUpdate.Load(),
 	}
 }
 
-func (gco *GCOptimizer) forceGC() {
-	gco.mu.Lock()
-	defer gco.mu.Unlock()
+func (o *ResourceEfficiencyOptimizer) ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
+	start := time.Now()
 
-	debug.FreeOSMemory()
-	gco.lastGC = time.Now()
-	gco.forceGCCount.Add(1)
-	log.Println("[GCOptimizer] Forced GC executed")
-}
+	o.Optimize()
 
-func (gco *GreenComputeOptimizer) setLowPowerMode(enabled bool) {
-	gco.mu.Lock()
-	defer gco.mu.Unlock()
-	gco.lowPowerMode = enabled
-}
+	result := req.Data
 
-func (gco *GreenComputeOptimizer) adjustResources() {
-	gco.mu.Lock()
-	defer gco.mu.Unlock()
-
-	if time.Since(gco.lastAdjustment) < 10*time.Second {
-		return
-	}
-
-	numGoroutines := float64(runtime.NumGoroutine())
-	gco.loadHistory = append(gco.loadHistory, numGoroutines)
-	if len(gco.loadHistory) > 60 {
-		gco.loadHistory = gco.loadHistory[1:]
-	}
-
-	avgLoad := gco.calculateAverageLoad()
-	gco.adjustFrequency(avgLoad)
-	gco.lastAdjustment = time.Now()
-}
-
-func (gco *GreenComputeOptimizer) calculateAverageLoad() float64 {
-	if len(gco.loadHistory) == 0 {
-		return 0
-	}
-
-	sum := 0.0
-	for _, load := range gco.loadHistory {
-		sum += load
-	}
-	return sum / float64(len(gco.loadHistory))
-}
-
-func (gco *GreenComputeOptimizer) adjustFrequency(avgLoad float64) {
-	targetFreq := 1.0
-	if gco.lowPowerMode {
-		targetFreq = 0.5
-	} else if avgLoad < 100 {
-		targetFreq = 0.7
-	} else if avgLoad > 1000 {
-		targetFreq = 1.0
-	}
-
-	if targetFreq != gco.currentFrequency {
-		gco.currentFrequency = targetFreq
-		log.Printf("[GreenComputeOptimizer] Adjusted frequency to %.2f", targetFreq)
-	}
+	return &Response{
+		RequestID: req.ID,
+		Data:      result,
+		LatencyNs: time.Since(start).Nanoseconds(),
+	}, nil
 }

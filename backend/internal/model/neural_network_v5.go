@@ -260,7 +260,7 @@ func (nn *NeuralNetworkV5) initWeightMatrix(rows, cols int) [][]float64 {
 	for i := range weights {
 		weights[i] = make([]float64, cols)
 		for j := range weights[i] {
-			weights[i][j] = (math.randomFloat64() - 0.5) * math.Sqrt(2.0/float64(rows+cols))
+			weights[i][j] = (randGenerator.randomFloat64() - 0.5) * math.Sqrt(2.0/float64(rows+cols))
 		}
 	}
 	return weights
@@ -515,11 +515,8 @@ func (nn *NeuralNetworkV5) Backward(loss float64, forwardResult *ForwardPassResu
 		layer := nn.Layers[i]
 		layerID := fmt.Sprintf("layer_%d", i)
 
-		inputGrad := make([]float64, layer.InputDim)
-
-		for j := range layer.OutputDim {
+		for range layer.OutputDim {
 			gradient := loss * 0.1
-
 			gradNorm += gradient * gradient
 		}
 
@@ -527,16 +524,14 @@ func (nn *NeuralNetworkV5) Backward(loss float64, forwardResult *ForwardPassResu
 		for k := range weightGrad {
 			weightGrad[k] = make([]float64, layer.OutputDim)
 			for j := range weightGrad[k] {
-				weightGrad[k][j] = 0.1 * math.randomFloat64()
+				weightGrad[k][j] = 0.1 * randGenerator.randomFloat64()
 			}
 		}
 
 		result.Gradients[layerID] = weightGrad
 
-		lr := nn.TrainingState.LearningRate
-		optimizer := nn.OptimizerConfig.OptimizerType
-
 		weightUpdate := make([][]float64, layer.InputDim)
+		lr := nn.TrainingState.LearningRate
 		for k := range weightUpdate {
 			weightUpdate[k] = make([]float64, layer.OutputDim)
 			for j := range weightUpdate[k] {
@@ -702,38 +697,19 @@ func (nn *NeuralNetworkV5) Load(checkpoint *ModelCheckpoint) error {
 	return nil
 }
 
-type math struct{}
+var randGenerator = NewRandGenerator()
 
-func (m math) randomFloat64() float64 {
-	return float64(time.Now().UnixNano()%10000) / 10000.0
-}
-
-func (m math) Max(a, b float64) float64 {
-	if a > b {
-		return a
+func NewRandGenerator() *RandGenerator {
+	return &RandGenerator{
+		seed: time.Now().UnixNano(),
 	}
-	return b
 }
 
-func (m math) Min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
+type RandGenerator struct {
+	seed int64
 }
 
-func (m math) Sqrt(a float64) float64 {
-	return math.Sqrt(a)
-}
-
-func (m math) Exp(a float64) float64 {
-	return math.Exp(a)
-}
-
-func (m math) Pow(a, b float64) float64 {
-	return math.Pow(a, b)
-}
-
-func (m math) Tanh(a float64) float64 {
-	return math.Tanh(a)
+func (r *RandGenerator) randomFloat64() float64 {
+	r.seed = (r.seed*1103515245 + 12345) & 0x7fffffff
+	return float64(r.seed%10000) / 10000.0
 }

@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+var (
+	ErrDIDInvalid           = errors.New("invalid DID")
+	ErrDIDNotFound          = errors.New("DID not found")
+	ErrDIDAlreadyExists     = errors.New("DID already exists")
+	ErrVCInvalid            = errors.New("invalid verifiable credential")
+	ErrVCExpired            = errors.New("verifiable credential expired")
+	ErrVCRevoked            = errors.New("verifiable credential revoked")
+	ErrVPInvalid            = errors.New("invalid verifiable presentation")
+	ErrZKProofInvalid       = errors.New("invalid ZK proof")
+	ErrZKProofVerification  = errors.New("ZK proof verification failed")
+	ErrChainNotSupported    = errors.New("chain not supported")
+	ErrDIDDocNotValid       = errors.New("DID document not valid")
+)
+
+type DIDMethod string
+
+const (
+	DIDMethodWeb    DIDMethod = "did:web"
+	DIDMethodEthr   DIDMethod = "did:ethr"
+	DIDMethodIon    DIDMethod = "did:ion"
+	DIDMethodSolana DIDMethod = "did:sol"
+)
+
 type DIDVerificationService struct {
 	mu           sync.RWMutex
 	didRegistry  *DIDRegistry

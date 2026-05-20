@@ -225,7 +225,7 @@ func (kms *KeyManagementSystem) GenerateKey(ctx context.Context, req *KeyGenerat
 		return nil, ErrQuotaExceeded
 	}
 
-	keyID := generateKeyID()
+	keyID := generateKMSKeyID()
 	now := time.Now()
 
 	metadata := &KeyMetadata{
@@ -421,7 +421,7 @@ func (kms *KeyManagementSystem) RotateKey(ctx context.Context, req *KeyRotationR
 	oldKeyID := req.KeyID
 
 	newMetadata := &KeyMetadata{
-		KeyID:     generateKeyID(),
+		KeyID:     generateKMSKeyID(),
 		KeyType:   oldKey.KeyType,
 		Status:    KeyStatusActive,
 		CreatedAt: now,
@@ -694,7 +694,7 @@ func (kms *KeyManagementSystem) logAudit(keyID, action, actorID, details, ipAddr
 	}
 }
 
-func generateKeyID() string {
+func generateKMSKeyID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return base64.URLEncoding.EncodeToString(b)

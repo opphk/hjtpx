@@ -708,6 +708,23 @@ type FSCrossValidationResult struct {
 	StdDeviation  float64
 }
 
+var fslRandGenerator = NewFSRandGenerator()
+
+func NewFSRandGenerator() *FSRandGenerator {
+	return &FSRandGenerator{
+		seed: time.Now().UnixNano(),
+	}
+}
+
+type FSRandGenerator struct {
+	seed int64
+}
+
+func (r *FSRandGenerator) randomFloat64() float64 {
+	r.seed = (r.seed*1103515245 + 12345) & 0x7fffffff
+	return float64(r.seed%10000) / 10000.0
+}
+
 type fsmath struct{}
 
 func (m fsmath) randomFloat64() float64 {

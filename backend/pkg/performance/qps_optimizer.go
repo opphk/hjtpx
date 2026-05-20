@@ -2,381 +2,437 @@ package performance
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-const (
-	TargetQPSv2 = 20000
-	BatchSize   = 100
-)
-
 type QPSOptimizer struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	mu        sync.RWMutex
-	isRunning bool
-
-	// 请求批处理
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.RWMutex
+	isRunning     bool
+	config        *QPSConfig
+	metrics       *QPSMetrics
 	batchProcessor *BatchProcessor
-
-	// 工作池
-	workerPool *HighPerformanceWorkerPool
-
-	// 算法优化
-	algorithmOptimizer *AlgorithmOptimizer
-
-	// 统计信息
-	stats *QPSStats
+	connectionPool *ConnPool
+	rateLimiter   *AdaptiveRateLimiter
 }
 
-type BatchProcessor struct {
-	mu           sync.Mutex
-	batchQueue   []BatchRequest
-	batchSize    int
-	flushTimeout time.Duration
-	flushChan    chan struct{}
-	processor    func([]BatchRequest) error
+type QPSConfig struct {
+	TargetQPS        int
+	MaxQPS          int
+	BurstSize       int
+	BatchSize       int
+	BatchTimeout    time.Duration
+	ConnPoolSize    int
+	EnableBatching  bool
+	EnableRateLimit bool
 }
 
-type BatchRequest struct {
-	ID      string
-	Payload interface{}
-	Result  chan interface{}
-}
-
-type HighPerformanceWorkerPool struct {
-	workers     []*WorkerV2
-	taskQueue   chan TaskV2
-	wg          sync.WaitGroup
-	workerCount int
-}
-
-type WorkerV2 struct {
-	id       int
-	pool     *HighPerformanceWorkerPool
-	taskChan chan TaskV2
-	ctx      context.Context
-	cancel   context.CancelFunc
-}
-
-type TaskV2 struct {
-	fn       func() error
-	priority int
-}
-
-type AlgorithmOptimizer struct {
-	mu           sync.RWMutex
-	cache        map[string]interface{}
-	accessCount  map[string]int64
-	lruList      []string
-	maxCacheSize int
-}
-
-type QPSStats struct {
-	CurrentQPS      atomic.Int64
-	PeakQPS         atomic.Int64
+type QPSMetrics struct {
 	TotalRequests   atomic.Int64
-	BatchProcessed  atomic.Int64
-	WorkerUtilization atomic.Int64
-	CacheHits       atomic.Int64
-	CacheMisses     atomic.Int64
+	CurrentQPS      atomic.Int64
+	PeakQPS        atomic.Int64
+	AvgLatencyMs   atomic.Int64
+	P99LatencyMs   atomic.Int64
+	BatchHits      atomic.Int64
+	BatchMisses    atomic.Int64
+	DroppedRequests atomic.Int64
+	ThrottledRequests atomic.Int64
 	LastUpdate      atomic.Value
 }
 
+type BatchProcessor struct {
+	mu           sync.RWMutex
+	batchSize    int
+	timeout      time.Duration
+	buffer       []*BatchRequest
+	flushTicker  *time.Ticker
+}
+
+type BatchRequest struct {
+	ID        string
+	Data      interface{}
+	Timestamp time.Time
+	Response  chan *BatchResponse
+}
+
+type BatchResponse struct {
+	ID   string
+	Data interface{}
+	Err  error
+}
+
+type ConnPool struct {
+	mu       sync.RWMutex
+	conns    chan *Conn
+	maxSize  int
+	active   int32
+	idle     int32
+	created  int64
+}
+
+type Conn struct {
+	ID      int
+	Busy    atomic.Bool
+	Created time.Time
+}
+
+type AdaptiveRateLimiter struct {
+	mu           sync.RWMutex
+	rate         int
+	burst        int
+	tokens       float64
+	lastRefill   time.Time
+	refillAmount float64
+}
+
+const (
+	TargetQPS = 20000
+	MaxQPS    = 25000
+)
+
 func NewQPSOptimizer() *QPSOptimizer {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &QPSOptimizer{
-		ctx:                ctx,
-		cancel:             cancel,
-		batchProcessor:     NewBatchProcessor(BatchSize, 10*time.Millisecond),
-		workerPool:         NewHighPerformanceWorkerPool(500),
-		algorithmOptimizer: NewAlgorithmOptimizer(10000),
-		stats:              &QPSStats{},
+		ctx:            ctx,
+		cancel:         cancel,
+		config:         NewQPSConfig(),
+		metrics:        &QPSMetrics{},
+		batchProcessor: NewBatchProcessor(),
+		connectionPool:  NewConnPool(100),
+		rateLimiter:    NewAdaptiveRateLimiter(TargetQPS),
 	}
 }
 
-func NewBatchProcessor(batchSize int, flushTimeout time.Duration) *BatchProcessor {
+func NewQPSConfig() *QPSConfig {
+	return &QPSConfig{
+		TargetQPS:       TargetQPS,
+		MaxQPS:          MaxQPS,
+		BurstSize:       TargetQPS * 2,
+		BatchSize:       100,
+		BatchTimeout:    10 * time.Millisecond,
+		ConnPoolSize:    100,
+		EnableBatching:  true,
+		EnableRateLimit: true,
+	}
+}
+
+func NewBatchProcessor() *BatchProcessor {
 	return &BatchProcessor{
-		batchQueue:   make([]BatchRequest, 0, batchSize),
-		batchSize:    batchSize,
-		flushTimeout: flushTimeout,
-		flushChan:    make(chan struct{}, 1),
+		batchSize: 100,
+		timeout:   10 * time.Millisecond,
+		buffer:    make([]*BatchRequest, 0, 100),
+		flushTicker: time.NewTicker(10 * time.Millisecond),
 	}
 }
 
-func NewHighPerformanceWorkerPool(workerCount int) *HighPerformanceWorkerPool {
-	pool := &HighPerformanceWorkerPool{
-		taskQueue:   make(chan TaskV2, 100000),
-		workerCount: workerCount,
-		workers:     make([]*WorkerV2, 0, workerCount),
+func NewConnPool(maxSize int) *ConnPool {
+	pool := &ConnPool{
+		conns:   make(chan *Conn, maxSize),
+		maxSize: maxSize,
 	}
+
+	for i := 0; i < maxSize; i++ {
+		pool.conns <- &Conn{ID: i, Created: time.Now()}
+	}
+
 	return pool
 }
 
-func NewAlgorithmOptimizer(maxCacheSize int) *AlgorithmOptimizer {
-	return &AlgorithmOptimizer{
-		cache:        make(map[string]interface{}, maxCacheSize),
-		accessCount:  make(map[string]int64, maxCacheSize),
-		lruList:      make([]string, 0, maxCacheSize),
-		maxCacheSize: maxCacheSize,
+func NewAdaptiveRateLimiter(rate int) *AdaptiveRateLimiter {
+	return &AdaptiveRateLimiter{
+		rate:         rate,
+		burst:        rate * 2,
+		tokens:       float64(rate),
+		lastRefill:   time.Now(),
+		refillAmount: float64(rate) / float64(time.Second),
 	}
 }
 
-func (q *QPSOptimizer) Start(ctx context.Context) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (o *QPSOptimizer) Start() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if q.isRunning {
+	if o.isRunning {
 		return nil
 	}
-	q.isRunning = true
 
-	q.workerPool.Start(q.ctx)
-	go q.batchProcessor.run(q.ctx)
-	go q.monitorQPS()
-	go q.optimizeWorkerPool()
+	o.isRunning = true
 
-	log.Println("[QPSOptimizer] Started successfully with target QPS:", TargetQPSv2)
+	go o.runQPSMonitor()
+	go o.runAdaptiveScaling()
+	go o.batchProcessor.runFlush(o.ctx)
+
+	log.Printf("[QPSOptimizer] Started with target QPS: %d", o.config.TargetQPS)
 	return nil
 }
 
-func (q *QPSOptimizer) Stop() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (o *QPSOptimizer) Stop() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if !q.isRunning {
+	if !o.isRunning {
 		return
 	}
-	q.isRunning = false
-	q.cancel()
-	q.workerPool.Stop()
 
+	o.cancel()
+	o.isRunning = false
 	log.Println("[QPSOptimizer] Stopped")
 }
 
-func (q *QPSOptimizer) SubmitRequest(req BatchRequest) {
-	q.stats.TotalRequests.Add(1)
-	q.batchProcessor.submit(req)
+func (o *QPSOptimizer) ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
+	start := time.Now()
+
+	o.metrics.TotalRequests.Add(1)
+
+	if o.config.EnableRateLimit {
+		if !o.rateLimiter.Allow() {
+			o.metrics.ThrottledRequests.Add(1)
+			return nil, fmt.Errorf("rate limit exceeded")
+		}
+	}
+
+	if o.config.EnableBatching {
+		resp := o.batchProcessor.Process(req)
+		latency := time.Since(start).Milliseconds()
+		o.recordLatency(latency)
+		return &Response{
+			RequestID: req.ID,
+			Data:      resp.Data,
+			LatencyNs: time.Since(start).Nanoseconds(),
+		}, resp.Err
+	}
+
+	result := req.Data
+	latency := time.Since(start).Milliseconds()
+	o.recordLatency(latency)
+
+	return &Response{
+		RequestID: req.ID,
+		Data:      result,
+		LatencyNs: time.Since(start).Nanoseconds(),
+	}, nil
 }
 
-func (q *QPSOptimizer) SubmitTask(task func() error, priority int) bool {
-	select {
-	case q.workerPool.taskQueue <- TaskV2{fn: task, priority: priority}:
-		return true
-	default:
-		return false
+func (o *QPSOptimizer) recordLatency(latencyMs int64) {
+	total := o.metrics.TotalRequests.Load()
+	if total == 0 {
+		o.metrics.AvgLatencyMs.Store(latencyMs)
+		return
+	}
+
+	prevAvg := o.metrics.AvgLatencyMs.Load()
+	newAvg := (prevAvg*(total-1) + latencyMs) / total
+	o.metrics.AvgLatencyMs.Store(newAvg)
+
+	if latencyMs > o.metrics.P99LatencyMs.Load() {
+		o.metrics.P99LatencyMs.Store(latencyMs)
 	}
 }
 
-func (q *QPSOptimizer) CacheResult(key string, value interface{}) {
-	q.algorithmOptimizer.set(key, value)
-}
-
-func (q *QPSOptimizer) GetCachedResult(key string) (interface{}, bool) {
-	value, ok := q.algorithmOptimizer.get(key)
-	if ok {
-		q.stats.CacheHits.Add(1)
-	} else {
-		q.stats.CacheMisses.Add(1)
-	}
-	return value, ok
-}
-
-func (q *QPSOptimizer) SetBatchProcessor(processor func([]BatchRequest) error) {
-	q.batchProcessor.processor = processor
-}
-
-func (q *QPSOptimizer) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"current_qps":          q.stats.CurrentQPS.Load(),
-		"peak_qps":             q.stats.PeakQPS.Load(),
-		"target_qps":           TargetQPSv2,
-		"total_requests":       q.stats.TotalRequests.Load(),
-		"batch_processed":      q.stats.BatchProcessed.Load(),
-		"worker_utilization":   q.stats.WorkerUtilization.Load(),
-		"cache_hits":           q.stats.CacheHits.Load(),
-		"cache_misses":         q.stats.CacheMisses.Load(),
-		"last_update":          q.stats.LastUpdate.Load(),
-	}
-}
-
-func (q *QPSOptimizer) monitorQPS() {
+func (o *QPSOptimizer) runQPSMonitor() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	requestWindow := make([]int64, 0, 5)
-	lastRequestCount := int64(0)
+	var lastCount int64
+	var window []int64
 
 	for {
 		select {
-		case <-q.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			currentRequests := q.stats.TotalRequests.Load()
-			qps := currentRequests - lastRequestCount
-			lastRequestCount = currentRequests
+			currentCount := o.metrics.TotalRequests.Load()
+			qps := currentCount - lastCount
+			lastCount = currentCount
 
-			requestWindow = append(requestWindow, qps)
-			if len(requestWindow) > 5 {
-				requestWindow = requestWindow[1:]
+			o.metrics.CurrentQPS.Store(qps)
+
+			if qps > o.metrics.PeakQPS.Load() {
+				o.metrics.PeakQPS.Store(qps)
 			}
 
-			var avgQPS int64
-			for _, r := range requestWindow {
-				avgQPS += r
+			window = append(window, qps)
+			if len(window) > 60 {
+				window = window[1:]
 			}
-			avgQPS /= int64(len(requestWindow))
 
-			q.stats.CurrentQPS.Store(avgQPS)
-			if avgQPS > q.stats.PeakQPS.Load() {
-				q.stats.PeakQPS.Store(avgQPS)
-			}
-			q.stats.LastUpdate.Store(time.Now())
-
-			if avgQPS > TargetQPSv2 {
-				log.Printf("[QPSOptimizer] QPS target achieved: %d", avgQPS)
-			}
+			o.metrics.LastUpdate.Store(time.Now())
 		}
 	}
 }
 
-func (q *QPSOptimizer) optimizeWorkerPool() {
+func (o *QPSOptimizer) runAdaptiveScaling() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-q.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			queueSize := len(q.workerPool.taskQueue)
-			q.stats.WorkerUtilization.Store(int64(queueSize) * 100 / int64(cap(q.workerPool.taskQueue)))
-		}
-	}
-}
+			currentQPS := int(o.metrics.CurrentQPS.Load())
 
-func (bp *BatchProcessor) submit(req BatchRequest) {
-	bp.mu.Lock()
-	bp.batchQueue = append(bp.batchQueue, req)
-	if len(bp.batchQueue) >= bp.batchSize {
-		bp.mu.Unlock()
-		select {
-		case bp.flushChan <- struct{}{}:
-		default:
-		}
-		return
-	}
-	bp.mu.Unlock()
-}
-
-func (bp *BatchProcessor) run(ctx context.Context) {
-	ticker := time.NewTicker(bp.flushTimeout)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-bp.flushChan:
-			bp.flush()
-		case <-ticker.C:
-			bp.flush()
-		}
-	}
-}
-
-func (bp *BatchProcessor) flush() {
-	bp.mu.Lock()
-	if len(bp.batchQueue) == 0 {
-		bp.mu.Unlock()
-		return
-	}
-
-	batch := make([]BatchRequest, len(bp.batchQueue))
-	copy(batch, bp.batchQueue)
-	bp.batchQueue = bp.batchQueue[:0]
-	bp.mu.Unlock()
-
-	if bp.processor != nil {
-		bp.processor(batch)
-	}
-}
-
-func (wp *HighPerformanceWorkerPool) Start(ctx context.Context) {
-	for i := 0; i < wp.workerCount; i++ {
-		workerCtx, cancel := context.WithCancel(ctx)
-		worker := &WorkerV2{
-			id:       i,
-			pool:     wp,
-			taskChan: wp.taskQueue,
-			ctx:      workerCtx,
-			cancel:   cancel,
-		}
-		wp.workers = append(wp.workers, worker)
-		wp.wg.Add(1)
-		go worker.run()
-	}
-}
-
-func (wp *HighPerformanceWorkerPool) Stop() {
-	for _, worker := range wp.workers {
-		worker.cancel()
-	}
-	wp.wg.Wait()
-}
-
-func (w *WorkerV2) run() {
-	defer w.pool.wg.Done()
-	for {
-		select {
-		case <-w.ctx.Done():
-			return
-		case task := <-w.taskChan:
-			if task.fn != nil {
-				task.fn()
+			if currentQPS < o.config.TargetQPS*80/100 {
+				o.scaleDown()
+			} else if currentQPS > o.config.TargetQPS*90/100 {
+				o.scaleUp()
 			}
 		}
 	}
 }
 
-func (ao *AlgorithmOptimizer) get(key string) (interface{}, bool) {
-	ao.mu.RLock()
-	value, ok := ao.cache[key]
-	if ok {
-		ao.accessCount[key]++
-	}
-	ao.mu.RUnlock()
-	return value, ok
+func (o *QPSOptimizer) scaleUp() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	log.Printf("[QPSOptimizer] Scaling up: current target QPS %d", o.config.TargetQPS)
 }
 
-func (ao *AlgorithmOptimizer) set(key string, value interface{}) {
-	ao.mu.Lock()
-	defer ao.mu.Unlock()
+func (o *QPSOptimizer) scaleDown() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if _, exists := ao.cache[key]; exists {
-		ao.cache[key] = value
+	log.Printf("[QPSOptimizer] Scaling down: current target QPS %d", o.config.TargetQPS)
+}
+
+func (b *BatchProcessor) Process(req *Request) *BatchResponse {
+	responseCh := make(chan *BatchResponse, 1)
+
+	batchReq := &BatchRequest{
+		ID:        req.ID,
+		Data:      req.Data,
+		Timestamp: time.Now(),
+		Response:  responseCh,
+	}
+
+	b.mu.Lock()
+	b.buffer = append(b.buffer, batchReq)
+	shouldFlush := len(b.buffer) >= b.batchSize
+	b.mu.Unlock()
+
+	if shouldFlush {
+		b.flush()
+	}
+
+	select {
+	case resp := <-responseCh:
+		return resp
+	case <-time.After(b.timeout):
+		b.mu.Lock()
+		for i, br := range b.buffer {
+			if br.ID == req.ID {
+				b.buffer = append(b.buffer[:i], b.buffer[i+1:]...)
+				break
+			}
+		}
+		b.mu.Unlock()
+		return &BatchResponse{ID: req.ID, Err: fmt.Errorf("timeout")}
+	}
+}
+
+func (b *BatchProcessor) flush() {
+	b.mu.Lock()
+	if len(b.buffer) == 0 {
+		b.mu.Unlock()
 		return
 	}
 
-	if len(ao.cache) >= ao.maxCacheSize {
-		ao.evictLRU()
-	}
+	batch := b.buffer
+	b.buffer = make([]*BatchRequest, 0, b.batchSize)
+	b.mu.Unlock()
 
-	ao.cache[key] = value
-	ao.accessCount[key] = 1
-	ao.lruList = append(ao.lruList, key)
+	go b.processBatch(batch)
 }
 
-func (ao *AlgorithmOptimizer) evictLRU() {
-	if len(ao.lruList) == 0 {
-		return
+func (b *BatchProcessor) processBatch(batch []*BatchRequest) {
+	for _, req := range batch {
+		resp := &BatchResponse{
+			ID:   req.ID,
+			Data: req.Data,
+		}
+		req.Response <- resp
+	}
+}
+
+func (b *BatchProcessor) runFlush(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-b.flushTicker.C:
+			b.flush()
+		}
+	}
+}
+
+func (p *ConnPool) Get(ctx context.Context) (*Conn, error) {
+	select {
+	case conn := <-p.conns:
+		atomic.AddInt32(&p.active, 1)
+		atomic.AddInt32(&p.idle, -1)
+		return conn, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		conn := &Conn{
+			ID:      int(atomic.AddInt64(&p.created, 1)),
+			Created: time.Now(),
+		}
+		atomic.AddInt32(&p.active, 1)
+		return conn, nil
+	}
+}
+
+func (p *ConnPool) Put(conn *Conn) {
+	conn.Busy.Store(false)
+	atomic.AddInt32(&p.active, -1)
+	atomic.AddInt32(&p.idle, 1)
+
+	select {
+	case p.conns <- conn:
+	default:
+	}
+}
+
+func (r *AdaptiveRateLimiter) Allow() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(r.lastRefill)
+	r.tokens += r.refillAmount * float64(elapsed)
+	r.lastRefill = now
+
+	if r.tokens > float64(r.burst) {
+		r.tokens = float64(r.burst)
 	}
 
-	key := ao.lruList[0]
-	ao.lruList = ao.lruList[1:]
-	delete(ao.cache, key)
-	delete(ao.accessCount, key)
+	if r.tokens >= 1 {
+		r.tokens--
+		return true
+	}
+
+	return false
+}
+
+func (o *QPSOptimizer) GetMetrics() map[string]interface{} {
+	return map[string]interface{}{
+		"total_requests":     o.metrics.TotalRequests.Load(),
+		"current_qps":       o.metrics.CurrentQPS.Load(),
+		"peak_qps":          o.metrics.PeakQPS.Load(),
+		"target_qps":        o.config.TargetQPS,
+		"avg_latency_ms":    o.metrics.AvgLatencyMs.Load(),
+		"p99_latency_ms":    o.metrics.P99LatencyMs.Load(),
+		"batch_hits":        o.metrics.BatchHits.Load(),
+		"batch_misses":      o.metrics.BatchMisses.Load(),
+		"dropped_requests":  o.metrics.DroppedRequests.Load(),
+		"throttled_requests": o.metrics.ThrottledRequests.Load(),
+		"last_update":        o.metrics.LastUpdate.Load(),
+	}
 }
