@@ -24,7 +24,7 @@ import (
 
 const (
 	whitelabelCacheKey = "whitelabel:config"
-	uploadsDir         = github.com/hjtpx/hjtpx/uploads"
+	uploadsDir         = "./uploads"
 	logoDir            = "logos"
 	defaultPrimary     = "#007bff"
 	defaultSuccess     = "#28a745"

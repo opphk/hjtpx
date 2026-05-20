@@ -41,7 +41,7 @@ type ProtectedHealthInformation struct {
 type PHIField struct {
 	FieldName     string   `json:"field_name"`
 	DataType      string   `json:"data_type"`
-	Is PHI        bool     `json:"is_phi"`
+	IsPHI         bool     `json:"is_phi"`
 	IsEncrypted   bool     `json:"is_encrypted"`
 	MaskingLevel  string   `json:"masking_level"`
 }

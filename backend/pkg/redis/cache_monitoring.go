@@ -32,6 +32,7 @@ type CacheMonitor struct {
 	alertThresholds *AlertThresholds
 	stopChan chan struct{}
 	mu sync.RWMutex
+	avgLatencyMu sync.Mutex
 }
 
 type AlertThresholds struct {
@@ -265,7 +266,9 @@ func (m *CacheMonitor) recordLatency(latencyMs int64) {
 	totalOps := atomic.LoadInt64(&m.metrics.TotalOperations)
 	if totalOps > 0 {
 		avgLatency := float64(atomic.LoadInt64(&m.metrics.TotalLatency)) / float64(totalOps)
-		atomic.StoreInt64(&m.metrics.AvgLatency, int64(avgLatency))
+		m.avgLatencyMu.Lock()
+		m.metrics.AvgLatency = avgLatency
+		m.avgLatencyMu.Unlock()
 	}
 
 	currentMin := atomic.LoadInt64(&m.metrics.MinLatency)
@@ -293,7 +296,9 @@ func (m *CacheMonitor) GetMetrics() *CacheMetrics {
 	metrics.ReadOperations = atomic.LoadInt64(&m.metrics.ReadOperations)
 	metrics.WriteOperations = atomic.LoadInt64(&m.metrics.WriteOperations)
 	metrics.DeleteOperations = atomic.LoadInt64(&m.metrics.DeleteOperations)
-	metrics.AvgLatency = float64(atomic.LoadInt64(&m.metrics.AvgLatency))
+	m.avgLatencyMu.Lock()
+	metrics.AvgLatency = m.metrics.AvgLatency
+	m.avgLatencyMu.Unlock()
 	metrics.MinLatency = atomic.LoadInt64(&m.metrics.MinLatency)
 	metrics.MaxLatency = atomic.LoadInt64(&m.metrics.MaxLatency)
 
@@ -324,150 +329,4 @@ func (m *CacheMonitor) ResetMetrics() {
 	}
 }
 
-type PerformanceOptimizer struct {
-	client *redis.Client
-	config *OptimizerConfig
-}
 
-type OptimizerConfig struct {
-	EnablePipeline       bool
-	PipelineSize        int
-	EnableCompression   bool
-	CompressionThreshold int
-	EnablePrefetch      bool
-	PrefetchKeys       []string
-}
-
-func NewPerformanceOptimizer(client *redis.Client, config *OptimizerConfig) *PerformanceOptimizer {
-	if config == nil {
-		config = &OptimizerConfig{
-			EnablePipeline:       true,
-			PipelineSize:        100,
-			EnableCompression:   true,
-			CompressionThreshold: 1024,
-			EnablePrefetch:      false,
-		}
-	}
-
-	return &PerformanceOptimizer{
-		client: client,
-		config: config,
-	}
-}
-
-func (o *PerformanceOptimizer) Optimize() error {
-	if err := o.optimizeMemory(); err != nil {
-		return fmt.Errorf("failed to optimize memory: %w", err)
-	}
-
-	if err := o.optimizeConnections(); err != nil {
-		return fmt.Errorf("failed to optimize connections: %w", err)
-	}
-
-	if err := o.cleanupExpiredKeys(); err != nil {
-		return fmt.Errorf("failed to cleanup expired keys: %w", err)
-	}
-
-	return nil
-}
-
-func (o *PerformanceOptimizer) optimizeMemory() error {
-	ctx := context.Background()
-
-	if _, err := o.client.ConfigSet(ctx, "maxmemory-policy", "allkeys-lru").Result(); err != nil {
-		return fmt.Errorf("failed to set memory policy: %w", err)
-	}
-
-	return nil
-}
-
-func (o *PerformanceOptimizer) optimizeConnections() error {
-	ctx := context.Background()
-
-	if _, err := o.client.ConfigSet(ctx, "tcp-keepalive", "300").Result(); err != nil {
-		log.Printf("Warning: failed to set tcp-keepalive: %v", err)
-	}
-
-	if _, err := o.client.ConfigSet(ctx, "timeout", "0").Result(); err != nil {
-		log.Printf("Warning: failed to set timeout: %v", err)
-	}
-
-	return nil
-}
-
-func (o *PerformanceOptimizer) cleanupExpiredKeys() error {
-	ctx := context.Background()
-
-	count, err := o.client.DBSize(ctx).Result()
-	if err != nil {
-		return err
-	}
-
-	if count > 100000 {
-		log.Printf("Large number of keys detected: %d", count)
-	}
-
-	return nil
-}
-
-func (o *PerformanceOptimizer) AnalyzeHotKeys(ctx context.Context) ([]string, error) {
-	var hotKeys []string
-
-	iter := o.client.Scan(ctx, 0, "*", 1000).Iterator()
-
-	count := 0
-	for iter.Next(ctx) {
-		count++
-		if count > 10000 {
-			break
-		}
-	}
-
-	if err := iter.Err(); err != nil {
-		return nil, err
-	}
-
-	return hotKeys, nil
-}
-
-func (o *PerformanceOptimizer) SuggestOptimizations(ctx context.Context) ([]string, error) {
-	var suggestions []string
-
-	info, err := o.client.Info(ctx, "memory").Result()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range splitLines(info) {
-		parts := splitKeyValue(line)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key, value := parts[0], parts[1]
-
-		if key == "used_memory_human" {
-			suggestions = append(suggestions, fmt.Sprintf("Current memory usage: %s", value))
-		}
-
-		if key == "mem_fragmentation_ratio" {
-			var ratio float64
-			fmt.Sscanf(value, "%f", &ratio)
-			if ratio > 1.5 {
-				suggestions = append(suggestions, "High memory fragmentation detected. Consider restarting Redis.")
-			}
-		}
-	}
-
-	stats, err := o.client.PoolStats().Result()
-	if err == nil {
-		if stats.Hits > 0 || stats.Misses > 0 {
-			hitRate := float64(stats.Hits) / float64(stats.Hits+stats.Misses) * 100
-			if hitRate < 50 {
-				suggestions = append(suggestions, fmt.Sprintf("Low hit rate: %.2f%%. Consider increasing cache size.", hitRate))
-			}
-		}
-	}
-
-	return suggestions, nil
-}

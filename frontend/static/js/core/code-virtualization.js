@@ -2,7 +2,7 @@
     'use strict';
 
     const CodeVirtualization = (function() {
-        const VERSION = '2.0.0';
+        const VERSION = '3.0.0';
         
         const OPCODES = {
             NOP: 0x00,
@@ -36,13 +36,32 @@
             ENCRYPT: 0x1C,
             DECRYPT: 0x1D,
             VALIDATE: 0x1E,
-            CHECKSUM: 0x1F
+            CHECKSUM: 0x1F,
+            STRING_LENGTH: 0x20,
+            STRING_CHAR_AT: 0x21,
+            STRING_CONCAT: 0x22,
+            STRING_EQUALS: 0x23,
+            ARRAY_CREATE: 0x24,
+            ARRAY_GET: 0x25,
+            ARRAY_SET: 0x26,
+            ARRAY_LENGTH: 0x27,
+            OBJECT_CREATE: 0x28,
+            OBJECT_GET: 0x29,
+            OBJECT_SET: 0x2A,
+            TIME_NOW: 0x2B,
+            TIME_SLEEP: 0x2C,
+            CONSOLE_LOG: 0x2D,
+            ERROR_THROW: 0x2E,
+            ASSERT: 0x2F
         };
 
         const _0xVM = {
             memory: new Uint32Array(4096),
             registers: new Uint32Array(8),
             stack: [],
+            stringTable: [],
+            arrayTable: [],
+            objectTable: [],
             ip: 0,
             sp: 0,
             running: false,
@@ -52,18 +71,73 @@
             code: [],
             handlers: {},
             secretKey: null,
-            checksum: null
+            checksum: null,
+            enableStringOps: true,
+            enableArrayOps: true,
+            enableTimeOps: true
         };
 
         function initVM() {
             _0xVM.memory.fill(0);
             _0xVM.registers.fill(0);
             _0xVM.stack = [];
+            _0xVM.stringTable = [];
+            _0xVM.arrayTable = [];
+            _0xVM.objectTable = [];
             _0xVM.ip = 0;
             _0xVM.sp = 0;
             _0xVM.running = false;
             _0xVM.instructionCount = 0;
             _0xVM.secretKey = generateSecretKey();
+        }
+
+        function resetVM() {
+            initVM();
+        }
+
+        function getVMStatus() {
+            return {
+                running: _0xVM.running,
+                instructionCount: _0xVM.instructionCount,
+                stackDepth: _0xVM.sp,
+                memoryUsed: _0xVM.memory.filter(v => v !== 0).length,
+                stringsCount: _0xVM.stringTable.length,
+                arraysCount: _0xVM.arrayTable.length,
+                objectsCount: _0xVM.objectTable.length,
+                maxInstructions: _0xVM.maxInstructions
+            };
+        }
+
+        function setMaxInstructions(max) {
+            if (typeof max === 'number' && max > 0) {
+                _0xVM.maxInstructions = max;
+                return true;
+            }
+            return false;
+        }
+
+        function enableStringOperations(enabled) {
+            _0xVM.enableStringOps = enabled;
+        }
+
+        function enableArrayOperations(enabled) {
+            _0xVM.enableArrayOps = enabled;
+        }
+
+        function enableTimeOperations(enabled) {
+            _0xVM.enableTimeOps = enabled;
+        }
+
+        function addBreakpoint(address) {
+            _0xVM.breakpoints.add(address);
+        }
+
+        function removeBreakpoint(address) {
+            _0xVM.breakpoints.delete(address);
+        }
+
+        function clearBreakpoints() {
+            _0xVM.breakpoints.clear();
         }
 
         function generateSecretKey() {
@@ -307,6 +381,123 @@
                     }
                     break;
                     
+                case OPCODES.STRING_LENGTH:
+                    if (_0xVM.sp > 0) {
+                        const strIdx = _0xVM.stack.pop();
+                        _0xVM.sp--;
+                        if (strIdx >= 0 && strIdx < _0xVM.stringTable.length) {
+                            _0xVM.stack.push(_0xVM.stringTable[strIdx].length);
+                            _0xVM.sp++;
+                        } else {
+                            _0xVM.stack.push(0);
+                            _0xVM.sp++;
+                        }
+                    }
+                    break;
+                    
+                case OPCODES.STRING_CHAR_AT:
+                    if (_0xVM.sp >= 2) {
+                        const idx = _0xVM.stack.pop();
+                        const strIdx = _0xVM.stack.pop();
+                        _0xVM.sp -= 2;
+                        if (strIdx >= 0 && strIdx < _0xVM.stringTable.length) {
+                            const str = _0xVM.stringTable[strIdx];
+                            _0xVM.stack.push(idx >= 0 && idx < str.length ? str.charCodeAt(idx) : 0);
+                            _0xVM.sp++;
+                        } else {
+                            _0xVM.stack.push(0);
+                            _0xVM.sp++;
+                        }
+                    }
+                    break;
+                    
+                case OPCODES.STRING_CONCAT:
+                    if (_0xVM.sp >= 2) {
+                        const str2 = _0xVM.stack.pop();
+                        const str1 = _0xVM.stack.pop();
+                        _0xVM.sp -= 2;
+                        _0xVM.stringTable.push(String(str1) + String(str2));
+                        _0xVM.stack.push(_0xVM.stringTable.length - 1);
+                        _0xVM.sp++;
+                    }
+                    break;
+                    
+                case OPCODES.ARRAY_CREATE:
+                    const arrSize = args[0] || 0;
+                    _0xVM.arrayTable.push(new Array(arrSize).fill(0));
+                    _0xVM.stack.push(_0xVM.arrayTable.length - 1);
+                    _0xVM.sp++;
+                    break;
+                    
+                case OPCODES.ARRAY_GET:
+                    if (_0xVM.sp >= 2) {
+                        const arrIdx = _0xVM.stack.pop();
+                        const index = _0xVM.stack.pop();
+                        _0xVM.sp -= 2;
+                        if (arrIdx >= 0 && arrIdx < _0xVM.arrayTable.length) {
+                            const arr = _0xVM.arrayTable[arrIdx];
+                            _0xVM.stack.push(index >= 0 && index < arr.length ? arr[index] : 0);
+                            _0xVM.sp++;
+                        } else {
+                            _0xVM.stack.push(0);
+                            _0xVM.sp++;
+                        }
+                    }
+                    break;
+                    
+                case OPCODES.ARRAY_SET:
+                    if (_0xVM.sp >= 3) {
+                        const value = _0xVM.stack.pop();
+                        const index = _0xVM.stack.pop();
+                        const arrIdx = _0xVM.stack.pop();
+                        _0xVM.sp -= 3;
+                        if (arrIdx >= 0 && arrIdx < _0xVM.arrayTable.length) {
+                            _0xVM.arrayTable[arrIdx][index] = value;
+                        }
+                    }
+                    break;
+                    
+                case OPCODES.ARRAY_LENGTH:
+                    if (_0xVM.sp > 0) {
+                        const arrIdx = _0xVM.stack.pop();
+                        _0xVM.sp--;
+                        if (arrIdx >= 0 && arrIdx < _0xVM.arrayTable.length) {
+                            _0xVM.stack.push(_0xVM.arrayTable[arrIdx].length);
+                            _0xVM.sp++;
+                        } else {
+                            _0xVM.stack.push(0);
+                            _0xVM.sp++;
+                        }
+                    }
+                    break;
+                    
+                case OPCODES.TIME_NOW:
+                    _0xVM.stack.push(Date.now());
+                    _0xVM.sp++;
+                    break;
+                    
+                case OPCODES.CONSOLE_LOG:
+                    if (_0xVM.sp > 0) {
+                        const msg = _0xVM.stack.pop();
+                        _0xVM.sp--;
+                        console.log('[VM]', msg);
+                    }
+                    break;
+                    
+                case OPCODES.ERROR_THROW:
+                    const errorMsg = args[0] || 'Unknown error';
+                    throw new Error(errorMsg);
+                    
+                case OPCODES.ASSERT:
+                    if (_0xVM.sp > 0) {
+                        const condition = _0xVM.stack.pop();
+                        _0xVM.sp--;
+                        if (!condition) {
+                            throw new Error('Assertion failed');
+                        }
+                    }
+                    break;
+                    
                 case OPCODES.HALT:
                     _0xVM.running = false;
                     break;
@@ -440,7 +631,16 @@
             generateVirtualizedCode: generateVirtualizedCode,
             protectFunction: protectFunction,
             getStatus: getStatus,
-            initVM: initVM
+            initVM: initVM,
+            resetVM: resetVM,
+            getVMStatus: getVMStatus,
+            setMaxInstructions: setMaxInstructions,
+            enableStringOperations: enableStringOperations,
+            enableArrayOperations: enableArrayOperations,
+            enableTimeOperations: enableTimeOperations,
+            addBreakpoint: addBreakpoint,
+            removeBreakpoint: removeBreakpoint,
+            clearBreakpoints: clearBreakpoints
         };
     })();
 

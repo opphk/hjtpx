@@ -1,8 +1,6 @@
 package performance
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestLSTMFeatureExtractor_ExtractFeaturesAIBehavior(t *testing.T) {

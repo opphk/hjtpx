@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/testing/chaos"
-	github.com/hjtpx/hjtpx/internal/testing/coverage"
-	github.com/hjtpx/hjtpx/internal/testing/fuzzing"
-	github.com/hjtpx/hjtpx/internal/testing/pentest"
+	"github.com/hjtpx/hjtpx/internal/testing/chaos"
+	"github.com/hjtpx/hjtpx/internal/testing/coverage"
+	"github.com/hjtpx/hjtpx/internal/testing/fuzzing"
+	"github.com/hjtpx/hjtpx/internal/testing/pentest"
 )
 
 type TestSuiteResult struct {

@@ -258,7 +258,7 @@ func LoadConfig() *Config {
 		},
 		Backup: BackupConfig{
 			Enabled:                 getEnvAsBool("BACKUP_ENABLED", true),
-			BackupDir:               getEnv("BACKUP_DIR", github.com/hjtpx/hjtpx/backups"),
+			BackupDir:               getEnv("BACKUP_DIR", "github.com/hjtpx/hjtpx/backups"),
 			AutoBackupEnabled:       getEnvAsBool("BACKUP_AUTO_ENABLED", true),
 			AutoBackupIntervalHours: getEnvAsInt("BACKUP_AUTO_INTERVAL_HOURS", 24),
 			IncrementalEnabled:      getEnvAsBool("BACKUP_INCREMENTAL_ENABLED", true),

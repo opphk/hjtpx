@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/pkg/logger"
+	"github.com/hjtpx/hjtpx/internal/pkg/logger"
 )
 
 var (

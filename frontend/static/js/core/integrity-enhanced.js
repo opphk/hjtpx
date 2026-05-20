@@ -2,7 +2,7 @@
     'use strict';
 
     const IntegrityEnhanced = (function() {
-        const VERSION = '4.0.0';
+        const VERSION = '5.0.0';
         
         const _0xIE = {
             hashes: {},
@@ -17,7 +17,11 @@
             crc32Initialized: false,
             lastCheckTime: 0,
             integrityViolations: 0,
-            maxViolations: 3
+            maxViolations: 3,
+            verificationMode: 'strict',
+            enableMultiHash: true,
+            enableWatermark: true,
+            watermarkPattern: null
         };
 
         function initCRC32() {
@@ -120,6 +124,36 @@
             return [a, b, c, d].map(v => (v >>> 0).toString(16).padStart(8, '0')).join('');
         }
 
+        async function computeSHA1(data) {
+            const encoder = new TextEncoder();
+            const dataBuffer = typeof data === 'string' ? encoder.encode(data) : data;
+            const hashBuffer = await crypto.subtle.digest('SHA-1', dataBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function computeFNV1a(data) {
+            let hash = 0x811C9DC5;
+            const fnvPrime = 0x1000193;
+            
+            for (let i = 0; i < data.length; i++) {
+                hash ^= data.charCodeAt(i);
+                hash = (hash * fnvPrime) >>> 0;
+                hash = hash >>> 0;
+            }
+            
+            return hash.toString(16).padStart(8, '0');
+        }
+
+        function computeAdler32(data) {
+            let a = 1, b = 0;
+            for (let i = 0; i < data.length; i++) {
+                a = (a + data.charCodeAt(i)) % 65521;
+                b = (b + a) % 65521;
+            }
+            return ((b << 16) | a) >>> 0;
+        }
+
         function generateSalt() {
             const array = new Uint8Array(16);
             crypto.getRandomValues(array);
@@ -131,12 +165,18 @@
             const sha256 = await computeSHA256(data);
             const sha512 = await computeSHA512(data);
             const md5 = computeMD5(data);
+            const sha1 = await computeSHA1(data);
+            const fnv1a = computeFNV1a(data);
+            const adler32 = computeAdler32(data).toString(16).padStart(8, '0');
             
             return {
                 crc32: crc32,
+                sha1: sha1,
                 sha256: sha256,
                 sha512: sha512,
                 md5: md5,
+                fnv1a: fnv1a,
+                adler32: adler32,
                 combined: crc32 + sha256.slice(0, 16) + md5.slice(0, 16),
                 timestamp: Date.now()
             };
@@ -168,13 +208,61 @@
                 marker.setAttribute('data-h', _0xIE.hashes.sha256);
                 marker.setAttribute('data-c', _0xIE.hashes.crc32);
                 marker.setAttribute('data-s', _0xIE.salt);
+                marker.setAttribute('data-sha1', _0xIE.hashes.sha1 || '');
+                marker.setAttribute('data-fnv', _0xIE.hashes.fnv1a || '');
                 document.body.appendChild(marker);
                 _0xIE.markers.push(marker.id);
+            }
+            
+            if (_0xIE.enableWatermark) {
+                createWatermark();
+            }
+        }
+
+        function createWatermark() {
+            const watermark = document.createElement('div');
+            watermark.id = '_0xIE_watermark';
+            watermark.style.display = 'none';
+            
+            const watermarkData = {
+                timestamp: Date.now(),
+                hash: _0xIE.hashes.sha256,
+                salt: _0xIE.salt,
+                version: VERSION
+            };
+            
+            watermark.setAttribute('data-w', btoa(JSON.stringify(watermarkData)));
+            document.body.appendChild(watermark);
+            _0xIE.markers.push(watermark.id);
+        }
+
+        function verifyWatermark() {
+            const watermark = document.getElementById('_0xIE_watermark');
+            if (!watermark) {
+                return { valid: false, reason: 'Watermark missing' };
+            }
+            
+            try {
+                const watermarkData = JSON.parse(atob(watermark.getAttribute('data-w')));
+                
+                if (watermarkData.hash !== _0xIE.hashes.sha256) {
+                    return { valid: false, reason: 'Watermark hash mismatch' };
+                }
+                
+                if (watermarkData.salt !== _0xIE.salt) {
+                    return { valid: false, reason: 'Watermark salt mismatch' };
+                }
+                
+                return { valid: true, reason: 'Watermark verified' };
+            } catch (e) {
+                return { valid: false, reason: 'Watermark decoding failed' };
             }
         }
 
         function verifyDOMMarkers() {
             for (const markerId of _0xIE.markers) {
+                if (markerId === '_0xIE_watermark') continue;
+                
                 const el = document.getElementById(markerId);
                 if (!el) {
                     return { valid: false, reason: 'Marker missing: ' + markerId };
@@ -187,6 +275,9 @@
                 }
                 if (el.getAttribute('data-s') !== _0xIE.salt) {
                     return { valid: false, reason: 'Marker salt mismatch: ' + markerId };
+                }
+                if (_0xIE.hashes.sha1 && el.getAttribute('data-sha1') !== _0xIE.hashes.sha1) {
+                    return { valid: false, reason: 'Marker SHA1 mismatch: ' + markerId };
                 }
             }
             return { valid: true, reason: 'All markers verified' };
@@ -257,6 +348,14 @@
                 return { status: 'marker_failure', valid: false, reason: markerResult.reason };
             }
 
+            if (_0xIE.enableWatermark) {
+                const watermarkResult = verifyWatermark();
+                if (!watermarkResult.valid) {
+                    _0xIE.integrityViolations++;
+                    return { status: 'watermark_failure', valid: false, reason: watermarkResult.reason };
+                }
+            }
+
             const timingResult = verifyTimingConsistency();
             if (!timingResult.valid) {
                 _0xIE.integrityViolations++;
@@ -276,6 +375,18 @@
             }
 
             return { status: 'success', valid: true, checkCount: _0xIE.checkCount };
+        }
+
+        function setVerificationMode(mode) {
+            if (['strict', 'relaxed', 'minimal'].includes(mode)) {
+                _0xIE.verificationMode = mode;
+                return true;
+            }
+            return false;
+        }
+
+        function setWatermarkEnabled(enabled) {
+            _0xIE.enableWatermark = enabled;
         }
 
         function handleIntegrityFailure(reason) {
@@ -381,11 +492,17 @@
             computeSHA256: computeSHA256,
             computeSHA512: computeSHA512,
             computeMD5: computeMD5,
+            computeSHA1: computeSHA1,
+            computeFNV1a: computeFNV1a,
+            computeAdler32: computeAdler32,
             computeMultipleHashes: computeMultipleHashes,
             generateSignature: generateSignature,
             verifySignature: verifySignature,
             verifyCodeHash: verifyCodeHash,
-            performIntegrityCheck: performIntegrityCheck
+            performIntegrityCheck: performIntegrityCheck,
+            setVerificationMode: setVerificationMode,
+            setWatermarkEnabled: setWatermarkEnabled,
+            verifyWatermark: verifyWatermark
         };
     })();
 

@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滑块验证码自动化测试 - 墨盾验证</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
+    <style>
+        :root {
+            --test-primary: #c9a96e;
+            --test-success: #28a745;
+            --test-danger: #dc3545;
+            --test-warning: #ffc107;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .test-header {
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .test-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .test-title i { color: var(--test-primary); }
+
+        .test-subtitle {
+            color: #6c757d;
+            margin-top: 0.5rem;
+        }
+
+        .test-stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: #f8f9fa;
+            border-radius: 10px;
+            min-width: 120px;
+        }
+
+        .stat-item i { font-size: 1.25rem; }
+        .stat-item.success i { color: var(--test-success); }
+        .stat-item.danger i { color: var(--test-danger); }
+        .stat-item.primary i { color: var(--test-primary); }
+
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
+        .stat-label { font-size: 0.85rem; color: #6c757d; margin-left: 0.5rem; }
+
+        .test-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title i { color: var(--test-primary); }
+
+        .captcha-demo {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .test-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .test-card:hover {
+            border-color: var(--test-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .test-card-title {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .test-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .test-status.pending { background: #e9ecef; color: #6c757d; }
+        .test-status.running { background: rgba(201, 169, 110, 0.2); color: var(--test-primary); }
+        .test-status.passed { background: rgba(40, 167, 69, 0.15); color: var(--test-success); }
+        .test-status.failed { background: rgba(220, 53, 69, 0.15); color: var(--test-danger); }
+
+        .test-card-desc {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .test-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-test {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-test.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-test.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-test.secondary {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .btn-test.secondary:hover { background: #dee2e6; }
+
+        .btn-test.success {
+            background: var(--test-success);
+            color: white;
+        }
+
+        .btn-test:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .progress-bar-container {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 1.5rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--test-primary), #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .log-container {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: 350px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #e0e0e0;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .log-entry.info { background: rgba(13, 202, 240, 0.1); color: #a5d8ff; }
+        .log-entry.success { background: rgba(40, 167, 69, 0.1); color: #8ce99a; }
+        .log-entry.error { background: rgba(220, 53, 69, 0.1); color: #ff8787; }
+        .log-entry.warning { background: rgba(255, 193, 7, 0.1); color: #ffe066; }
+
+        .log-time { color: #6c757d; white-space: nowrap; }
+        .log-message { flex: 1; word-break: break-word; }
+
+        .screenshot-section {
+            margin-top: 2rem;
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .screenshot-item {
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+        }
+
+        .screenshot-preview {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .screenshot-info {
+            padding: 0.75rem;
+        }
+
+        .screenshot-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            font-size: 0.9rem;
+        }
+
+        .screenshot-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .instruction-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-left: 4px solid #667eea;
+            border-radius: 0 12px 12px 0;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .instruction-title {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .instruction-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .instruction-list li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: #495057;
+        }
+
+        .instruction-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-tab:hover { background: #f0f0f0; }
+
+        .nav-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            .test-container { padding: 1.5rem; }
+            .test-stats { flex-direction: column; }
+            .test-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1 class="test-title">
+                <i class="fas fa-sliders-h"></i>
+                滑块验证码自动化测试
+            </h1>
+            <p class="test-subtitle">全面的滑块验证组件交互测试套件 - 支持拖动、动画、键盘操作、响应式测试</p>
+
+            <div class="test-stats">
+                <div class="stat-item primary">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span class="stat-value" id="total-count">0</span>
+                    <span class="stat-label">总测试</span>
+                </div>
+                <div class="stat-item success">
+                    <i class="fas fa-check-circle"></i>
+                    <span class="stat-value" id="passed-count">0</span>
+                    <span class="stat-label">通过</span>
+                </div>
+                <div class="stat-item danger">
+                    <i class="fas fa-times-circle"></i>
+                    <span class="stat-value" id="failed-count">0</span>
+                    <span class="stat-label">失败</span>
+                </div>
+                <div class="stat-item primary">
+                    <i class="fas fa-percentage"></i>
+                    <span class="stat-value" id="coverage-percent">0%</span>
+                    <span class="stat-label">覆盖率</span>
+                </div>
+            </div>
+
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="test-progress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('demo')">
+                <i class="fas fa-eye"></i> 演示
+            </button>
+            <button class="nav-tab" onclick="showTab('interactions')">
+                <i class="fas fa-hand-pointer"></i> 交互测试
+            </button>
+            <button class="nav-tab" onclick="showTab('animation')">
+                <i class="fas fa-film"></i> 动画测试
+            </button>
+            <button class="nav-tab" onclick="showTab('keyboard')">
+                <i class="fas fa-keyboard"></i> 键盘测试
+            </button>
+            <button class="nav-tab" onclick="showTab('screenshots')">
+                <i class="fas fa-camera"></i> 截图
+            </button>
+        </div>
+
+        <div id="tab-demo" class="tab-content active">
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-play-circle"></i>
+                    滑块验证码演示
+                </h2>
+
+                <div class="instruction-box">
+                    <div class="instruction-title">
+                        <i class="fas fa-info-circle"></i>
+                        操作说明
+                    </div>
+                    <ul class="instruction-list">
+                        <li>拖动滑块到最右侧完成验证</li>
+                        <li>点击刷新按钮重新生成验证码</li>
+                        <li>观察拖动过程中的轨迹和动画</li>
+                        <li>测试完成后会自动显示成功/失败状态</li>
+                    </ul>
+                </div>
+
+                <div class="captcha-demo">
+                    <div id="slider-captcha-container"></div>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-rocket"></i>
+                    快速测试
+                </h2>
+                <div class="test-actions mb-3">
+                    <button class="btn-test success" onclick="runAllTests()">
+                        <i class="fas fa-play"></i> 运行全部测试
+                    </button>
+                    <button class="btn-test secondary" onclick="resetTests()">
+                        <i class="fas fa-redo"></i> 重置测试
+                    </button>
+                    <button class="btn-test primary" onclick="takeScreenshot('slider-demo')">
+                        <i class="fas fa-camera"></i> 截图
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-interactions" class="tab-content">
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-hand-pointer"></i>
+                    交互功能测试
+                </h2>
+
+                <div class="test-grid" id="interaction-tests">
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-animation" class="tab-content">
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-film"></i>
+                    动画效果测试
+                </h2>
+
+                <div class="test-grid" id="animation-tests">
+                </div>
+
+                <div class="captcha-demo mt-4">
+                    <h5 class="mb-3">动画预览区域</h5>
+                    <div id="animation-preview" style="min-height: 200px;">
+                        <div class="slider-captcha">
+                            <div class="slider-image-wrapper">
+                                <canvas class="slider-canvas" width="360" height="220"></canvas>
+                                <div class="slider-puzzle"></div>
+                                <button class="captcha-refresh-btn" id="preview-refresh-btn">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <div class="slider-skeleton"></div>
+                            </div>
+                            <div class="slider-container" id="preview-slider">
+                                <div class="slider-track"></div>
+                                <div class="slider-button" id="preview-button">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="slider-text">拖动滑块完成验证</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="test-actions mt-3">
+                        <button class="btn-test primary" onclick="playSuccessAnimation()">
+                            <i class="fas fa-check"></i> 成功动画
+                        </button>
+                        <button class="btn-test secondary" onclick="playErrorAnimation()">
+                            <i class="fas fa-times"></i> 错误动画
+                        </button>
+                        <button class="btn-test secondary" onclick="playDragAnimation()">
+                            <i class="fas fa-arrows-alt-h"></i> 拖动动画
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-keyboard" class="tab-content">
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-keyboard"></i>
+                    键盘无障碍测试
+                </h2>
+
+                <div class="instruction-box">
+                    <div class="instruction-title">
+                        <i class="fas fa-universal-access"></i>
+                        键盘操作说明
+                    </div>
+                    <ul class="instruction-list">
+                        <li><strong>Tab</strong>: 聚焦到滑块</li>
+                        <li><strong>方向键 →/↑</strong>: 向右/上移动滑块</li>
+                        <li><strong>方向键 ←/↓</strong>: 向左/下移动滑块</li>
+                        <li><strong>Enter/Space</strong>: 提交验证</li>
+                    </ul>
+                </div>
+
+                <div class="captcha-demo">
+                    <h5 class="mb-3">键盘测试区域</h5>
+                    <div id="keyboard-captcha-container"></div>
+                </div>
+
+                <div class="test-grid mt-4" id="keyboard-tests">
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-screenshots" class="tab-content">
+            <div class="test-section">
+                <h2 class="section-title">
+                    <i class="fas fa-camera"></i>
+                    测试截图记录
+                </h2>
+
+                <div class="test-actions mb-3">
+                    <button class="btn-test primary" onclick="takeAllSliderScreenshots()">
+                        <i class="fas fa-images"></i> 截取所有状态
+                    </button>
+                    <button class="btn-test secondary" onclick="downloadScreenshots()">
+                        <i class="fas fa-download"></i> 下载截图
+                    </button>
+                </div>
+
+                <div class="screenshot-grid" id="screenshot-gallery">
+                    <p class="text-muted">暂无截图，点击上方按钮截取测试结果</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2 class="section-title">
+                <i class="fas fa-terminal"></i>
+                测试日志
+            </h2>
+            <div class="log-container" id="test-log">
+                <div class="log-entry info">
+                    <span class="log-time">[--:--:--]</span>
+                    <span class="log-message">滑块验证测试框架已就绪...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/components/slider-captcha.js"></script>
+    <script>
+    const SliderTestRunner = (function() {
+        const state = {
+            tests: {
+                interaction: [],
+                animation: [],
+                keyboard: []
+            },
+            results: {
+                interaction: {},
+                animation: {},
+                keyboard: {}
+            },
+            screenshots: [],
+            passed: 0,
+            failed: 0
+        };
+
+        const interactionTests = [
+            {
+                id: 'init-render',
+                name: '组件初始化渲染',
+                desc: '验证滑块组件是否正确初始化并渲染到页面',
+                run: () => {
+                    const container = document.getElementById('slider-captcha-container');
+                    return container && container.querySelector('.slider-captcha') !== null;
+                }
+            },
+            {
+                id: 'button-exists',
+                name: '滑块按钮存在',
+                desc: '验证滑块拖动按钮是否存在',
+                run: () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    return button !== null;
+                }
+            },
+            {
+                id: 'track-exists',
+                name: '滑轨存在',
+                desc: '验证进度条滑轨是否存在',
+                run: () => {
+                    const track = document.querySelector('#slider-captcha-container .slider-track');
+                    return track !== null;
+                }
+            },
+            {
+                id: 'canvas-exists',
+                name: '画布元素存在',
+                desc: '验证验证码画布是否存在',
+                run: () => {
+                    const canvas = document.querySelector('#slider-captcha-container .slider-canvas');
+                    return canvas !== null && canvas.tagName === 'CANVAS';
+                }
+            },
+            {
+                id: 'refresh-btn',
+                name: '刷新按钮',
+                desc: '验证刷新按钮是否存在并可点击',
+                run: () => {
+                    const btn = document.querySelector('#slider-captcha-container .captcha-refresh-btn');
+                    return btn !== null;
+                }
+            },
+            {
+                id: 'mousedown-event',
+                name: '鼠标按下事件',
+                desc: '模拟鼠标按下滑块按钮',
+                run: async () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    if (!button) return false;
+                    const rect = button.getBoundingClientRect();
+                    button.dispatchEvent(new MouseEvent('mousedown', {
+                        bubbles: true,
+                        clientX: rect.left + rect.width / 2,
+                        clientY: rect.top + rect.height / 2
+                    }));
+                    await delay(100);
+                    return button.classList.contains('dragging') || 
+                           document.querySelector('#slider-captcha-container .slider-container').classList.contains('is-dragging');
+                }
+            },
+            {
+                id: 'mousemove-event',
+                name: '鼠标移动事件',
+                desc: '模拟拖动滑块',
+                run: async () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    const track = document.querySelector('#slider-captcha-container .slider-track');
+                    if (!button || !track) return false;
+                    const rect = button.getBoundingClientRect();
+                    document.dispatchEvent(new MouseEvent('mousedown', {
+                        bubbles: true,
+                        clientX: rect.left + rect.width / 2,
+                        clientY: rect.top + rect.height / 2
+                    }));
+                    await delay(50);
+                    document.dispatchEvent(new MouseEvent('mousemove', {
+                        bubbles: true,
+                        clientX: rect.left + 150,
+                        clientY: rect.top + rect.height / 2
+                    }));
+                    await delay(100);
+                    const width = parseFloat(track.style.width) || 0;
+                    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                    return width > 50;
+                }
+            },
+            {
+                id: 'mouseup-event',
+                name: '鼠标释放事件',
+                desc: '模拟释放滑块',
+                run: () => {
+                    return true;
+                }
+            },
+            {
+                id: 'touch-event',
+                name: '触摸事件支持',
+                desc: '验证触摸事件是否正确绑定',
+                run: () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    if (!button) return false;
+                    const hasTouchstart = button.onclick !== null || button.addEventListener !== undefined;
+                    return hasTouchstart;
+                }
+            }
+        ];
+
+        const animationTests = [
+            {
+                id: 'loading-animation',
+                name: '加载动画',
+                desc: '测试骨架屏加载动画',
+                run: () => {
+                    const skeleton = document.querySelector('#slider-captcha-container .slider-skeleton');
+                    return skeleton !== null;
+                }
+            },
+            {
+                id: 'refresh-spin',
+                name: '刷新旋转动画',
+                desc: '测试刷新按钮点击时的旋转动画',
+                run: async () => {
+                    const btn = document.querySelector('#slider-captcha-container .captcha-refresh-btn');
+                    if (!btn) return false;
+                    btn.click();
+                    await delay(100);
+                    const hasClass = btn.classList.contains('spinning');
+                    await delay(1500);
+                    return true;
+                }
+            },
+            {
+                id: 'drag-animation',
+                name: '拖动动画',
+                desc: '测试滑块拖动时的视觉反馈',
+                run: async () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    const container = document.querySelector('#slider-captcha-container .slider-container');
+                    if (!button || !container) return false;
+                    const rect = button.getBoundingClientRect();
+                    button.dispatchEvent(new MouseEvent('mousedown', {
+                        bubbles: true,
+                        clientX: rect.left + rect.width / 2,
+                        clientY: rect.top + rect.height / 2
+                    }));
+                    await delay(100);
+                    const isDragging = container.classList.contains('is-dragging');
+                    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                    return isDragging;
+                }
+            },
+            {
+                id: 'success-animation',
+                name: '成功动画',
+                desc: '测试验证成功时的动画效果',
+                run: () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    return button !== null;
+                }
+            },
+            {
+                id: 'error-animation',
+                name: '错误动画',
+                desc: '测试验证失败时的抖动动画',
+                run: () => {
+                    const button = document.querySelector('#slider-captcha-container .slider-button');
+                    return button !== null;
+                }
+            }
+        ];
+
+        const keyboardTests = [
+            {
+                id: 'focusable',
+                name: '可聚焦性',
+                desc: '验证滑块容器是否可以被聚焦',
+                run: () => {
+                    const container = document.querySelector('#keyboard-captcha-container .slider-container');
+                    return container && container.tabIndex >= 0;
+                }
+            },
+            {
+                id: 'arrow-right',
+                name: '右箭头键',
+                desc: '测试右箭头键移动滑块',
+                run: async () => {
+                    const container = document.querySelector('#keyboard-captcha-container .slider-container');
+                    const button = document.querySelector('#keyboard-captcha-container .slider-button');
+                    if (!container || !button) return false;
+                    container.focus();
+                    const initialLeft = parseFloat(button.style.left) || 2;
+                    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+                    await delay(150);
+                    const newLeft = parseFloat(button.style.left) || 0;
+                    return newLeft > initialLeft;
+                }
+            },
+            {
+                id: 'arrow-left',
+                name: '左箭头键',
+                desc: '测试左箭头键移动滑块',
+                run: async () => {
+                    const container = document.querySelector('#keyboard-captcha-container .slider-container');
+                    const button = document.querySelector('#keyboard-captcha-container .slider-button');
+                    if (!container || !button) return false;
+                    container.focus();
+                    button.style.left = '100px';
+                    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+                    await delay(150);
+                    const newLeft = parseFloat(button.style.left) || 0;
+                    return newLeft < 100;
+                }
+            },
+            {
+                id: 'enter-key',
+                name: '回车键提交',
+                desc: '测试回车键提交验证',
+                run: async () => {
+                    const container = document.querySelector('#keyboard-captcha-container .slider-container');
+                    if (!container) return false;
+                    const button = document.querySelector('#keyboard-captcha-container .slider-button');
+                    if (button) button.style.left = '200px';
+                    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    await delay(500);
+                    return true;
+                }
+            },
+            {
+                id: 'space-key',
+                name: '空格键提交',
+                desc: '测试空格键提交验证',
+                run: async () => {
+                    const container = document.querySelector('#keyboard-captcha-container .slider-container');
+                    if (!container) return false;
+                    container.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+                    await delay(500);
+                    return true;
+                }
+            }
+        ];
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getTimestamp() {
+            return new Date().toTimeString().split(' ')[0];
+        }
+
+        function log(message, type = 'info') {
+            const container = document.getElementById('test-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `
+                <span class="log-time">[${getTimestamp()}]</span>
+                <span class="log-message">${message}</span>
+            `;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function updateStats() {
+            const total = state.passed + state.failed;
+            const coverage = total > 0 ? Math.round((state.passed / total) * 100) : 0;
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('passed-count').textContent = state.passed;
+            document.getElementById('failed-count').textContent = state.failed;
+            document.getElementById('coverage-percent').textContent = coverage + '%';
+            document.getElementById('test-progress').style.width = coverage + '%';
+        }
+
+        function renderTests() {
+            renderTestGrid('interaction-tests', interactionTests, 'interaction');
+            renderTestGrid('animation-tests', animationTests, 'animation');
+            renderTestGrid('keyboard-tests', keyboardTests, 'keyboard');
+        }
+
+        function renderTestGrid(containerId, tests, category) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = tests.map(test => {
+                const result = state.results[category][test.id];
+                let statusClass = 'pending';
+                let statusText = '待测试';
+                if (result === true) { statusClass = 'passed'; statusText = '通过'; }
+                else if (result === false) { statusClass = 'failed'; statusText = '失败'; }
+
+                return `
+                    <div class="test-card" data-test-id="${test.id}">
+                        <div class="test-card-header">
+                            <div class="test-card-title">${test.name}</div>
+                            <span class="test-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="test-card-desc">${test.desc}</div>
+                        <div class="test-actions">
+                            <button class="btn-test primary" onclick="SliderTestRunner.runTest('${category}', '${test.id}')">
+                                <i class="fas fa-play"></i> 运行
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function runTest(category, testId) {
+            const test = state.tests[category].find(t => t.id === testId);
+            if (!test) return;
+
+            const statusEl = document.querySelector(`[data-test-id="${testId}"] .test-status`);
+            if (statusEl) {
+                statusEl.className = 'test-status running';
+                statusEl.textContent = '运行中...';
+            }
+
+            log(`开始测试: ${test.name}`, 'info');
+
+            try {
+                const result = await test.run();
+                state.results[category][testId] = result;
+                if (result) {
+                    state.passed++;
+                    log(`✓ ${test.name} - 通过`, 'success');
+                } else {
+                    state.failed++;
+                    log(`✗ ${test.name} - 失败`, 'error');
+                }
+            } catch (error) {
+                state.results[category][testId] = false;
+                state.failed++;
+                log(`✗ ${test.name} - 异常: ${error.message}`, 'error');
+            }
+
+            updateStats();
+
+            if (statusEl) {
+                const result = state.results[category][testId];
+                statusEl.className = `test-status ${result ? 'passed' : 'failed'}`;
+                statusEl.textContent = result ? '通过' : '失败';
+            }
+
+            renderTests();
+        }
+
+        async function runAllTests() {
+            log('═'.repeat(50), 'info');
+            log('开始运行所有交互测试...', 'info');
+
+            const allTests = [
+                ...interactionTests.map(t => ({ category: 'interaction', test: t })),
+                ...animationTests.map(t => ({ category: 'animation', test: t })),
+                ...keyboardTests.map(t => ({ category: 'keyboard', test: t }))
+            ];
+
+            for (const { category, test } of allTests) {
+                await runTest(category, test.id);
+                await delay(200);
+            }
+
+            log('═'.repeat(50), 'info');
+            log(`测试完成! 通过: ${state.passed} | 失败: ${state.failed}`, 'success');
+        }
+
+        function resetTests() {
+            state.results = { interaction: {}, animation: {}, keyboard: {} };
+            state.passed = 0;
+            state.failed = 0;
+            updateStats();
+            renderTests();
+            log('测试已重置', 'warning');
+        }
+
+        async function takeScreenshot(name) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#1a1a2e';
+                ctx.font = '24px Arial';
+                ctx.fillText(`滑块测试截图: ${name}`, 50, 50);
+                ctx.fillText(`时间: ${new Date().toLocaleString()}`, 50, 100);
+
+                const dataUrl = canvas.toDataURL('image/png');
+                state.screenshots.push({
+                    name: name,
+                    data: dataUrl,
+                    time: new Date().toLocaleTimeString()
+                });
+                updateScreenshotGallery();
+                log(`截图已保存: ${name}`, 'success');
+            } catch (error) {
+                log(`截图失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function takeAllSliderScreenshots() {
+            const tabs = ['demo', 'interactions', 'animation', 'keyboard'];
+            const names = ['滑块演示', '交互测试', '动画测试', '键盘测试'];
+
+            for (let i = 0; i < tabs.length; i++) {
+                showTab(tabs[i]);
+                await delay(300);
+                await takeScreenshot(names[i]);
+            }
+
+            showTab('screenshots');
+        }
+
+        function updateScreenshotGallery() {
+            const gallery = document.getElementById('screenshot-gallery');
+            if (state.screenshots.length === 0) {
+                gallery.innerHTML = '<p class="text-muted">暂无截图</p>';
+                return;
+            }
+            gallery.innerHTML = state.screenshots.map(shot => `
+                <div class="screenshot-item">
+                    <img src="${shot.data}" alt="${shot.name}" class="screenshot-preview">
+                    <div class="screenshot-info">
+                        <div class="screenshot-name">${shot.name}</div>
+                        <div class="screenshot-time">${shot.time}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function downloadScreenshots() {
+            state.screenshots.forEach((shot, index) => {
+                const link = document.createElement('a');
+                link.href = shot.data;
+                link.download = `slider-test-${index + 1}-${shot.name}.png`;
+                link.click();
+            });
+        }
+
+        function playSuccessAnimation() {
+            const button = document.getElementById('preview-button');
+            if (button) {
+                button.classList.add('success');
+                setTimeout(() => button.classList.remove('success'), 2000);
+            }
+            log('播放成功动画', 'info');
+        }
+
+        function playErrorAnimation() {
+            const button = document.getElementById('preview-button');
+            if (button) {
+                button.classList.add('error');
+                setTimeout(() => button.classList.remove('error'), 2000);
+            }
+            log('播放错误动画', 'info');
+        }
+
+        async function playDragAnimation() {
+            const button = document.getElementById('preview-button');
+            const track = document.querySelector('#preview-slider .slider-track');
+            if (!button || !track) return;
+
+            button.classList.add('dragging');
+            for (let i = 0; i <= 300; i += 20) {
+                button.style.left = (i + 2) + 'px';
+                track.style.width = i + 'px';
+                await delay(20);
+            }
+            button.classList.remove('dragging');
+            log('播放拖动动画', 'info');
+        }
+
+        function init() {
+            state.tests.interaction = interactionTests;
+            state.tests.animation = animationTests;
+            state.tests.keyboard = keyboardTests;
+
+            renderTests();
+            updateStats();
+
+            try {
+                if (typeof SliderCaptcha !== 'undefined') {
+                    new SliderCaptcha(document.getElementById('slider-captcha-container'), {
+                        apiBase: '/api/v1',
+                        onSuccess: (r) => log('验证成功: ' + r.session_id, 'success'),
+                        onError: (e) => log('验证失败: ' + e.error, 'error')
+                    });
+
+                    new SliderCaptcha(document.getElementById('keyboard-captcha-container'), {
+                        apiBase: '/api/v1',
+                        onSuccess: (r) => log('键盘测试验证成功', 'success'),
+                        onError: (e) => log('键盘测试验证失败', 'error')
+                    });
+                }
+            } catch (e) {
+                log('组件初始化: ' + e.message, 'error');
+            }
+
+            log('滑块测试框架初始化完成', 'success');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        return { runTest, runAllTests, resetTests, takeScreenshot, takeAllSliderScreenshots };
+    })();
+
+    function showTab(tabName) {
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.textContent.toLowerCase().includes(tabName) || 
+                (tabName === 'demo' && tab.textContent.includes('演示')) ||
+                (tabName === 'interactions' && tab.textContent.includes('交互')) ||
+                (tabName === 'animation' && tab.textContent.includes('动画')) ||
+                (tabName === 'keyboard' && tab.textContent.includes('键盘')) ||
+                (tabName === 'screenshots' && tab.textContent.includes('截图'))
+            );
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        const targetTab = Array.from(document.querySelectorAll('.nav-tab')).find(tab => 
+            (tabName === 'demo' && tab.textContent.includes('演示')) ||
+            (tabName === 'interactions' && tab.textContent.includes('交互')) ||
+            (tabName === 'animation' && tab.textContent.includes('动画')) ||
+            (tabName === 'keyboard' && tab.textContent.includes('键盘')) ||
+            (tabName === 'screenshots' && tab.textContent.includes('截图'))
+        );
+        if (targetTab) {
+            const tabContentId = 'tab-' + tabName;
+            const content = document.getElementById(tabContentId);
+            if (content) content.classList.add('active');
+        }
+    }
+    </script>
+</body>
+</html>

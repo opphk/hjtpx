@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	github.com/hjtpx/hjtpx/internal/model"
+	model "github.com/hjtpx/hjtpx/internal/model"
 )
 
 // ============================================

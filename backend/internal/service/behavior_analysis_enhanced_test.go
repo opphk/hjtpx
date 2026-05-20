@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestNewBehaviorAnalysisEnhancedService(t *testing.T) {

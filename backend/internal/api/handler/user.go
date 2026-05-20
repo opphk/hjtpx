@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	github.com/hjtpx/hjtpx/internal/api/middleware"
-	github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/jwt"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/redis"
@@ -30,29 +30,29 @@ func NewUserHandler() *UserHandler {
 // RegisterRequest 用户注册请求
 // @Description 用户注册请求参数
 type RegisterRequest struct {
-	Username     string `json:"username" binding:"required,min=3,max=50"` // 用户名
-	Email        string `json:"email" binding:"required,email"`         // 邮箱
+	Username     string `json:"username" binding:"required,min=3,max=50"`  // 用户名
+	Email        string `json:"email" binding:"required,email"`            // 邮箱
 	Password     string `json:"password" binding:"required,min=6,max=128"` // 密码
-	BehaviorData string `json:"behavior_data,omitempty"`                 // 行为数据（可选）
+	BehaviorData string `json:"behavior_data,omitempty"`                   // 行为数据（可选）
 }
 
 // RegisterResponse 用户注册响应
 // @Description 用户注册响应数据
 type RegisterResponse struct {
-	UserID           uint   `json:"user_id"`            // 用户ID
-	Username         string `json:"username"`           // 用户名
-	Email            string `json:"email"`              // 邮箱
+	UserID           uint   `json:"user_id"`                     // 用户ID
+	Username         string `json:"username"`                    // 用户名
+	Email            string `json:"email"`                       // 邮箱
 	VerificationLink string `json:"verification_link,omitempty"` // 验证链接
-	Message          string `json:"message"`            // 消息
+	Message          string `json:"message"`                     // 消息
 }
 
 // LoginRequest 用户登录请求
 // @Description 用户登录请求参数
 type UserLoginRequest struct {
-	Username     string `json:"username" binding:"required"`              // 用户名
-	Password     string `json:"password" binding:"required"`            // 密码
-	CaptchaToken string `json:"captcha_token,omitempty"`                // 验证码令牌
-	BehaviorData string `json:"behavior_data,omitempty"`               // 行为数据
+	Username     string `json:"username" binding:"required"` // 用户名
+	Password     string `json:"password" binding:"required"` // 密码
+	CaptchaToken string `json:"captcha_token,omitempty"`     // 验证码令牌
+	BehaviorData string `json:"behavior_data,omitempty"`     // 行为数据
 }
 
 // LoginResponse 用户登录响应
@@ -84,13 +84,13 @@ type UpdateProfileRequest struct {
 	Nickname string `json:"nickname" binding:"max=100"` // 昵称
 	Avatar   string `json:"avatar" binding:"max=500"`   // 头像URL
 	Phone    string `json:"phone" binding:"max=20"`     // 电话
-	Bio      string `json:"bio" binding:"max=500"`       // 个人简介
+	Bio      string `json:"bio" binding:"max=500"`      // 个人简介
 }
 
 // ChangePasswordRequest 修改密码请求
 // @Description 修改密码请求参数
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`      // 原密码
+	OldPassword string `json:"old_password" binding:"required"`               // 原密码
 	NewPassword string `json:"new_password" binding:"required,min=6,max=128"` // 新密码
 }
 
@@ -110,7 +110,7 @@ type PasswordResetResponse struct {
 // ResetPasswordRequest 重置密码请求
 // @Description 重置密码请求参数
 type ResetPasswordRequest struct {
-	Token       string `json:"token" binding:"required"`                       // 重置令牌
+	Token       string `json:"token" binding:"required"`                      // 重置令牌
 	NewPassword string `json:"new_password" binding:"required,min=6,max=128"` // 新密码
 }
 

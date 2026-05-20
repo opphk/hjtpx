@@ -2,9 +2,10 @@
     'use strict';
 
     const AdvancedObfuscator = (function() {
-        const VERSION = '4.0.0';
+        const VERSION = '5.0.0';
         const CHAR_POOL = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$';
         const HEX_POOL = '0123456789abcdef';
+        const STRING_ENCODING_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
         
         let config = {
             enableVariableObfuscation: true,
@@ -16,11 +17,19 @@
             enableBooleanObfuscation: true,
             enablePropertyAccessObfuscation: true,
             enableUnicodeObfuscation: true,
+            enableRC4Encryption: true,
+            enableAESEncryption: false,
             stringEncryptionKey: 'hjtpx-obfuscate-key-2024',
             obfuscationLevel: 3,
             shuffleStrings: true,
             addOpaquePredicates: true,
-            controlFlowIterations: 3
+            controlFlowIterations: 3,
+            addDebugTrap: true,
+            enableSelfDefending: true,
+            enableAntiDebug: true,
+            maxStringLength: 100,
+            splitStrings: true,
+            stringChunkSize: 50
         };
 
         let variableMap = new Map();
@@ -29,9 +38,87 @@
         let usedNames = new Set();
         let identifierCounter = 0;
         let stringCounter = 0;
+        let encryptionKey = null;
+        let rc4State = null;
 
         function setConfig(cfg) {
             Object.assign(config, cfg);
+            if (cfg.stringEncryptionKey) {
+                encryptionKey = cfg.stringEncryptionKey;
+                rc4State = initRC4State(encryptionKey);
+            }
+        }
+
+        function initRC4State(key) {
+            const state = new Array(256);
+            for (let i = 0; i < 256; i++) {
+                state[i] = i;
+            }
+            
+            let j = 0;
+            const keyBytes = stringToBytes(key);
+            for (let i = 0; i < 256; i++) {
+                j = (j + state[i] + keyBytes[i % keyBytes.length]) % 256;
+                [state[i], state[j]] = [state[j], state[i]];
+            }
+            
+            return { state, i: 0, j: 0 };
+        }
+
+        function rc4Encrypt(data) {
+            if (!rc4State) {
+                rc4State = initRC4State(config.stringEncryptionKey);
+            }
+            
+            const state = rc4State.state.slice();
+            let i = 0, j = 0;
+            const result = [];
+            
+            const dataBytes = stringToBytes(data);
+            for (let n = 0; n < dataBytes.length; n++) {
+                i = (i + 1) % 256;
+                j = (j + state[i]) % 256;
+                [state[i], state[j]] = [state[j], state[i]];
+                const k = state[(state[i] + state[j]) % 256];
+                result.push(dataBytes[n] ^ k);
+            }
+            
+            return result;
+        }
+
+        function rc4Decrypt(encryptedBytes) {
+            return rc4Encrypt(encryptedBytes);
+        }
+
+        function stringToBytes(str) {
+            const bytes = [];
+            for (let i = 0; i < str.length; i++) {
+                bytes.push(str.charCodeAt(i) & 0xFF);
+            }
+            return bytes;
+        }
+
+        function bytesToString(bytes) {
+            return String.fromCharCode.apply(null, bytes);
+        }
+
+        function bytesToBase64(bytes) {
+            let result = '';
+            const chunkSize = 3;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.slice(i, i + chunkSize);
+                const padding = chunk.length < chunkSize ? chunkSize - chunk.length : 0;
+                
+                const b1 = chunk[0] || 0;
+                const b2 = chunk[1] || 0;
+                const b3 = chunk[2] || 0;
+                
+                result += STRING_ENCODING_POOL[b1 >> 2];
+                result += STRING_ENCODING_POOL[((b1 & 0x03) << 4) | (b2 >> 4)];
+                result += padding > 1 ? '=' : STRING_ENCODING_POOL[((b2 & 0x0F) << 2) | (b3 >> 6)];
+                result += padding > 0 ? '=' : STRING_ENCODING_POOL[b3 & 0x3F];
+            }
+            return result;
         }
 
         function generateObfuscatedName() {
@@ -100,16 +187,33 @@
             if (!config.enableStringEncryption || str.length < 3) return str;
 
             const key = config.stringEncryptionKey;
-            let encrypted = '';
             
-            for (let i = 0; i < str.length; i++) {
-                const charCode = str.charCodeAt(i);
-                const keyChar = key.charCodeAt(i % key.length);
-                const encryptedCode = charCode ^ keyChar;
-                encrypted += String.fromCharCode(encryptedCode);
+            if (config.enableRC4Encryption) {
+                const encrypted = rc4Encrypt(str);
+                const hexString = encrypted.map(b => b.toString(16).padStart(2, '0')).join('');
+                return btoa(hexString);
+            } else {
+                let encrypted = '';
+                for (let i = 0; i < str.length; i++) {
+                    const charCode = str.charCodeAt(i);
+                    const keyChar = key.charCodeAt(i % key.length);
+                    const encryptedCode = charCode ^ keyChar;
+                    encrypted += String.fromCharCode(encryptedCode);
+                }
+                return btoa(encrypted);
             }
+        }
 
-            return btoa(encrypted);
+        function splitString(str) {
+            if (!config.splitStrings || str.length <= config.stringChunkSize) {
+                return [str];
+            }
+            
+            const chunks = [];
+            for (let i = 0; i < str.length; i += config.stringChunkSize) {
+                chunks.push(str.slice(i, i + config.stringChunkSize));
+            }
+            return chunks;
         }
 
         function obfuscateStrings(code) {
@@ -122,13 +226,22 @@
                 const quote = match[0];
                 const content = match.slice(1, -1);
                 
-                if (content.length < 3) return match;
+                if (content.length < 3 || content.length > config.maxStringLength) return match;
+                if (content.includes('__decrypt') || content.includes('window.')) return match;
                 
                 stringCounter++;
-                const encrypted = encryptString(content);
-                stringMap.set(content, encrypted);
+                const chunks = splitString(content);
+                const encryptedChunks = chunks.map(chunk => encryptString(chunk));
+                stringMap.set(content, encryptedChunks);
                 
-                return quote + 'window.__decrypt(' + quote + encrypted + quote + ')' + quote;
+                if (chunks.length === 1) {
+                    return quote + 'window.__decrypt' + quote + encryptedChunks[0] + quote + ')';
+                } else {
+                    const combinedExpr = encryptedChunks.map((enc, idx) => 
+                        'window.__decrypt' + quote + enc + quote + ')'
+                    ).join('+');
+                    return '((' + combinedExpr + '))';
+                }
             });
 
             return result;
@@ -139,11 +252,35 @@
 
             let result = code;
             
-            result = flattenIfStatements(result);
-            result = flattenLoops(result);
-            result = addStateMachine(result);
+            for (let i = 0; i < config.controlFlowIterations; i++) {
+                result = flattenIfStatements(result);
+                result = flattenLoops(result);
+                result = flattenSwitchStatements(result);
+                result = addStateMachine(result);
+            }
 
             return result;
+        }
+
+        function flattenSwitchStatements(code) {
+            const switchPattern = /\bswitch\s*\(([^)]+)\)\s*\{([^}]+)\}/g;
+            
+            return code.replace(switchPattern, (match, expr, body) => {
+                const stateVar = generateObfuscatedName();
+                const cases = [];
+                let caseIndex = 0;
+                
+                const casePattern = /\bcase\s+(\d+)\s*:/g;
+                let caseMatch;
+                while ((caseMatch = casePattern.exec(body)) !== null) {
+                    cases.push({ value: parseInt(caseMatch[1]), index: caseIndex++ });
+                }
+                
+                if (cases.length < 2) return match;
+                
+                const switchImpl = `(function(){var ${stateVar}=${expr};${body}})()`;
+                return switchImpl;
+            });
         }
 
         function flattenIfStatements(code) {
@@ -169,7 +306,20 @@
         }
 
         function addStateMachine(code) {
-            const machineCode = `(function(){var _0xSM={s:0,t:[function(){this.s=1;},function(){this.s=2;},function(){this.s=0;}],r:function(){this.t[this.s].call(this);}};_0xSM.r();})();`;
+            const numStates = 3 + Math.floor(Math.random() * 3);
+            const stateVar = generateObfuscatedName();
+            const transitions = [];
+            
+            for (let i = 0; i < numStates; i++) {
+                const nextState = (i + 1) % numStates;
+                transitions.push(`case ${i}: ${stateVar}=${nextState};break;`);
+            }
+            
+            const machineCode = `(function(){var ${stateVar}=0;switch(${stateVar}){${transitions.join('')}case ${numStates}:}})();`;
+            
+            if (config.enableDeadCodeInjection) {
+                return machineCode + injectDeadCode(code);
+            }
             return machineCode + code;
         }
 
@@ -177,7 +327,30 @@
             if (!config.enableDeadCodeInjection) return code;
 
             const deadCode = generateDeadCode();
+            
+            if (config.addDebugTrap) {
+                const trapCode = generateDebugTrap();
+                return '(function(){' + deadCode + trapCode + '})();' + code;
+            }
+            
             return '(function(){' + deadCode + '})();' + code;
+        }
+
+        function generateDebugTrap() {
+            const trapVar1 = generateObfuscatedName();
+            const trapVar2 = generateObfuscatedName();
+            const trapVar3 = generateObfuscatedName();
+            
+            return `
+                var ${trapVar1}=function(){
+                    var ${trapVar2}=Date.now();
+                    var ${trapVar3}=Math.random();
+                    if(${trapVar3}<0.001){
+                        debugger;
+                    }
+                };
+                ${trapVar1}();
+            `.replace(/\s+/g, ' ').trim();
         }
 
         function generateDeadCode() {
@@ -283,7 +456,33 @@
         function generateDecoderFunction() {
             const key = btoa(config.stringEncryptionKey);
             
-            return `window.__decrypt=function(_0xE){var _0xK=atob('${key}');var _0xC=atob(_0xE);var _0xO='';for(var _0xI=0;_0xI<_0xC.length;_0xI++){_0xO+=String.fromCharCode(_0xC.charCodeAt(_0xI)^_0xK.charCodeAt(_0xI%_0xK.length));}return _0xO;};`;
+            if (config.enableRC4Encryption) {
+                return `
+                    window.__decrypt=function(_0xE){
+                        var _0xK=atob('${key}');
+                        var _0xS=[];
+                        for(var _0xI=0;_0xI<256;_0xI++){_0xS[_0xI]=_0xI;}
+                        var _0xJ=0;
+                        for(var _0xI=0;_0xI<256;_0xI++){
+                            _0xJ=(_0xJ+_0xS[_0xI]+_0xK.charCodeAt(_0xI%_0xK.length))%256;
+                            var _0xT=_0xS[_0xI];_0xS[_0xI]=_0xS[_0xJ];_0xS[_0xJ]=_0xT;
+                        }
+                        var _0xH=atob(_0xE);
+                        var _0xR='';
+                        var _0xI=0,_0xJ=0;
+                        for(var _0xP=0;_0xP<_0xH.length;_0xP++){
+                            _0xI=(_0xI+1)%256;
+                            _0xJ=(_0xJ+_0xS[_0xI])%256;
+                            var _0xT=_0xS[_0xI];_0xS[_0xI]=_0xS[_0xJ];_0xS[_0xJ]=_0xT;
+                            var _0xK2=_0xS[(_0xS[_0xI]+_0xS[_0xJ])%256];
+                            _0xR+=String.fromCharCode(_0xH.charCodeAt(_0xP)^_0xK2);
+                        }
+                        return _0xR;
+                    };
+                `.replace(/\s+/g, ' ').trim();
+            } else {
+                return `window.__decrypt=function(_0xE){var _0xK=atob('${key}');var _0xC=atob(_0xE);var _0xO='';for(var _0xI=0;_0xI<_0xC.length;_0xI++){_0xO+=String.fromCharCode(_0xC.charCodeAt(_0xI)^_0xK.charCodeAt(_0xI%_0xK.length));}return _0xO;};`;
+            }
         }
 
         function compressCode(code) {
@@ -296,6 +495,66 @@
             return code.trim();
         }
 
+        function addSelfDefendingCode(code) {
+            if (!config.enableSelfDefending) return code;
+
+            const checksumVar = generateObfuscatedName();
+            const hashVar = generateObfuscatedName();
+            
+            const selfDefendingCode = `
+                (function(){
+                    var ${checksumVar}=0;
+                    var ${hashVar}=function(_0xC){
+                        var _0xH=0;
+                        for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+                            _0xH=((_0xH<<5)-_0xH)+_0xC.charCodeAt(_0xI);
+                            _0xH=_0xH&_0xH;
+                        }
+                        return Math.abs(_0xH);
+                    };
+                    var _0xS=document.getElementsByTagName('script');
+                    if(_0xS.length>0){
+                        var _0xSC=_0xS[_0xS.length-1].textContent;
+                        var _0xCK=${hashVar}(_0xSC);
+                        if(_0xCK!==${checksumVar}){
+                            throw new Error('Code integrity check failed');
+                        }
+                    }
+                })();
+            `.replace(/\s+/g, ' ').trim();
+            
+            return selfDefendingCode + code;
+        }
+
+        function addAntiDebugCode(code) {
+            if (!config.enableAntiDebug) return code;
+
+            const antiDebugCode = `
+                (function(){
+                    var _0xT=Date.now();
+                    var _0xF=function(){
+                        var _0xN=Date.now();
+                        if(_0xN-_0xT>100){
+                            throw new Error('Execution time anomaly detected');
+                        }
+                        _0xT=_0xN;
+                    };
+                    setInterval(_0xF,500);
+                    var _0xCK=function(){
+                        var _0xS=performance.now();
+                        debugger;
+                        var _0xE=performance.now()-_0xS;
+                        if(_0xE>50){
+                            throw new Error('Debugger detected');
+                        }
+                    };
+                    setTimeout(_0xCK,1000);
+                })();
+            `.replace(/\s+/g, ' ').trim();
+            
+            return antiDebugCode + code;
+        }
+
         function obfuscate(code) {
             variableMap.clear();
             stringMap.clear();
@@ -303,11 +562,17 @@
             usedNames.clear();
             identifierCounter = 0;
             stringCounter = 0;
+            encryptionKey = config.stringEncryptionKey;
+            rc4State = initRC4State(encryptionKey);
 
             let result = code;
 
             if (config.enableDeadCodeInjection) {
                 result = injectDeadCode(result);
+            }
+
+            if (config.enableAntiDebug) {
+                result = addAntiDebugCode(result);
             }
 
             if (config.enableVariableObfuscation) {
@@ -350,6 +615,10 @@
                 result = generateDecoderFunction() + result;
             }
 
+            if (config.enableSelfDefending) {
+                result = addSelfDefendingCode(result);
+            }
+
             result = compressCode(result);
 
             return result;
@@ -360,7 +629,11 @@
                 variablesObfuscated: variableMap.size,
                 stringsEncrypted: stringMap.size,
                 functionsWrapped: functionMap.size,
-                version: VERSION
+                version: VERSION,
+                rc4Enabled: config.enableRC4Encryption,
+                controlFlowIterations: config.controlFlowIterations,
+                selfDefendingEnabled: config.enableSelfDefending,
+                antiDebugEnabled: config.enableAntiDebug
             };
         }
 
@@ -370,7 +643,9 @@
             obfuscate: obfuscate,
             getStats: getStats,
             encryptString: encryptString,
-            generateObfuscatedName: generateObfuscatedName
+            generateObfuscatedName: generateObfuscatedName,
+            rc4Encrypt: rc4Encrypt,
+            rc4Decrypt: rc4Decrypt
         };
     })();
 

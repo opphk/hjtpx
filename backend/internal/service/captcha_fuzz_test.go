@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	github.com/hjtpx/hjtpx/internal/testing/fuzz"
+	"github.com/hjtpx/hjtpx/internal/testing/fuzz"
 	"github.com/stretchr/testify/assert"
 )
 

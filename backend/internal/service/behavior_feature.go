@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 type MouseBehaviorExtractor struct {

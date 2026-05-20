@@ -2,7 +2,7 @@
     'use strict';
 
     const AntiDebugEnhanced = (function() {
-        const VERSION = '4.0.0';
+        const VERSION = '5.0.0';
         
         const _0xAD = {
             enabled: true,
@@ -18,11 +18,19 @@
                 timingAttack: true,
                 breakPointDetection: true,
                 memoryCheck: true,
-                propertyCheck: true
+                propertyCheck: true,
+                automationDetection: true,
+                performanceProfiling: true,
+                stackTraceAnalysis: true,
+                sourceMapDetection: true,
+                proxyDetection: true,
+                vpnDetection: true
             },
             debugDetected: false,
             detectionHistory: [],
-            triggerCallback: null
+            triggerCallback: null,
+            protectionMode: 'block',
+            stealthMode: false
         };
 
         function detectWindowSizeAnomaly() {
@@ -252,6 +260,160 @@
             return { detected: false };
         }
 
+        function detectAutomation() {
+            const indicators = [
+                { name: 'selenium', check: () => navigator.webdriver === true },
+                { name: 'puppeteer', check: () => navigator.userAgent.includes('HeadlessChrome') },
+                { name: 'playwright', check: () => navigator.userAgent.includes('Playwright') },
+                { name: 'phantomjs', check: () => navigator.userAgent.includes('PhantomJS') },
+                { name: 'automation', check: () => navigator.automation === true }
+            ];
+            
+            for (const indicator of indicators) {
+                if (indicator.check()) {
+                    return {
+                        detected: true,
+                        type: 'automation',
+                        details: { reason: indicator.name + ' detected' }
+                    };
+                }
+            }
+            
+            const testDiv = document.createElement('div');
+            testDiv.id = 'webdriver-test';
+            testDiv.style.display = 'none';
+            document.body.appendChild(testDiv);
+            
+            const driverDiv = document.getElementById('webdriver-test');
+            if (driverDiv && driverDiv.style.display === '') {
+                return {
+                    detected: true,
+                    type: 'webdriver',
+                    details: { reason: 'WebDriver automation detected' }
+                };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectPerformanceProfiling() {
+            if (window.performance) {
+                const memory = window.performance.memory;
+                if (memory) {
+                    const jsHeapSize = memory.usedJSHeapSize;
+                    if (jsHeapSize > 500 * 1024 * 1024) {
+                        return {
+                            detected: true,
+                            type: 'memory_pressure',
+                            details: { reason: 'High memory usage detected', heapSize: jsHeapSize }
+                        };
+                    }
+                }
+            }
+            
+            return { detected: false };
+        }
+
+        function detectStackTraceAnalysis() {
+            try {
+                const error = new Error();
+                const stack = error.stack;
+                
+                if (stack) {
+                    const suspiciousPatterns = [
+                        /at Function\./,
+                        /at Object\./,
+                        /at \w+\s+\(/,
+                        /__proto__/
+                    ];
+                    
+                    for (const pattern of suspiciousPatterns) {
+                        if (pattern.test(stack)) {
+                            return {
+                                detected: true,
+                                type: 'stack_trace',
+                                details: { reason: 'Suspicious stack trace detected' }
+                            };
+                        }
+                    }
+                }
+            } catch (e) {
+                return { detected: false };
+            }
+            
+            return { detected: false };
+        }
+
+        function detectSourceMaps() {
+            const scripts = document.querySelectorAll('script');
+            
+            for (const script of scripts) {
+                if (script.src) {
+                    try {
+                        const url = new URL(script.src);
+                        const lastSegment = url.pathname.split('/').pop();
+                        if (lastSegment.endsWith('.map')) {
+                            return {
+                                detected: true,
+                                type: 'source_map',
+                                details: { reason: 'Source map file detected', url: script.src }
+                            };
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+            }
+            
+            return { detected: false };
+        }
+
+        function detectProxy() {
+            const proxyIndicators = [
+                typeof navigator.pdfViewerEnabled !== 'undefined',
+                navigator.maxTouchPoints > 0 && navigator.maxTouchPoints !== window.navigator.maxTouchPoints,
+                typeof navigator.hardwareConcurrency !== 'number' || navigator.hardwareConcurrency > 16
+            ];
+            
+            for (const indicator of proxyIndicators) {
+                if (indicator) {
+                    return {
+                        detected: true,
+                        type: 'proxy',
+                        details: { reason: 'Proxy or VPN detected' }
+                    };
+                }
+            }
+            
+            return { detected: false };
+        }
+
+        function detectTimeAnomaly() {
+            const start1 = Date.now();
+            const end1 = Date.now();
+            
+            const testRuns = 100;
+            let totalDiff = 0;
+            
+            for (let i = 0; i < testRuns; i++) {
+                const start = Date.now();
+                const end = Date.now();
+                totalDiff += (end - start);
+            }
+            
+            const avgDiff = totalDiff / testRuns;
+            
+            if (avgDiff > 10) {
+                return {
+                    detected: true,
+                    type: 'time_anomaly',
+                    details: { reason: 'Time manipulation detected', avgDiff: avgDiff }
+                };
+            }
+            
+            return { detected: false };
+        }
+
         function performAllChecks() {
             const results = [];
             
@@ -275,6 +437,7 @@
             
             if (_0xAD.enabledChecks.timingAttack) {
                 results.push(detectTimingAttack());
+                results.push(detectTimeAnomaly());
             }
             
             if (_0xAD.enabledChecks.breakPointDetection) {
@@ -287,6 +450,26 @@
             
             if (_0xAD.enabledChecks.propertyCheck) {
                 results.push(detectPropertyTampering());
+            }
+            
+            if (_0xAD.enabledChecks.automationDetection) {
+                results.push(detectAutomation());
+            }
+            
+            if (_0xAD.enabledChecks.performanceProfiling) {
+                results.push(detectPerformanceProfiling());
+            }
+            
+            if (_0xAD.enabledChecks.stackTraceAnalysis) {
+                results.push(detectStackTraceAnalysis());
+            }
+            
+            if (_0xAD.enabledChecks.sourceMapDetection) {
+                results.push(detectSourceMaps());
+            }
+            
+            if (_0xAD.enabledChecks.proxyDetection) {
+                results.push(detectProxy());
             }
             
             return results;
@@ -309,28 +492,56 @@
             }
         }
 
-        function triggerProtection() {
+        function triggerProtection(type, details) {
             _0xAD.enabled = false;
             _0xAD.debugDetected = true;
 
-            document.documentElement.style.display = 'none';
-            document.body.innerHTML = `
-                <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0a0a;color:#e74c3c;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;">
-                    <div style="text-align:center;max-width:500px;padding:30px;">
-                        <div style="font-size:72px;margin-bottom:20px;">&#9888;</div>
-                        <h1 style="font-size:28px;margin:0 0 15px 0;">Security Alert</h1>
-                        <p style="font-size:14px;opacity:0.8;margin:0 0 20px 0;">
-                            Debugging tools have been detected.<br>
-                            Your access has been temporarily restricted for security reasons.
-                        </p>
-                        <div style="font-size:12px;color:#666;">
-                            Violation count: ${_0xAD.violations}/${_0xAD.maxViolations}
+            if (_0xAD.stealthMode) {
+                const randomDelay = Math.random() * 1000 + 500;
+                setTimeout(() => {
+                    document.documentElement.style.display = 'none';
+                }, randomDelay);
+            }
+
+            if (_0xAD.protectionMode === 'block') {
+                document.documentElement.style.display = 'none';
+                document.body.innerHTML = `
+                    <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0a0a;color:#e74c3c;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;">
+                        <div style="text-align:center;max-width:500px;padding:30px;">
+                            <div style="font-size:72px;margin-bottom:20px;">&#9888;</div>
+                            <h1 style="font-size:28px;margin:0 0 15px 0;">Security Alert</h1>
+                            <p style="font-size:14px;opacity:0.8;margin:0 0 20px 0;">
+                                Debugging tools have been detected.<br>
+                                Your access has been temporarily restricted for security reasons.
+                            </p>
+                            <div style="font-size:12px;color:#666;">
+                                Violation count: ${_0xAD.violations}/${_0xAD.maxViolations}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
 
-            throw new Error('Debug detection triggered - ' + JSON.stringify(_0xAD.detectionHistory));
+                throw new Error('Debug detection triggered - ' + JSON.stringify(_0xAD.detectionHistory));
+            } else if (_0xAD.protectionMode === 'corrupt') {
+                const originalBody = document.body.innerHTML;
+                document.body.innerHTML = originalBody.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '<script>void(0);</script>');
+            }
+        }
+
+        function enableStealthMode() {
+            _0xAD.stealthMode = true;
+        }
+
+        function disableStealthMode() {
+            _0xAD.stealthMode = false;
+        }
+
+        function setProtectionMode(mode) {
+            if (['block', 'corrupt', 'silent'].includes(mode)) {
+                _0xAD.protectionMode = mode;
+                return true;
+            }
+            return false;
         }
 
         function startDetectionLoop() {
@@ -455,7 +666,16 @@
             detectWindowSize: detectWindowSizeAnomaly,
             detectDebugger: detectDebuggerStatement,
             detectConsole: detectConsoleTampering,
-            detectTiming: detectTimingAttack
+            detectTiming: detectTimingAttack,
+            detectAutomation: detectAutomation,
+            detectPerformance: detectPerformanceProfiling,
+            detectStackTrace: detectStackTraceAnalysis,
+            detectSourceMaps: detectSourceMaps,
+            detectProxy: detectProxy,
+            detectTimeAnomaly: detectTimeAnomaly,
+            enableStealthMode: enableStealthMode,
+            disableStealthMode: disableStealthMode,
+            setProtectionMode: setProtectionMode
         };
     })();
 

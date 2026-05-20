@@ -98,7 +98,7 @@ func TestCollectUserData(t *testing.T) {
 
 func TestExportToJSON(t *testing.T) {
 	service := NewGDPRService()
-	testDir := github.com/hjtpx/hjtpx/test-exports"
+	testDir := "/tmp/test-exports"
 	os.MkdirAll(testDir, 0755)
 	defer os.RemoveAll(testDir)
 
@@ -128,7 +128,7 @@ func TestExportToJSON(t *testing.T) {
 
 func TestExportToCSV(t *testing.T) {
 	service := NewGDPRService()
-	testDir := github.com/hjtpx/hjtpx/test-exports"
+	testDir := "/tmp/test-exports"
 	os.MkdirAll(testDir, 0755)
 	defer os.RemoveAll(testDir)
 

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"golang.org/x/image/font/sfnt"
@@ -71,12 +71,14 @@ type CaptchaSession struct {
 	ID           string
 	Type         string
 	Mode         CaptchaMode
+	Status       string
+	VerifyCount  int
+	MaxPoints    int
 	TargetPoints []ClickPoint
 	HintOrder    []int
 	AllowShuffle bool
 	Points       [][2]int
 	Hint         string
-	MaxPoints    int
 	CreatedAt    time.Time
 	Tolerance    int
 	ImageWidth   int
@@ -2180,28 +2182,38 @@ func VerifyCaptcha(c *gin.Context) {
 	startTime := time.Now()
 	var req VerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[CAPTCHA-VERIFY] Invalid request parameters: %v, client_ip: %s", err, c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
+			"code":    400,
 			"message": "无效的请求参数",
 		})
 		return
 	}
+
+	log.Printf("[CAPTCHA-VERIFY] Verification request - session_id: %s, type: %s, client_ip: %s, user_agent: %s",
+		req.SessionID, req.Type, c.ClientIP(), c.GetHeader("User-Agent"))
 
 	sessionMutex.RLock()
 	session, exists := captchaSessions[req.SessionID]
 	sessionMutex.RUnlock()
 
 	if !exists {
+		log.Printf("[CAPTCHA-VERIFY] Session not found - session_id: %s, client_ip: %s", req.SessionID, c.ClientIP())
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
+			"code":    404,
 			"message": "会话不存在或已过期",
 		})
 		return
 	}
 
 	if session.Type != req.Type {
+		log.Printf("[CAPTCHA-VERIFY] Type mismatch - session_type: %s, request_type: %s, session_id: %s",
+			session.Type, req.Type, req.SessionID)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
+			"code":    400,
 			"message": "验证类型不匹配",
 		})
 		return
@@ -2217,8 +2229,12 @@ func VerifyCaptcha(c *gin.Context) {
 			failReason = fmt.Sprintf("滑块位置偏差过大: 期望(%d,%d), 实际(%d,%d), 容差(%d)",
 				session.TargetX, session.TargetY, req.X, req.Y, tolerance)
 		}
+		log.Printf("[CAPTCHA-VERIFY] Slider verification - session_id: %s, success: %v, target: (%d,%d), user: (%d,%d)",
+			req.SessionID, captchaSuccess, session.TargetX, session.TargetY, req.X, req.Y)
 	} else if req.Type == "click" {
 		captchaSuccess, failReason = verifyClickPoints(session, req)
+		log.Printf("[CAPTCHA-VERIFY] Click verification - session_id: %s, success: %v, points_count: %d",
+			req.SessionID, captchaSuccess, len(req.Points))
 	}
 
 	db := database.GetDB()
@@ -2267,6 +2283,13 @@ func VerifyCaptcha(c *gin.Context) {
 
 	duration := time.Since(startTime).Milliseconds()
 
+	log.Printf("[CAPTCHA-VERIFY] Verification result - session_id: %s, captcha_success: %v, final_success: %v, risk_score: %.2f, duration: %dms",
+		req.SessionID, captchaSuccess, finalSuccess, riskScore, duration)
+
+	if !finalSuccess && failReason != "" {
+		log.Printf("[CAPTCHA-VERIFY] Verification failed - session_id: %s, reason: %s", req.SessionID, failReason)
+	}
+
 	var appID *uint
 	if req.ApplicationID > 0 {
 		appID = &req.ApplicationID
@@ -2285,7 +2308,7 @@ func VerifyCaptcha(c *gin.Context) {
 	}
 
 	if err := db.Create(verification).Error; err != nil {
-		log.Printf("Failed to save verification: %v", err)
+		log.Printf("[CAPTCHA-VERIFY] Failed to save verification: %v", err)
 	}
 
 	logEntry := &models.VerificationLog{
@@ -2302,7 +2325,7 @@ func VerifyCaptcha(c *gin.Context) {
 	}
 
 	if err := db.Create(logEntry).Error; err != nil {
-		log.Printf("Failed to save verification log: %v", err)
+		log.Printf("[CAPTCHA-VERIFY] Failed to save verification log: %v", err)
 	}
 
 	message := "验证失败"
@@ -2312,6 +2335,7 @@ func VerifyCaptcha(c *gin.Context) {
 
 	response := gin.H{
 		"success":      finalSuccess,
+		"code":         0,
 		"message":      message,
 		"risk_score":   riskScore,
 		"captcha_pass": captchaSuccess,
@@ -2716,4 +2740,416 @@ func analyzeEnvironmentData(envData map[string]interface{}) float64 {
 	}
 
 	return score
+}
+
+type CaptchaGenerateRequest struct {
+	Type      string `json:"type" binding:"required"`       // 验证码类型: slider, click
+	Mode      string `json:"mode"`                          // 验证码模式: number, letter, chinese, icon, math, color, phrase
+	Width     int    `json:"width"`                         // 图片宽度
+	Height    int    `json:"height"`                        // 图片高度
+	Points    int    `json:"points"`                        // 点击点数
+	Shuffle   bool   `json:"shuffle"`                       // 是否允许打乱顺序
+	Language  string `json:"language"`                      // 语言设置: zh-CN, en-US
+	ExpiresIn int    `json:"expires_in"`                    // 过期时间（秒）
+}
+
+type CaptchaGenerateResponse struct {
+	SessionID   string                   `json:"session_id"`
+	Type        string                   `json:"type"`
+	ImageURL    string                   `json:"image_url"`
+	Hint        string                   `json:"hint,omitempty"`
+	HintOrder   []int                    `json:"hint_order,omitempty"`
+	MaxPoints   int                      `json:"max_points,omitempty"`
+	Points      [][2]int                 `json:"points,omitempty"`
+	TargetX     int                      `json:"target_x,omitempty"`
+	TargetY     int                      `json:"target_y,omitempty"`
+	PuzzleImage string                   `json:"puzzle_image,omitempty"`
+	Tolerance   int                      `json:"tolerance,omitempty"`
+	ExpiresIn   int64                    `json:"expires_in"`
+	ExpiresAt   int64                    `json:"expires_at"`
+	Metadata    map[string]interface{}   `json:"metadata,omitempty"`
+}
+
+func GenerateCaptcha(c *gin.Context) {
+	startTime := time.Now()
+
+	var req CaptchaGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"code":    400,
+			"message": "无效的请求参数: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Type == "" {
+		req.Type = "slider"
+	}
+
+	if req.ExpiresIn <= 0 {
+		req.ExpiresIn = 300
+	}
+
+	expiresAt := time.Now().Add(time.Duration(req.ExpiresIn) * time.Second)
+
+	switch req.Type {
+	case "slider":
+		generateSliderCaptchaResponse(c, req, expiresAt, startTime)
+	case "click":
+		generateClickCaptchaResponse(c, req, expiresAt, startTime)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"code":    400,
+			"message": "不支持的验证码类型: " + req.Type,
+		})
+		return
+	}
+}
+
+func generateSliderCaptchaResponse(c *gin.Context, req CaptchaGenerateRequest, expiresAt time.Time, startTime time.Time) {
+	sessionID := generateSessionID()
+
+	width := req.Width
+	if width <= 0 {
+		width = 360
+	}
+	height := req.Height
+	if height <= 0 {
+		height = 220
+	}
+
+	imageURL, puzzleImage, targetX, targetY := generateSliderCaptchaImagesWithSize(width, height)
+
+	session := &CaptchaSession{
+		ID:        sessionID,
+		Type:      "slider",
+		TargetX:   targetX,
+		TargetY:   targetY,
+		CreatedAt: time.Now(),
+	}
+
+	sessionMutex.Lock()
+	captchaSessions[sessionID] = session
+	sessionMutex.Unlock()
+
+	duration := time.Since(startTime).Milliseconds()
+	log.Printf("[CAPTCHA] Generated slider captcha - session_id: %s, duration: %dms, target: (%d, %d)",
+		sessionID, duration, targetX, targetY)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"code":          0,
+		"message":        "验证码生成成功",
+		"session_id":     sessionID,
+		"type":          "slider",
+		"image_url":     imageURL,
+		"puzzle_image":  puzzleImage,
+		"target_x":      targetX,
+		"target_y":      targetY,
+		"puzzle_y":      targetY,
+		"puzzle_style":  0,
+		"tolerance":     10,
+		"expires_in":    int64(req.ExpiresIn),
+		"expires_at":    expiresAt.Unix(),
+		"metadata": gin.H{
+			"width":  width,
+			"height": height,
+		},
+	})
+}
+
+func generateClickCaptchaResponse(c *gin.Context, req CaptchaGenerateRequest, expiresAt time.Time, startTime time.Time) {
+	sessionID := generateSessionID()
+
+	if req.Mode == "" {
+		req.Mode = "number"
+	}
+
+	if req.Language == "" {
+		req.Language = "en-US"
+	}
+
+	shuffle := req.Shuffle
+	maxPoints := req.Points
+	if maxPoints <= 0 {
+		maxPoints = 3
+	}
+	if maxPoints > 6 {
+		maxPoints = 6
+	}
+
+	var mode CaptchaMode
+	switch req.Mode {
+	case "letter":
+		mode = ModeLetter
+	case "chinese":
+		mode = ModeChinese
+	case "mixed":
+		mode = ModeMixed
+	case "icon":
+		mode = ModeIcon
+	case "math":
+		mode = ModeMath
+	case "color":
+		mode = ModeColor
+	case "phrase":
+		mode = ModePhrase
+	default:
+		mode = ModeNumber
+	}
+
+	session := &CaptchaSession{
+		ID:            sessionID,
+		Type:          "click",
+		Mode:          mode,
+		MaxPoints:     maxPoints,
+		AllowShuffle:  shuffle,
+		CreatedAt:     time.Now(),
+		ImageSeed:     time.Now().UnixNano(),
+		Language:      req.Language,
+		SmartTarget:   true,
+	}
+
+	var imageURL string
+	var hintOrder []int
+	var hint string
+
+	switch mode {
+	case ModeMath:
+		imageURL, _, hintOrder, hint = generateMathClickImage(session)
+	case ModeColor:
+		imageURL, _, hintOrder, hint = generateColorClickImage(session)
+	case ModePhrase:
+		imageURL, _, hintOrder, hint = generatePhraseClickImage(session)
+	default:
+		imageURL, _, hintOrder, hint = generateClickImageWithBackground(session)
+	}
+
+	sessionMutex.Lock()
+	captchaSessions[sessionID] = session
+	sessionMutex.Unlock()
+
+	duration := time.Since(startTime).Milliseconds()
+	log.Printf("[CAPTCHA] Generated click captcha - session_id: %s, mode: %s, duration: %dms, points: %d",
+		sessionID, mode, duration, maxPoints)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"code":        0,
+		"message":     "验证码生成成功",
+		"session_id":  sessionID,
+		"type":        "click",
+		"mode":        string(mode),
+		"image_url":   imageURL,
+		"hint":        hint,
+		"hint_order":  hintOrder,
+		"max_points":  maxPoints,
+		"points":      session.Points,
+		"expires_in":  int64(req.ExpiresIn),
+		"expires_at":  expiresAt.Unix(),
+		"metadata": gin.H{
+			"language":     req.Language,
+			"allow_shuffle": shuffle,
+		},
+	})
+}
+
+func generateSliderCaptchaImagesWithSize(width, height int) (string, string, int, int) {
+	pieceSize := 50
+	if width < 200 {
+		pieceSize = 40
+	}
+	bumpRadius := 8 + rand.Intn(5)
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	r1, g1, b1 := rand.Intn(80)+40, rand.Intn(80)+40, rand.Intn(80)+120
+	r2, g2, b2 := rand.Intn(80)+120, rand.Intn(80)+40, rand.Intn(80)+40
+	r3, g3, b3 := rand.Intn(60)+80, rand.Intn(60)+120, rand.Intn(60)+40
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			ratio1 := float64(x+y) / float64(width+height)
+			ratio2 := float64(x) / float64(width)
+			r := uint8(float64(r1)*(1-ratio1)*0.6 + float64(r2)*ratio1*0.6 + float64(r3)*ratio2*0.4)
+			g := uint8(float64(g1)*(1-ratio1)*0.6 + float64(g2)*ratio1*0.6 + float64(g3)*ratio2*0.4)
+			b := uint8(float64(b1)*(1-ratio1)*0.6 + float64(b2)*ratio1*0.6 + float64(b3)*ratio2*0.4)
+			img.Set(x, y, color.RGBA{r, g, b, 255})
+		}
+	}
+
+	for i := 0; i < 25; i++ {
+		c := color.RGBA{
+			uint8(rand.Intn(200)),
+			uint8(rand.Intn(200)),
+			uint8(rand.Intn(200)),
+			uint8(25 + rand.Intn(55)),
+		}
+		switch rand.Intn(4) {
+		case 0:
+			drawFilledCircle(img, rand.Intn(width), rand.Intn(height), 8+rand.Intn(35), c)
+		case 1:
+			drawFilledRect(img, rand.Intn(width), rand.Intn(height), 15+rand.Intn(50), 8+rand.Intn(30), c)
+		case 2:
+			drawLine(img, rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), c)
+		case 3:
+			drawBezier(img, rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), c)
+		}
+	}
+
+	for i := 0; i < 1000; i++ {
+		x := rand.Intn(width)
+		y := rand.Intn(height)
+		noise := rand.Intn(50) - 25
+		p := img.RGBAAt(x, y)
+		img.Set(x, y, color.RGBA{
+			clampU8(int(p.R) + noise),
+			clampU8(int(p.G) + noise),
+			clampU8(int(p.B) + noise),
+			255,
+		})
+	}
+
+	margin := 30
+	maxX := width - pieceSize - bumpRadius - margin
+	if maxX <= margin {
+		maxX = margin + 1
+	}
+	targetX := margin + rand.Intn(maxX-margin)
+	targetY := margin + rand.Intn(height-pieceSize-2*margin)
+
+	pieceWidth := pieceSize + bumpRadius
+	pieceImg := image.NewRGBA(image.Rect(0, 0, pieceWidth, pieceSize))
+
+	for py := 0; py < pieceSize; py++ {
+		for px := 0; px < pieceWidth; px++ {
+			absX := targetX + px
+			absY := targetY + py
+			if absX >= 0 && absX < width && absY >= 0 && absY < height {
+				if isInPuzzlePiece(px, py, pieceSize, bumpRadius) {
+					p := img.RGBAAt(absX, absY)
+					pieceImg.Set(px, py, p)
+					img.Set(absX, absY, color.RGBA{
+						uint8(int(p.R) * 35 / 100),
+						uint8(int(p.G) * 35 / 100),
+						uint8(int(p.B) * 35 / 100),
+						255,
+					})
+				} else {
+					pieceImg.Set(px, py, color.RGBA{0, 0, 0, 0})
+				}
+			}
+		}
+	}
+
+	addPuzzleShadow(pieceImg, pieceSize, bumpRadius)
+	addCutoutBorder(img, targetX, targetY, pieceSize, bumpRadius)
+
+	imageURL := "data:image/png;base64," + imageToBase64(img)
+	puzzleImage := "data:image/png;base64," + imageToBase64(pieceImg)
+
+	return imageURL, puzzleImage, targetX, targetY
+}
+
+type CaptchaStatusRequest struct {
+	SessionID string `json:"session_id" binding:"required"`
+}
+
+type CaptchaStatusResponse struct {
+	Success    bool                   `json:"success"`
+	Code       int                    `json:"code"`
+	Message    string                 `json:"message"`
+	SessionID  string                 `json:"session_id"`
+	Type       string                 `json:"type"`
+	Status     string                 `json:"status"`
+	Valid      bool                   `json:"valid"`
+	CreatedAt  int64                  `json:"created_at"`
+	ExpiresAt  int64                  `json:"expires_at"`
+	VerifyCount int                   `json:"verify_count"`
+	MaxAttempts int                   `json:"max_attempts"`
+	RemainingAttempts int             `json:"remaining_attempts"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+}
+
+func GetCaptchaStatus(c *gin.Context) {
+	startTime := time.Now()
+
+	sessionID := c.Query("session_id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"code":    400,
+			"message": "session_id不能为空",
+		})
+		return
+	}
+
+	sessionMutex.RLock()
+	session, exists := captchaSessions[sessionID]
+	sessionMutex.RUnlock()
+
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success":    false,
+			"code":       404,
+			"message":    "会话不存在或已过期",
+			"session_id": sessionID,
+		})
+		return
+	}
+
+	now := time.Now()
+	isExpired := now.After(session.CreatedAt.Add(10 * time.Minute))
+	if isExpired {
+		sessionMutex.Lock()
+		delete(captchaSessions, sessionID)
+		sessionMutex.Unlock()
+
+		c.JSON(http.StatusOK, gin.H{
+			"success":    true,
+			"code":       0,
+			"message":    "验证码已过期",
+			"session_id": sessionID,
+			"type":       session.Type,
+			"status":     "expired",
+			"valid":      false,
+			"created_at": session.CreatedAt.Unix(),
+			"expires_at": session.CreatedAt.Add(10 * time.Minute).Unix(),
+			"metadata": gin.H{
+				"reason": "session expired",
+			},
+		})
+		return
+	}
+
+	remainingAttempts := 3
+	if session.Type == "click" {
+		remainingAttempts = session.MaxPoints - session.VerifyCount
+	}
+
+	duration := time.Since(startTime).Milliseconds()
+	log.Printf("[CAPTCHA] Get status - session_id: %s, status: %s, duration: %dms",
+		sessionID, session.Status, duration)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":             true,
+		"code":                0,
+		"message":             "查询成功",
+		"session_id":          sessionID,
+		"type":                session.Type,
+		"status":              session.Status,
+		"valid":               true,
+		"created_at":          session.CreatedAt.Unix(),
+		"expires_at":          session.CreatedAt.Add(10 * time.Minute).Unix(),
+		"verify_count":        session.VerifyCount,
+		"max_attempts":        3,
+		"remaining_attempts":   remainingAttempts,
+		"metadata": gin.H{
+			"mode":       session.Mode,
+			"max_points": session.MaxPoints,
+			"tolerance":  session.Tolerance,
+		},
+	})
 }

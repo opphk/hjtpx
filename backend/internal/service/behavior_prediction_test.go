@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestBehaviorPredictionRealtime(t *testing.T) {

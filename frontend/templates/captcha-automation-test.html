@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证组件自动化测试</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
+    <style>
+        :root {
+            --test-primary: #c9a96e;
+            --test-success: #28a745;
+            --test-danger: #dc3545;
+            --test-warning: #ffc107;
+            --test-info: #0dcaf0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .test-master-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .test-header-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .test-header-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+        }
+
+        .test-header-subtitle {
+            color: #6c757d;
+            font-size: 1rem;
+        }
+
+        .test-status-bar {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .status-item i {
+            font-size: 1.2rem;
+        }
+
+        .status-item.running i {
+            color: var(--test-primary);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-item.passed i {
+            color: var(--test-success);
+        }
+
+        .status-item.failed i {
+            color: var(--test-danger);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .test-nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .test-nav-tab {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .test-nav-tab:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+
+        .test-nav-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .test-nav-tab .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+
+        .test-nav-tab .badge.bg-success {
+            background: var(--test-success) !important;
+        }
+
+        .test-nav-tab .badge.bg-danger {
+            background: var(--test-danger) !important;
+        }
+
+        .test-nav-tab .badge.bg-secondary {
+            background: #6c757d !important;
+        }
+
+        .test-content-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            margin-bottom: 2rem;
+        }
+
+        .test-section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .test-section-title i {
+            color: var(--test-primary);
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .test-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .test-item:hover {
+            border-color: var(--test-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .test-item-title {
+            font-weight: 600;
+            color: #1a1a2e;
+            font-size: 1rem;
+        }
+
+        .test-item-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .test-item-status.pending {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+        }
+
+        .test-item-status.running {
+            background: rgba(201, 169, 110, 0.1);
+            color: var(--test-primary);
+        }
+
+        .test-item-status.passed {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--test-success);
+        }
+
+        .test-item-status.failed {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--test-danger);
+        }
+
+        .test-item-desc {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .test-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .test-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .test-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .test-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .test-btn-secondary {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .test-btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        .test-btn-success {
+            background: var(--test-success);
+            color: white;
+        }
+
+        .test-btn-danger {
+            background: var(--test-danger);
+            color: white;
+        }
+
+        .test-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .captcha-demo-container {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .captcha-demo-title {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+
+        .test-log-container {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .log-entry.info {
+            background: rgba(13, 202, 240, 0.1);
+            color: #a5d8ff;
+        }
+
+        .log-entry.success {
+            background: rgba(40, 167, 69, 0.1);
+            color: #8ce99a;
+        }
+
+        .log-entry.error {
+            background: rgba(220, 53, 69, 0.1);
+            color: #ff8787;
+        }
+
+        .log-entry.warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffe066;
+        }
+
+        .log-time {
+            color: #6c757d;
+            white-space: nowrap;
+        }
+
+        .log-message {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .screenshot-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .screenshot-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .screenshot-item:hover {
+            border-color: var(--test-primary);
+            transform: scale(1.02);
+        }
+
+        .screenshot-preview {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .screenshot-info {
+            padding: 1rem;
+        }
+
+        .screenshot-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 0.25rem;
+        }
+
+        .screenshot-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .responsive-preview-container {
+            position: relative;
+            background: #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .responsive-device-frame {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            min-height: 400px;
+            transition: all 0.3s ease;
+        }
+
+        .responsive-simulator {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .breakpoint-indicator {
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            z-index: 1000;
+            display: none;
+        }
+
+        .breakpoint-indicator.show {
+            display: block;
+        }
+
+        .test-progress-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .test-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--test-primary), #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .test-summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(201, 169, 110, 0.1), rgba(201, 169, 110, 0.05));
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid rgba(201, 169, 110, 0.2);
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
+            border-color: rgba(40, 167, 69, 0.2);
+        }
+
+        .stat-card.danger {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
+            border-color: rgba(220, 53, 69, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 0.5rem;
+        }
+
+        .test-instruction-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-left: 4px solid #667eea;
+            border-radius: 0 8px 8px 0;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .test-instruction-title {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .test-instruction-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .test-instruction-list li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: #495057;
+        }
+
+        .test-instruction-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .test-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .test-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .test-modal {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .test-modal-overlay.show .test-modal {
+            transform: scale(1);
+        }
+
+        .test-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .test-modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .test-modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6c757d;
+            padding: 0.5rem;
+            transition: color 0.3s ease;
+        }
+
+        .test-modal-close:hover {
+            color: #dc3545;
+        }
+
+        .test-results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .test-results-table th,
+        .test-results-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .test-results-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .test-results-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .test-header-section,
+            .test-content-card {
+                padding: 1.5rem;
+            }
+
+            .test-header-title {
+                font-size: 1.5rem;
+            }
+
+            .test-nav-tabs {
+                flex-direction: column;
+            }
+
+            .test-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .test-status-bar {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-master-container">
+        <div class="test-header-section">
+            <h1 class="test-header-title">
+                <i class="fas fa-vial me-2"></i>墨盾验证组件自动化测试
+            </h1>
+            <p class="test-header-subtitle">全面的前端验证组件交互测试套件 - 支持滑块、点选、图形验证及响应式布局测试</p>
+            
+            <div class="test-status-bar">
+                <div class="status-item" id="status-total">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>总测试: <strong id="total-count">0</strong></span>
+                </div>
+                <div class="status-item passed" id="status-passed">
+                    <i class="fas fa-check-circle"></i>
+                    <span>通过: <strong id="passed-count">0</strong></span>
+                </div>
+                <div class="status-item failed" id="status-failed">
+                    <i class="fas fa-times-circle"></i>
+                    <span>失败: <strong id="failed-count">0</strong></span>
+                </div>
+                <div class="status-item running" id="status-running">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>运行中: <strong id="running-count">0</strong></span>
+                </div>
+                <div class="status-item" id="status-coverage">
+                    <i class="fas fa-percentage"></i>
+                    <span>覆盖率: <strong id="coverage-percent">0%</strong></span>
+                </div>
+            </div>
+
+            <div class="test-progress-bar">
+                <div class="test-progress-fill" id="main-progress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="test-nav-tabs" id="test-nav-tabs">
+            <button class="test-nav-tab active" data-tab="slider">
+                <i class="fas fa-sliders-h"></i> 滑块验证
+                <span class="badge bg-secondary" id="slider-badge">0/0</span>
+            </button>
+            <button class="test-nav-tab" data-tab="point">
+                <i class="fas fa-hand-pointer"></i> 点选验证
+                <span class="badge bg-secondary" id="point-badge">0/0</span>
+            </button>
+            <button class="test-nav-tab" data-tab="image">
+                <i class="fas fa-image"></i> 图形验证
+                <span class="badge bg-secondary" id="image-badge">0/0</span>
+            </button>
+            <button class="test-nav-tab" data-tab="responsive">
+                <i class="fas fa-mobile-alt"></i> 响应式布局
+                <span class="badge bg-secondary" id="responsive-badge">0/0</span>
+            </button>
+            <button class="test-nav-tab" data-tab="summary">
+                <i class="fas fa-chart-pie"></i> 测试报告
+                <span class="badge bg-secondary" id="summary-badge">0/0</span>
+            </button>
+        </div>
+
+        <div class="test-content-card" id="slider-tab-content">
+            <h2 class="test-section-title">
+                <i class="fas fa-sliders-h"></i>
+                滑块验证交互测试
+            </h2>
+
+            <div class="test-instruction-box">
+                <div class="test-instruction-title">
+                    <i class="fas fa-info-circle"></i>
+                    测试说明
+                </div>
+                <ul class="test-instruction-list">
+                    <li>测试滑块拖动交互功能是否正常</li>
+                    <li>验证轨迹记录和数据采集</li>
+                    <li>测试成功/失败动画效果</li>
+                    <li>测试键盘辅助功能</li>
+                    <li>测试刷新功能</li>
+                </ul>
+            </div>
+
+            <div class="captcha-demo-container">
+                <div class="captcha-demo-title">滑块验证码演示</div>
+                <div id="slider-captcha-container"></div>
+            </div>
+
+            <div class="test-grid" id="slider-test-list">
+            </div>
+        </div>
+
+        <div class="test-content-card hidden" id="point-tab-content">
+            <h2 class="test-section-title">
+                <i class="fas fa-hand-pointer"></i>
+                点选验证交互测试
+            </h2>
+
+            <div class="test-instruction-box">
+                <div class="test-instruction-title">
+                    <i class="fas fa-info-circle"></i>
+                    测试说明
+                </div>
+                <ul class="test-instruction-list">
+                    <li>测试图片点击交互功能</li>
+                    <li>验证点击动画和反馈</li>
+                    <li>测试进度指示器</li>
+                    <li>测试重置和确认功能</li>
+                    <li>测试安全检查机制</li>
+                </ul>
+            </div>
+
+            <div class="captcha-demo-container">
+                <div class="captcha-demo-title">点选验证码演示</div>
+                <div id="point-captcha-container"></div>
+            </div>
+
+            <div class="test-grid" id="point-test-list">
+            </div>
+        </div>
+
+        <div class="test-content-card hidden" id="image-tab-content">
+            <h2 class="test-section-title">
+                <i class="fas fa-image"></i>
+                图形验证交互测试
+            </h2>
+
+            <div class="test-instruction-box">
+                <div class="test-instruction-title">
+                    <i class="fas fa-info-circle"></i>
+                    测试说明
+                </div>
+                <ul class="test-instruction-list">
+                    <li>测试验证码输入功能</li>
+                    <li>验证刷新按钮</li>
+                    <li>测试键盘回车提交</li>
+                    <li>测试成功/失败反馈</li>
+                    <li>测试输入框验证</li>
+                </ul>
+            </div>
+
+            <div class="captcha-demo-container">
+                <div class="captcha-demo-title">图形验证码演示</div>
+                <div id="image-captcha-container"></div>
+            </div>
+
+            <div class="test-grid" id="image-test-list">
+            </div>
+        </div>
+
+        <div class="test-content-card hidden" id="responsive-tab-content">
+            <h2 class="test-section-title">
+                <i class="fas fa-mobile-alt"></i>
+                响应式布局测试
+            </h2>
+
+            <div class="test-instruction-box">
+                <div class="test-instruction-title">
+                    <i class="fas fa-info-circle"></i>
+                    测试说明
+                </div>
+                <ul class="test-instruction-list">
+                    <li>测试不同屏幕尺寸下的布局表现</li>
+                    <li>验证断点切换是否正确</li>
+                    <li>检查触摸目标尺寸</li>
+                    <li>测试 Toast 通知定位</li>
+                    <li>验证动画性能</li>
+                </ul>
+            </div>
+
+            <div class="test-grid">
+                <div class="test-item">
+                    <div class="test-item-header">
+                        <div class="test-item-title">设备模拟器</div>
+                    </div>
+                    <div class="test-item-desc">
+                        选择不同设备尺寸进行响应式测试
+                    </div>
+                    <div class="test-item-actions">
+                        <button class="test-btn test-btn-secondary" onclick="TestRunner.simulateDevice('mobile')">
+                            <i class="fas fa-mobile-alt"></i> 手机
+                        </button>
+                        <button class="test-btn test-btn-secondary" onclick="TestRunner.simulateDevice('tablet')">
+                            <i class="fas fa-tablet-alt"></i> 平板
+                        </button>
+                        <button class="test-btn test-btn-secondary" onclick="TestRunner.simulateDevice('desktop')">
+                            <i class="fas fa-desktop"></i> 桌面
+                        </button>
+                        <button class="test-btn test-btn-primary" onclick="TestRunner.runResponsiveTests()">
+                            <i class="fas fa-play"></i> 运行测试
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="responsive-preview-container mt-4">
+                <div class="responsive-device-frame" id="device-frame">
+                    <div class="responsive-simulator" id="simulator-content">
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-mobile-alt fa-3x mb-3"></i>
+                            <p>选择设备尺寸开始测试</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-grid" id="responsive-test-list">
+            </div>
+        </div>
+
+        <div class="test-content-card hidden" id="summary-tab-content">
+            <h2 class="test-section-title">
+                <i class="fas fa-chart-pie"></i>
+                测试报告汇总
+            </h2>
+
+            <div class="test-summary-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="summary-total">0</div>
+                    <div class="stat-label">总测试数</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-value" id="summary-passed">0</div>
+                    <div class="stat-label">通过</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-value" id="summary-failed">0</div>
+                    <div class="stat-label">失败</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="summary-duration">0s</div>
+                    <div class="stat-label">耗时</div>
+                </div>
+            </div>
+
+            <div class="test-instruction-box">
+                <div class="test-instruction-title">
+                    <i class="fas fa-camera"></i>
+                    截图记录
+                </div>
+                <p class="mb-3">自动保存的测试截图，用于人工复审</p>
+                <button class="test-btn test-btn-primary" onclick="TestRunner.takeAllScreenshots()">
+                    <i class="fas fa-camera"></i> 截取所有测试截图
+                </button>
+            </div>
+
+            <div class="screenshot-gallery" id="screenshot-gallery">
+                <p class="text-muted">暂无截图，点击上方按钮截取测试结果</p>
+            </div>
+
+            <h3 class="mt-4 mb-3">详细测试日志</h3>
+            <div class="test-log-container" id="summary-log-container">
+                <div class="log-entry info">
+                    <span class="log-time">[--:--:--]</span>
+                    <span class="log-message">等待测试开始...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-content-card">
+            <h2 class="test-section-title">
+                <i class="fas fa-terminal"></i>
+                测试日志
+            </h2>
+            <div class="test-log-container" id="test-log-container">
+                <div class="log-entry info">
+                    <span class="log-time">[--:--:--]</span>
+                    <span class="log-message">测试框架已就绪，准备开始测试...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="breakpoint-indicator" id="breakpoint-indicator">
+        <span id="bp-width">0px</span> × <span id="bp-height">0px</span>
+    </div>
+
+    <div class="test-modal-overlay" id="test-modal">
+        <div class="test-modal">
+            <div class="test-modal-header">
+                <h3 class="test-modal-title" id="modal-title">测试详情</h3>
+                <button class="test-modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-content">
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/components/slider-captcha.js"></script>
+    <script src="/static/js/components/point-captcha.js"></script>
+    <script src="/static/js/components/image-captcha.js"></script>
+    <script>
+    const TestRunner = (function() {
+        const state = {
+            tests: {
+                slider: [],
+                point: [],
+                image: [],
+                responsive: []
+            },
+            results: {
+                slider: {},
+                point: {},
+                image: {},
+                responsive: {}
+            },
+            running: 0,
+            passed: 0,
+            failed: 0,
+            startTime: null,
+            screenshots: []
+        };
+
+        const sliderTests = [
+            {
+                id: 'slider-render',
+                name: '滑块组件渲染',
+                desc: '验证滑块验证码组件是否正确渲染到页面',
+                run: async () => {
+                    const container = document.getElementById('slider-captcha-container');
+                    if (!container) return false;
+                    const slider = container.querySelector('.slider-captcha');
+                    return slider !== null;
+                }
+            },
+            {
+                id: 'slider-drag',
+                name: '滑块拖动交互',
+                desc: '模拟鼠标拖动滑块，验证位置更新',
+                run: async () => {
+                    const button = document.querySelector('.slider-captcha .slider-button');
+                    if (!button) return false;
+                    
+                    const rect = button.getBoundingClientRect();
+                    const startX = rect.left + rect.width / 2;
+                    const startY = rect.top + rect.height / 2;
+                    
+                    const mouseDown = new MouseEvent('mousedown', {
+                        bubbles: true,
+                        clientX: startX,
+                        clientY: startY
+                    });
+                    button.dispatchEvent(mouseDown);
+                    
+                    await delay(50);
+                    
+                    const mouseMove = new MouseEvent('mousemove', {
+                        bubbles: true,
+                        clientX: startX + 100,
+                        clientY: startY
+                    });
+                    document.dispatchEvent(mouseMove);
+                    
+                    await delay(50);
+                    
+                    const mouseUp = new MouseEvent('mouseup', { bubbles: true });
+                    document.dispatchEvent(mouseUp);
+                    
+                    await delay(500);
+                    
+                    const track = document.querySelector('.slider-captcha .slider-track');
+                    const width = parseFloat(track.style.width) || 0;
+                    return width > 0;
+                }
+            },
+            {
+                id: 'slider-refresh',
+                name: '刷新按钮功能',
+                desc: '点击刷新按钮，验证验证码刷新',
+                run: async () => {
+                    const refreshBtn = document.querySelector('#slider-captcha-container .captcha-refresh-btn');
+                    if (!refreshBtn) return false;
+                    
+                    refreshBtn.click();
+                    await delay(1000);
+                    return true;
+                }
+            },
+            {
+                id: 'slider-animation',
+                name: '滑块动画效果',
+                desc: '验证拖动时滑块的视觉反馈',
+                run: async () => {
+                    const button = document.querySelector('.slider-captcha .slider-button');
+                    const container = document.querySelector('.slider-captcha .slider-container');
+                    if (!button || !container) return false;
+                    
+                    const hasClass = button.classList.contains('dragging') || 
+                                   container.classList.contains('is-dragging');
+                    return hasClass === false;
+                }
+            },
+            {
+                id: 'slider-keyboard',
+                name: '键盘导航支持',
+                desc: '测试键盘方向键控制滑块',
+                run: async () => {
+                    const container = document.querySelector('.slider-captcha .slider-container');
+                    if (!container) return false;
+                    
+                    container.focus();
+                    
+                    const arrowRight = new KeyboardEvent('keydown', {
+                        key: 'ArrowRight',
+                        bubbles: true
+                    });
+                    container.dispatchEvent(arrowRight);
+                    
+                    await delay(100);
+                    
+                    const button = document.querySelector('.slider-captcha .slider-button');
+                    const left = parseFloat(button.style.left) || 0;
+                    return left > 2;
+                }
+            }
+        ];
+
+        const pointTests = [
+            {
+                id: 'point-render',
+                name: '点选组件渲染',
+                desc: '验证点选验证码组件是否正确渲染',
+                run: async () => {
+                    const container = document.getElementById('point-captcha-container');
+                    if (!container) return false;
+                    const canvas = container.querySelector('.captcha-canvas');
+                    return canvas !== null;
+                }
+            },
+            {
+                id: 'point-click',
+                name: '点击交互测试',
+                desc: '模拟点击画布，验证点击反馈',
+                run: async () => {
+                    const canvas = document.querySelector('#point-captcha-container .captcha-canvas');
+                    if (!canvas) return false;
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const clickEvent = new MouseEvent('click', {
+                        bubbles: true,
+                        clientX: rect.left + 100,
+                        clientY: rect.top + 100
+                    });
+                    canvas.dispatchEvent(clickEvent);
+                    
+                    await delay(300);
+                    
+                    const ripple = document.querySelector('#point-captcha-container .click-ripple');
+                    return true;
+                }
+            },
+            {
+                id: 'point-progress',
+                name: '进度指示器',
+                desc: '验证进度点是否正确显示',
+                run: async () => {
+                    const progressDots = document.querySelector('#point-captcha-container .progress-dots');
+                    if (!progressDots) return false;
+                    const dots = progressDots.querySelectorAll('.progress-dot');
+                    return dots.length > 0;
+                }
+            },
+            {
+                id: 'point-reset',
+                name: '重置按钮功能',
+                desc: '测试重置选择按钮',
+                run: async () => {
+                    const resetBtn = document.querySelector('#point-captcha-container .btn-reset');
+                    if (!resetBtn) return false;
+                    resetBtn.click();
+                    await delay(500);
+                    return true;
+                }
+            },
+            {
+                id: 'point-refresh',
+                name: '刷新按钮功能',
+                desc: '测试刷新验证码功能',
+                run: async () => {
+                    const refreshBtn = document.querySelector('#point-captcha-container .captcha-refresh-btn');
+                    if (!refreshBtn) return false;
+                    refreshBtn.click();
+                    await delay(1000);
+                    return true;
+                }
+            }
+        ];
+
+        const imageTests = [
+            {
+                id: 'image-render',
+                name: '图形组件渲染',
+                desc: '验证图形验证码组件是否正确渲染',
+                run: async () => {
+                    const container = document.getElementById('image-captcha-container');
+                    if (!container) return false;
+                    const img = container.querySelector('.captcha-img');
+                    return img !== null;
+                }
+            },
+            {
+                id: 'image-input',
+                name: '输入框功能',
+                desc: '测试验证码输入框',
+                run: async () => {
+                    const input = document.querySelector('#image-captcha-container .captcha-input');
+                    if (!input) return false;
+                    
+                    input.value = 'test';
+                    const event = new Event('input', { bubbles: true });
+                    input.dispatchEvent(event);
+                    
+                    return input.value === 'test';
+                }
+            },
+            {
+                id: 'image-refresh',
+                name: '刷新按钮功能',
+                desc: '测试刷新验证码图片',
+                run: async () => {
+                    const refreshBtn = document.querySelector('#image-captcha-container .captcha-refresh-btn');
+                    if (!refreshBtn) return false;
+                    refreshBtn.click();
+                    await delay(1000);
+                    return true;
+                }
+            },
+            {
+                id: 'image-enter',
+                name: '回车提交测试',
+                desc: '测试键盘回车键提交',
+                run: async () => {
+                    const input = document.querySelector('#image-captcha-container .captcha-input');
+                    if (!input) return false;
+                    
+                    input.value = 'ABCD';
+                    const enterEvent = new KeyboardEvent('keyup', {
+                        key: 'Enter',
+                        bubbles: true
+                    });
+                    input.dispatchEvent(enterEvent);
+                    
+                    await delay(500);
+                    return true;
+                }
+            },
+            {
+                id: 'image-empty',
+                name: '空输入验证',
+                desc: '测试空输入时的错误提示',
+                run: async () => {
+                    const input = document.querySelector('#image-captcha-container .captcha-input');
+                    const verifyBtn = document.querySelector('#image-captcha-container .btn-verify');
+                    if (!input || !verifyBtn) return false;
+                    
+                    input.value = '';
+                    verifyBtn.click();
+                    await delay(300);
+                    
+                    const feedback = document.querySelector('#image-captcha-container .captcha-feedback');
+                    return feedback && feedback.textContent.includes('请输入');
+                }
+            }
+        ];
+
+        const responsiveTests = [
+            {
+                id: 'resp-viewport',
+                name: '视口检测',
+                desc: '验证当前视口尺寸检测',
+                run: async () => {
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
+                    return width > 0 && height > 0;
+                }
+            },
+            {
+                id: 'resp-breakpoint',
+                name: '断点判断',
+                desc: '验证响应式断点是否正确',
+                run: async () => {
+                    const width = window.innerWidth;
+                    let breakpoint = 'large';
+                    if (width < 576) breakpoint = 'xs';
+                    else if (width < 768) breakpoint = 'sm';
+                    else if (width < 992) breakpoint = 'md';
+                    else if (width < 1200) breakpoint = 'lg';
+                    return breakpoint.length > 0;
+                }
+            },
+            {
+                id: 'resp-touch',
+                name: '触摸目标尺寸',
+                desc: '检查按钮等触摸目标是否符合最小尺寸',
+                run: async () => {
+                    const buttons = document.querySelectorAll('.captcha-refresh-btn, .slider-button');
+                    let valid = true;
+                    buttons.forEach(btn => {
+                        const rect = btn.getBoundingClientRect();
+                        if (rect.width < 32 || rect.height < 32) {
+                            valid = false;
+                        }
+                    });
+                    return valid;
+                }
+            },
+            {
+                id: 'resp-grid',
+                name: '网格布局',
+                desc: '验证响应式网格是否正常',
+                run: async () => {
+                    const grid = document.querySelector('.test-grid');
+                    if (!grid) return true;
+                    const style = getComputedStyle(grid);
+                    return style.display === 'grid';
+                }
+            },
+            {
+                id: 'resp-animation',
+                name: '动画性能',
+                desc: '测试动画帧率是否正常',
+                run: async () => {
+                    return new Promise(resolve => {
+                        let frameCount = 0;
+                        const startTime = performance.now();
+                        
+                        function countFrame() {
+                            frameCount++;
+                            if (performance.now() - startTime < 200) {
+                                requestAnimationFrame(countFrame);
+                            } else {
+                                const fps = (frameCount / (performance.now() - startTime)) * 1000;
+                                resolve(fps >= 20);
+                            }
+                        }
+                        requestAnimationFrame(countFrame);
+                    });
+                }
+            }
+        ];
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getTimestamp() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0];
+        }
+
+        function log(message, type = 'info') {
+            const container = document.getElementById('test-log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `
+                <span class="log-time">[${getTimestamp()}]</span>
+                <span class="log-message">${message}</span>
+            `;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function updateStats() {
+            const total = state.passed + state.failed;
+            const coverage = total > 0 ? Math.round((state.passed / total) * 100) : 0;
+            
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('passed-count').textContent = state.passed;
+            document.getElementById('failed-count').textContent = state.failed;
+            document.getElementById('running-count').textContent = state.running;
+            document.getElementById('coverage-percent').textContent = coverage + '%';
+            
+            const progress = total > 0 ? (state.passed / total) * 100 : 0;
+            document.getElementById('main-progress').style.width = progress + '%';
+            
+            updateBadges();
+        }
+
+        function updateBadges() {
+            ['slider', 'point', 'image', 'responsive'].forEach(tab => {
+                const badge = document.getElementById(`${tab}-badge`);
+                const tabTests = state.tests[tab];
+                const tabResults = state.results[tab];
+                const passed = tabTests.filter(t => tabResults[t.id] === true).length;
+                const total = tabTests.length;
+                badge.textContent = `${passed}/${total}`;
+                badge.className = `badge ${passed === total && total > 0 ? 'bg-success' : passed > 0 ? 'bg-warning' : 'bg-secondary'}`;
+            });
+        }
+
+        function renderTestList(tab, tests) {
+            const container = document.getElementById(`${tab}-test-list`);
+            container.innerHTML = tests.map(test => {
+                const result = state.results[tab][test.id];
+                let statusClass = 'pending';
+                let statusText = '待测试';
+                if (result === true) {
+                    statusClass = 'passed';
+                    statusText = '通过';
+                } else if (result === false) {
+                    statusClass = 'failed';
+                    statusText = '失败';
+                }
+                
+                return `
+                    <div class="test-item" data-test-id="${test.id}">
+                        <div class="test-item-header">
+                            <div class="test-item-title">${test.name}</div>
+                            <span class="test-item-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="test-item-desc">${test.desc}</div>
+                        <div class="test-item-actions">
+                            <button class="test-btn test-btn-primary" onclick="TestRunner.runTest('${tab}', '${test.id}')">
+                                <i class="fas fa-play"></i> 运行
+                            </button>
+                            <button class="test-btn test-btn-secondary" onclick="TestRunner.runTest('${tab}', '${test.id}', true)">
+                                <i class="fas fa-redo"></i> 重试
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function runTest(tab, testId, retry = false) {
+            const test = state.tests[tab].find(t => t.id === testId);
+            if (!test) return;
+            
+            if (retry) {
+                state.results[tab][testId] = undefined;
+            }
+            
+            state.running++;
+            updateStats();
+            
+            const statusEl = document.querySelector(`[data-test-id="${testId}"] .test-item-status`);
+            if (statusEl) {
+                statusEl.className = 'test-item-status running';
+                statusEl.textContent = '运行中...';
+            }
+            
+            log(`开始测试: ${test.name}`, 'info');
+            
+            try {
+                const result = await test.run();
+                state.results[tab][testId] = result;
+                
+                if (result) {
+                    state.passed++;
+                    log(`✓ 测试通过: ${test.name}`, 'success');
+                } else {
+                    state.failed++;
+                    log(`✗ 测试失败: ${test.name}`, 'error');
+                }
+            } catch (error) {
+                state.results[tab][testId] = false;
+                state.failed++;
+                log(`✗ 测试异常: ${test.name} - ${error.message}`, 'error');
+            }
+            
+            state.running--;
+            updateStats();
+            
+            if (statusEl) {
+                const result = state.results[tab][testId];
+                statusEl.className = `test-item-status ${result ? 'passed' : 'failed'}`;
+                statusEl.textContent = result ? '通过' : '失败';
+            }
+            
+            renderTestList(tab, state.tests[tab]);
+        }
+
+        async function runAllTests(tab = null) {
+            state.startTime = Date.now();
+            log('═'.repeat(60), 'info');
+            log('开始执行自动化测试', 'info');
+            
+            const tabs = tab ? [tab] : ['slider', 'point', 'image', 'responsive'];
+            
+            for (const t of tabs) {
+                for (const test of state.tests[t]) {
+                    await runTest(t, test.id);
+                    await delay(300);
+                }
+            }
+            
+            const duration = ((Date.now() - state.startTime) / 1000).toFixed(1);
+            log('═'.repeat(60), 'info');
+            log(`测试完成! 耗时: ${duration}s | 通过: ${state.passed} | 失败: ${state.failed}`, 'success');
+            
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const total = state.passed + state.failed;
+            const duration = state.startTime ? ((Date.now() - state.startTime) / 1000).toFixed(1) : '0';
+            
+            document.getElementById('summary-total').textContent = total;
+            document.getElementById('summary-passed').textContent = state.passed;
+            document.getElementById('summary-failed').textContent = state.failed;
+            document.getElementById('summary-duration').textContent = duration + 's';
+            
+            const summaryLog = document.getElementById('summary-log-container');
+            summaryLog.innerHTML = '';
+            
+            ['slider', 'point', 'image', 'responsive'].forEach(tab => {
+                const tabTests = state.tests[tab];
+                const tabResults = state.results[tab];
+                const passed = tabTests.filter(t => tabResults[t.id] === true).length;
+                const total = tabTests.length;
+                
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${passed === total ? 'success' : 'warning'}`;
+                entry.innerHTML = `
+                    <span class="log-time">[${tab.toUpperCase()}]</span>
+                    <span class="log-message">${passed}/${total} 测试通过</span>
+                `;
+                summaryLog.appendChild(entry);
+            });
+        }
+
+        function simulateDevice(type) {
+            const simulator = document.getElementById('simulator-content');
+            const indicator = document.getElementById('breakpoint-indicator');
+            
+            let content = '';
+            let sizes = { width: 0, height: 0 };
+            
+            switch(type) {
+                case 'mobile':
+                    sizes = { width: 375, height: 667 };
+                    content = `
+                        <div class="text-center">
+                            <i class="fas fa-mobile-alt fa-2x text-primary mb-2"></i>
+                            <h5>手机模式</h5>
+                            <p class="text-muted small">375 × 667</p>
+                            <div class="slider-captcha" style="max-width: 100%;">
+                                <div class="slider-container" style="font-size: 12px;">
+                                    <div class="slider-track" style="width: 0;"></div>
+                                    <div class="slider-button" style="width: 36px; height: 36px;">
+                                        <i class="fas fa-arrow-right" style="font-size: 12px;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'tablet':
+                    sizes = { width: 768, height: 1024 };
+                    content = `
+                        <div class="text-center">
+                            <i class="fas fa-tablet-alt fa-2x text-primary mb-2"></i>
+                            <h5>平板模式</h5>
+                            <p class="text-muted small">768 × 1024</p>
+                            <div class="slider-captcha">
+                                <div class="slider-container">
+                                    <div class="slider-track" style="width: 0;"></div>
+                                    <div class="slider-button" style="width: 44px; height: 44px;">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'desktop':
+                    sizes = { width: 1280, height: 800 };
+                    content = `
+                        <div class="text-center">
+                            <i class="fas fa-desktop fa-2x text-primary mb-2"></i>
+                            <h5>桌面模式</h5>
+                            <p class="text-muted small">1280 × 800</p>
+                            <div class="slider-captcha">
+                                <div class="slider-container">
+                                    <div class="slider-track" style="width: 0;"></div>
+                                    <div class="slider-button">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            simulator.innerHTML = content;
+            indicator.classList.add('show');
+            document.getElementById('bp-width').textContent = sizes.width + 'px';
+            document.getElementById('bp-height').textContent = sizes.height + 'px';
+            
+            log(`设备模拟: ${type} (${sizes.width}×${sizes.height})`, 'info');
+        }
+
+        async function runResponsiveTests() {
+            log('开始响应式布局测试...', 'info');
+            
+            const devices = ['mobile', 'tablet', 'desktop'];
+            
+            for (const device of devices) {
+                simulateDevice(device);
+                await delay(500);
+                
+                for (const test of state.tests.responsive) {
+                    await runTest('responsive', test.id);
+                    await delay(200);
+                }
+            }
+            
+            log('响应式布局测试完成', 'success');
+        }
+
+        async function takeScreenshot(name) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#1a1a2e';
+                ctx.font = '24px Arial';
+                ctx.fillText(`截图: ${name}`, 50, 50);
+                ctx.fillText(`时间: ${new Date().toLocaleString()}`, 50, 100);
+                
+                const dataUrl = canvas.toDataURL('image/png');
+                
+                state.screenshots.push({
+                    name: name,
+                    data: dataUrl,
+                    time: new Date().toLocaleTimeString()
+                });
+                
+                updateScreenshotGallery();
+                log(`截图已保存: ${name}`, 'success');
+            } catch (error) {
+                log(`截图失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function takeAllScreenshots() {
+            log('开始截取所有测试截图...', 'info');
+            
+            await takeScreenshot('滑块验证');
+            document.getElementById('test-nav-tabs').querySelector('[data-tab="point"]').click();
+            await delay(300);
+            await takeScreenshot('点选验证');
+            
+            document.getElementById('test-nav-tabs').querySelector('[data-tab="image"]').click();
+            await delay(300);
+            await takeScreenshot('图形验证');
+            
+            document.getElementById('test-nav-tabs').querySelector('[data-tab="responsive"]').click();
+            await delay(300);
+            await takeScreenshot('响应式布局');
+            
+            document.getElementById('test-nav-tabs').querySelector('[data-tab="summary"]').click();
+            await delay(300);
+            await takeScreenshot('测试报告');
+            
+            log('所有截图截取完成', 'success');
+        }
+
+        function updateScreenshotGallery() {
+            const gallery = document.getElementById('screenshot-gallery');
+            
+            if (state.screenshots.length === 0) {
+                gallery.innerHTML = '<p class="text-muted">暂无截图</p>';
+                return;
+            }
+            
+            gallery.innerHTML = state.screenshots.map((shot, index) => `
+                <div class="screenshot-item">
+                    <img src="${shot.data}" alt="${shot.name}" class="screenshot-preview">
+                    <div class="screenshot-info">
+                        <div class="screenshot-name">${shot.name}</div>
+                        <div class="screenshot-time">${shot.time}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function initCaptchas() {
+            try {
+                const sliderContainer = document.getElementById('slider-captcha-container');
+                if (sliderContainer && typeof SliderCaptcha !== 'undefined') {
+                    new SliderCaptcha(sliderContainer, {
+                        apiBase: '/api/v1',
+                        onSuccess: (result) => log('滑块验证成功: ' + result.session_id, 'success'),
+                        onError: (error) => log('滑块验证失败: ' + error.error, 'error')
+                    });
+                }
+            } catch (e) {
+                log('滑块组件初始化: ' + e.message, 'error');
+            }
+            
+            try {
+                const pointContainer = document.getElementById('point-captcha-container');
+                if (pointContainer && typeof PointCaptcha !== 'undefined') {
+                    new PointCaptcha(pointContainer, {
+                        apiBase: '/api/v1',
+                        onSuccess: (result) => log('点选验证成功: ' + result.session_id, 'success'),
+                        onError: (error) => log('点选验证失败: ' + error.error, 'error')
+                    });
+                }
+            } catch (e) {
+                log('点选组件初始化: ' + e.message, 'error');
+            }
+            
+            try {
+                const imageContainer = document.getElementById('image-captcha-container');
+                if (imageContainer && typeof ImageCaptcha !== 'undefined') {
+                    new ImageCaptcha(imageContainer, {
+                        apiBase: '/api/v1',
+                        onSuccess: (result) => log('图形验证成功: ' + result.session_id, 'success'),
+                        onError: (error) => log('图形验证失败: ' + error.error, 'error')
+                    });
+                }
+            } catch (e) {
+                log('图形组件初始化: ' + e.message, 'error');
+            }
+        }
+
+        function init() {
+            state.tests.slider = sliderTests;
+            state.tests.point = pointTests;
+            state.tests.image = imageTests;
+            state.tests.responsive = responsiveTests;
+            
+            renderTestList('slider', sliderTests);
+            renderTestList('point', pointTests);
+            renderTestList('image', imageTests);
+            renderTestList('responsive', responsiveTests);
+            
+            document.querySelectorAll('.test-nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.test-nav-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    document.querySelectorAll('.test-content-card').forEach(card => card.classList.add('hidden'));
+                    document.getElementById(`${tab.dataset.tab}-tab-content`).classList.remove('hidden');
+                    
+                    if (tab.dataset.tab === 'summary') {
+                        updateSummary();
+                    }
+                });
+            });
+            
+            const runAllBtn = document.createElement('button');
+            runAllBtn.className = 'test-btn test-btn-success ms-2';
+            runAllBtn.innerHTML = '<i class="fas fa-play-circle"></i> 运行全部测试';
+            runAllBtn.onclick = () => runAllTests();
+            document.querySelector('.test-status-bar').appendChild(runAllBtn);
+            
+            setTimeout(initCaptchas, 500);
+            
+            log('测试框架初始化完成', 'success');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        return {
+            runTest,
+            runAllTests,
+            runResponsiveTests,
+            simulateDevice,
+            takeScreenshot,
+            takeAllScreenshots,
+            updateSummary
+        };
+    })();
+
+    function closeModal() {
+        document.getElementById('test-modal').classList.remove('show');
+    }
+    </script>
+</body>
+</html>

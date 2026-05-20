@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	github.com/hjtpx/hjtpx/internal/api/middleware"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
@@ -42,9 +41,30 @@ func (h *APIDocHandler) GetAPIV1Doc(c *gin.Context) {
 				RateLimit:   "100/min",
 			},
 			{
+				Method:      "POST",
+				Path:        "/captcha/generate",
+				Description: "生成验证码（统一接口）",
+				Auth:        false,
+				RateLimit:   "60/min",
+			},
+			{
+				Method:      "POST",
+				Path:        "/captcha/verify",
+				Description: "验证验证码（统一接口）",
+				Auth:        false,
+				RateLimit:   "60/min",
+			},
+			{
 				Method:      "GET",
-				Path:        "/captcha/slider",
-				Description: "获取滑动验证码",
+				Path:        "/captcha/status",
+				Description: "查询验证码状态",
+				Auth:        false,
+				RateLimit:   "60/min",
+			},
+			{
+				Method:      "POST",
+				Path:        "/captcha/slider/create",
+				Description: "创建滑动验证码",
 				Auth:        false,
 				RateLimit:   "60/min",
 			},
@@ -442,10 +462,3 @@ func (h *APIDocHandler) RegisterRoutes(r *gin.Engine) {
 		}
 	}
 }
-
-func init() {
-	apiDocHandler := NewAPIDocHandler()
-	apiDocHandler.RegisterRoutes(nil)
-}
-
-var _ = middleware.PaginationMiddleware

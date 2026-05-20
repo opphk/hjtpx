@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/repository"
+	"github.com/hjtpx/hjtpx/internal/repository"
 	goredis "github.com/redis/go-redis/v9"
 )
 

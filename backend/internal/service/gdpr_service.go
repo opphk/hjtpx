@@ -139,7 +139,7 @@ func (s *GDPRService) processDataExport(requestID uint) {
 	}
 
 	// 创建导出目录
-	exportDir := github.com/hjtpx/hjtpx/exports"
+	exportDir := "./exports"
 	if err := os.MkdirAll(exportDir, 0755); err != nil {
 		database.DB.Model(&request).Updates(map[string]interface{}{
 			"status": "failed",

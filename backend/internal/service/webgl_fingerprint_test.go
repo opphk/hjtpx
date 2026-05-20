@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestNewWebGLFingerprintService(t *testing.T) {

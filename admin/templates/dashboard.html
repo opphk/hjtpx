@@ -44,6 +44,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="container-fluid" id="dashboardContent">
 <div class="row mb-4">
     <div class="col-12">
         <div class="alert alert-info alert-dismissible fade show" id="dashboardTip" style="display: none;">
@@ -682,10 +683,124 @@
 </div>
 {% endblock %}
 
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+<style>
+    .dashboard-stats {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .dashboard-stats:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    .counter-value {
+        font-weight: 700;
+        font-size: 2.5rem;
+        line-height: 1.2;
+    }
+    .progress-indicator {
+        height: 6px;
+        border-radius: 3px;
+        transition: width 0.6s ease;
+    }
+    .realtime-badge {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    .fade-in {
+        animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    @media (max-width: 768px) {
+        .counter-value {
+            font-size: 1.8rem;
+        }
+        .chart-container {
+            height: 250px;
+        }
+        .card-title {
+            font-size: 1rem;
+        }
+        .small-box h3 {
+            font-size: 1.5rem;
+        }
+    }
+    @media (max-width: 576px) {
+        .counter-value {
+            font-size: 1.5rem;
+        }
+        .small-box {
+            padding: 0.5rem;
+        }
+        .info-box {
+            padding: 0.75rem;
+        }
+        .table {
+            font-size: 0.85rem;
+        }
+        .btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .modal-dialog {
+            max-width: 95%;
+            margin: 0.5rem auto;
+        }
+    }
+    @media (min-width: 769px) and (max-width: 992px) {
+        .chart-container {
+            height: 280px;
+        }
+    }
+    @media (min-width: 993px) {
+        .chart-container {
+            height: 300px;
+        }
+    }
+    .responsive-card {
+        transition: all 0.3s ease;
+    }
+    .responsive-card.mobile-layout {
+        margin-bottom: 0.5rem;
+    }
+    .responsive-card.desktop-layout {
+        margin-bottom: 1rem;
+    }
+    .widget-container {
+        break-inside: avoid;
+    }
+    .touch-optimized {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    .device-mobile .content-wrapper {
+        padding: 0.5rem;
+    }
+    .orientation-landscape .card {
+        min-height: auto;
+    }
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
-<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/extension/bmap.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="/admin/static/js/dashboard-stats.js"></script>
+<script src="/admin/static/js/dashboard-charts.js"></script>
+<script src="/admin/static/js/dashboard-realtime.js"></script>
+<script src="/admin/static/js/dashboard-ux.js"></script>
+<script src="/admin/static/js/dashboard-responsive.js"></script>
 <script src="/admin/static/js/dashboard-ext.js"></script>
 <script src="/admin/static/js/dashboard-enhanced.js"></script>
 <script src="/admin/static/js/realtime-analytics.js"></script>

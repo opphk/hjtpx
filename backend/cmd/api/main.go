@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,7 +19,39 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 	"github.com/hjtpx/hjtpx/pkg/performance"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	envFile := os.Getenv("ENV_FILE")
+	if envFile == "" {
+		execPath, err := os.Executable()
+		if err == nil {
+			execDir := filepath.Dir(execPath)
+			possiblePaths := []string{
+				filepath.Join(execDir, ".env"),
+				filepath.Join(execDir, "..", ".env"),
+				filepath.Join(execDir, "..", "..", ".env"),
+				"/workspace/backend/.env",
+				"/workspace/.env",
+			}
+			for _, path := range possiblePaths {
+				if _, err := os.Stat(path); err == nil {
+					envFile = path
+					break
+				}
+			}
+		}
+		if envFile == "" {
+			envFile = "/workspace/.env"
+		}
+	}
+	if err := godotenv.Load(envFile); err != nil {
+		log.Printf("Warning: Failed to load .env file from %s: %v", envFile, err)
+	} else {
+		log.Printf("Successfully loaded .env file from %s", envFile)
+	}
+}
 
 func main() {
 	cfg := config.LoadConfig()

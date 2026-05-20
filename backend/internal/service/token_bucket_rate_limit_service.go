@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/pkg/logger"
+	"github.com/hjtpx/hjtpx/internal/pkg/logger"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 )
 

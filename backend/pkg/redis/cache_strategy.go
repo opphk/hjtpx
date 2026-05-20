@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -34,14 +33,18 @@ type LegacySerializer interface {
 	Deserialize([]byte, interface{}) error
 }
 
-type JSONSerializer struct{}
+type legacyJSONSerializer struct{}
 
-func (s *JSONSerializer) Serialize(v interface{}) ([]byte, error) {
+func (s *legacyJSONSerializer) Serialize(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (s *JSONSerializer) Deserialize(data []byte, v interface{}) error {
+func (s *legacyJSONSerializer) Deserialize(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+func newLegacyJSONSerializer() LegacySerializer {
+	return &legacyJSONSerializer{}
 }
 
 type SmartCacheManager struct {
@@ -74,7 +77,7 @@ func NewSmartCacheManager(client *redis.Client, config *CacheConfig) *SmartCache
 		strategies:  make(map[CacheStrategy]EvictionStrategy),
 	}
 
-	manager.serializers["json"] = &JSONSerializer{}
+	manager.serializers["json"] = newLegacyJSONSerializer()
 
 	manager.strategies[StrategyLRU] = &LRUStrategy{}
 	manager.strategies[StrategyLFU] = &LFUStrategy{}
@@ -153,7 +156,7 @@ func (m *SmartCacheManager) Delete(ctx context.Context, keys ...string) error {
 }
 
 func (m *SmartCacheManager) Exists(ctx context.Context, keys ...string) (int64, error) {
-	return m.client.Exists(ctx, keys...).Err()
+	return m.client.Exists(ctx, keys...).Result()
 }
 
 func (m *SmartCacheManager) Expire(ctx context.Context, key string, ttl time.Duration) error {
@@ -242,14 +245,12 @@ func (m *SmartCacheManager) GetStats(ctx context.Context) (*CacheStats, error) {
 
 	stats := &CacheStats{}
 
-	var currentSection string
 	for _, line := range splitLines(info) {
 		if line == "" {
 			continue
 		}
 
 		if !contains(line, ":") {
-			currentSection = line
 			continue
 		}
 
@@ -286,7 +287,7 @@ func (m *SmartCacheManager) GetStats(ctx context.Context) (*CacheStats, error) {
 func (m *SmartCacheManager) serialize(value interface{}) ([]byte, error) {
 	serializer, ok := m.serializers[m.config.SerializationType]
 	if !ok {
-		serializer = &JSONSerializer{}
+		serializer = newLegacyJSONSerializer()
 	}
 	return serializer.Serialize(value)
 }
@@ -294,7 +295,7 @@ func (m *SmartCacheManager) serialize(value interface{}) ([]byte, error) {
 func (m *SmartCacheManager) deserialize(data []byte, dest interface{}) error {
 	serializer, ok := m.serializers[m.config.SerializationType]
 	if !ok {
-		serializer = &JSONSerializer{}
+		serializer = newLegacyJSONSerializer()
 	}
 	return serializer.Deserialize(data, dest)
 }
@@ -378,6 +379,11 @@ func (s *AdaptiveStrategy) ShouldEvict(key string, stats *CacheStats) bool {
 		return s.LRUStrategy.ShouldEvict(key, stats)
 	}
 	return s.LFUStrategy.ShouldEvict(key, stats)
+}
+
+func (s *AdaptiveStrategy) RecordAccess(key string) {
+	s.LRUStrategy.RecordAccess(key)
+	s.LFUStrategy.RecordAccess(key)
 }
 
 func splitLines(s string) []string {

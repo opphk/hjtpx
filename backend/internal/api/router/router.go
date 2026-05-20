@@ -21,7 +21,7 @@ func SetupRoutes(r *gin.Engine) {
 	vrGen := captcha.NewVRGeneratorServiceSimple()
 	vrVer := captcha.NewVRVerifierServiceSimple()
 	handler.InitVRCaptchaHandler(vrGen, vrVer)
-	
+
 	// 初始化VR/AR验证码handler
 	vrArGen := captcha.NewVRARGeneratorServiceSimple()
 	vrArVer := captcha.NewVRARVerifierServiceSimple()
@@ -35,12 +35,10 @@ func SetupRoutes(r *gin.Engine) {
 	stSvc := service.NewSpatioTemporalCaptchaService()
 	handler.InitSpatioTemporalCaptchaHandler(stSvc)
 
-	// 初始化生物识别增强版验证码handler
-	handler.InitBiometricEnhancedHandler()
-
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
+	r.Use(middleware.AdvancedPerformanceMonitoring())
 
 	// 设置模板函数
 	r.SetFuncMap(template.FuncMap{
@@ -73,12 +71,14 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{"status": "ok"})
 		})
+		api.GET("/health/v2", handler.HealthCheck)
+		api.GET("/health/ready", handler.Readiness)
+		api.GET("/health/live", handler.Liveness)
 
-		// 滑块验证码
-		api.POST("/captcha/slider/create", handler.CreateSliderCaptcha)
-		api.POST("/captcha/slider/verify", handler.VerifySliderCaptcha)
-		api.GET("/captcha/slider/status/:session_id", handler.GetSliderCaptchaStatus)
-		api.GET("/captcha/slider/check/:session_id", handler.CheckSliderCaptchaValid)
+		// ============ 统一验证码接口 ============
+		api.POST("/captcha/generate", handler.GenerateCaptcha)
+		api.POST("/captcha/verify", handler.VerifyCaptcha)
+		api.GET("/captcha/status", handler.GetCaptchaStatus)
 
 		// 点选验证码
 		api.GET("/captcha/click", handler.GetClickCaptcha)
@@ -106,16 +106,6 @@ func SetupRoutes(r *gin.Engine) {
 		// 表情识别验证码
 		api.POST("/captcha/emoji/create", handler.CreateEmojiCaptcha)
 		api.POST("/captcha/emoji/verify", handler.VerifyEmojiCaptcha)
-
-		// 语义理解验证码
-		api.POST("/captcha/semantic/create", handler.CreateSemanticCaptcha)
-		api.POST("/captcha/semantic/verify", handler.VerifySemanticCaptcha)
-		api.GET("/captcha/semantic/status/:session_id", handler.GetSemanticCaptchaStatus)
-
-		// 组合验证码
-		api.POST("/captcha/combo/create", handler.CreateComboCaptcha)
-		api.POST("/captcha/combo/verify", handler.VerifyComboCaptcha)
-		api.GET("/captcha/combo/status/:session_id", handler.GetComboCaptchaStatus)
 
 		// ============ v17.0 新增验证码路由 ============
 		// 视频验证码
@@ -149,19 +139,9 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/captcha/vr-ar/verify", handler.VerifyVrArCaptcha)
 		api.GET("/captcha/vr-ar/status/:session_id", handler.GetVrArCaptchaStatus)
 
-		// 生物识别验证码
-		api.POST("/captcha/biometric/generate", handler.GenerateBiometricCaptcha)
-		api.POST("/captcha/biometric/verify", handler.VerifyBiometricCaptcha)
-
 		// 增强的组合验证码系统
 		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)
 		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
-
-		// ============ v20.0 新增验证码路由 ============
-		// 多感官融合验证码
-		api.POST("/captcha/multisensory/create", handler.CreateMultisensoryCaptcha)
-		api.POST("/captcha/multisensory/verify", handler.VerifyMultisensoryCaptcha)
-		api.GET("/captcha/multisensory/status/:session_id", handler.GetMultisensoryCaptchaStatus)
 
 		// ============ v17.0 新增 AI 模型 v3 路由 ============
 		api.POST("/ai/v3/smart-captcha/generate", aiModelV3Handler.GenerateSmartCaptcha)
@@ -175,9 +155,6 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/crypto/v2/decrypt", handler.DecryptAdvanced)
 		api.POST("/crypto/v2/quantum-hash", handler.GenerateQuantumHash)
 		api.GET("/crypto/v2/keys", handler.GetActiveKeys)
-
-		// 统一验证码验证接口
-		api.POST("/captcha/verify", handler.VerifyCaptcha)
 
 		// ============ 管理员认证路由 ============
 		admin := api.Group("/admin")
@@ -197,42 +174,6 @@ func SetupRoutes(r *gin.Engine) {
 			// 获取管理员仪表盘数据
 			admin.GET("/dashboard", middleware.AuthMiddleware(), handler.AdminDashboard)
 
-			// ============ 应用管理路由 ============
-			apps := admin.Group("/applications", middleware.AuthMiddleware())
-			{
-				apps.GET("", handler.ListApplications)
-				apps.POST("", handler.CreateApplication)
-				apps.GET("/:id", handler.GetApplication)
-				apps.PUT("/:id", handler.UpdateApplication)
-				apps.DELETE("/:id", handler.DeleteApplication)
-				apps.POST("/:id/rotate-key", handler.RegenerateApplicationKey)
-				apps.GET("/:id/statistics", handler.GetApplicationStatistics)
-			}
-
-			// ============ 日志管理路由 ============
-			logs := admin.Group("/logs", middleware.AuthMiddleware())
-			{
-				logs.GET("", handler.GetVerificationLogs)
-				logs.GET("/:id", handler.GetLogDetail)
-				logs.POST("/search", handler.AdvancedSearchLogs)
-				logs.GET("/export", handler.ExportLogs)
-				logs.GET("/session/:session_id", handler.GetLogsBySession)
-				logs.GET("/statistics", handler.GetLogStatistics)
-				logs.POST("/save-search", handler.SaveLogSearch)
-				logs.GET("/saved-searches", handler.GetSavedLogSearches)
-				logs.DELETE("/saved-searches/:id", handler.DeleteSavedLogSearch)
-			}
-
-			// ============ 风控规则路由 ============
-			rules := admin.Group("/risk-rules", middleware.AuthMiddleware())
-			{
-				rules.GET("", handler.ListRiskRules)
-				rules.POST("", handler.CreateRiskRule)
-				rules.GET("/:id", handler.GetRiskRule)
-				rules.PUT("/:id", handler.UpdateRiskRule)
-				rules.DELETE("/:id", handler.DeleteRiskRule)
-			}
-
 			// ============ 统计分析路由 ============
 			stats := admin.Group("/statistics", middleware.AuthMiddleware())
 			{
@@ -242,21 +183,34 @@ func SetupRoutes(r *gin.Engine) {
 				stats.GET("/performance", handler.GetVerificationStats)
 				stats.GET("/realtime", handler.GetRealtimeStats)
 			}
+		}
 
-			// ============ A/B测试路由 ============
-			abtest := admin.Group("/ab-testing", middleware.AuthMiddleware())
-			{
-				abtest.GET("", handler.ListABTests)
-				abtest.POST("", handler.CreateABTest)
-				abtest.GET("/:id", handler.GetABTest)
-				abtest.PUT("/:id", handler.UpdateABTest)
-				abtest.DELETE("/:id", handler.DeleteABTest)
-				abtest.POST("/:id/start", handler.StartABTest)
-				abtest.POST("/:id/stop", handler.StopABTest)
-				abtest.GET("/:id/report", handler.GetTestReport)
-				abtest.GET("/active", handler.GetActiveTests)
-				abtest.GET("/summary", handler.GetABTestSummary)
-			}
+		// ============ 用户管理路由 ============
+		userHandler := handler.GetUserHandler()
+		user := api.Group("/user")
+		{
+			// 用户注册
+			user.POST("/register", userHandler.Register)
+			// 用户登录
+			user.POST("/login", userHandler.Login)
+			// 刷新令牌
+			user.POST("/refresh-token", userHandler.RefreshToken)
+			// 登出
+			user.POST("/logout", middleware.UserAuthMiddleware(), userHandler.Logout)
+			// 获取用户资料（需要认证）
+			user.GET("/profile", middleware.UserAuthMiddleware(), userHandler.GetProfile)
+			// 更新用户资料（需要认证）
+			user.PUT("/profile", middleware.UserAuthMiddleware(), userHandler.UpdateProfile)
+			// 修改密码（需要认证）
+			user.POST("/change-password", middleware.UserAuthMiddleware(), userHandler.ChangePassword)
+			// 请求密码重置
+			user.POST("/reset-password/request", userHandler.RequestPasswordReset)
+			// 重置密码
+			user.POST("/reset-password", userHandler.ResetPassword)
+			// 验证邮箱
+			user.GET("/verify-email", userHandler.VerifyEmail)
+			// 重新发送验证邮件
+			user.POST("/resend-verification", userHandler.ResendVerification)
 		}
 	}
 }

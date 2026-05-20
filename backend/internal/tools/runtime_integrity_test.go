@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestNewRuntimeIntegrity(t *testing.T) {

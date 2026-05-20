@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	github.com/hjtpx/hjtpx/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 type HashAlgorithm string
