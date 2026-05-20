@@ -2,324 +2,514 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
 
-func TestNewAIModelLifecycleService(t *testing.T) {
+func TestAIModelLifecycleService_RegisterModel(t *testing.T) {
 	service := NewAIModelLifecycleService()
-	if service == nil {
-		t.Fatal("Expected service instance, got nil")
-	}
-}
 
-func TestListModels(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	models, err := service.ListModels(ctx)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if len(models) == 0 {
-		t.Error("Expected at least one model, got none")
-	}
-
-	for _, model := range models {
-		if model.ID == 0 {
-			t.Error("Expected model ID to be set")
-		}
-		if model.Name == "" {
-			t.Error("Expected model name to be set")
-		}
-		if model.Version == "" {
-			t.Error("Expected model version to be set")
-		}
-		if model.Status == "" {
-			t.Error("Expected model status to be set")
-		}
-	}
-}
-
-func TestGetModel(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	testID := uint(1)
-	model, err := service.GetModel(ctx, testID)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if model == nil {
-		t.Fatal("Expected model, got nil")
-	}
-
-	if model.ID != testID {
-		t.Errorf("Expected model ID %d, got %d", testID, model.ID)
-	}
-}
-
-func TestUploadModel(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	req := &ModelUploadRequest{
+	model := &AIModel{
 		Name:        "Test Model",
-		Description: "Test Description",
+		Description: "A test model",
 		Type:        "classification",
-		Version:     "v1.0.0",
-		Metadata: map[string]interface{}{
-			"accuracy": 0.95,
+		Framework:   "tensorflow",
+		Owner:      "test-owner",
+		Team:       "ai-team",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Errorf("RegisterModel() error = %v", err)
+	}
+
+	if model.ModelID == "" {
+		t.Error("ModelID should be set after registration")
+	}
+}
+
+func TestAIModelLifecycleService_GetModel(t *testing.T) {
+	service := NewAIModelLifecycleService()
+
+	model := &AIModel{
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
+	}
+
+	retrieved, err := service.GetModel(context.Background(), model.ModelID)
+	if err != nil {
+		t.Errorf("GetModel() error = %v", err)
+	}
+
+	if retrieved.Name != model.Name {
+		t.Errorf("Expected name '%s', got '%s'", model.Name, retrieved.Name)
+	}
+}
+
+func TestAIModelLifecycleService_UpdateModel(t *testing.T) {
+	service := NewAIModelLifecycleService()
+
+	model := &AIModel{
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
+	}
+
+	model.Description = "Updated description"
+	err = service.UpdateModel(context.Background(), model)
+	if err != nil {
+		t.Errorf("UpdateModel() error = %v", err)
+	}
+
+	retrieved, _ := service.GetModel(context.Background(), model.ModelID)
+	if retrieved.Description != "Updated description" {
+		t.Error("Model description was not updated")
+	}
+}
+
+func TestAIModelLifecycleService_DeleteModel(t *testing.T) {
+	service := NewAIModelLifecycleService()
+
+	model := &AIModel{
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
+	}
+
+	err = service.DeleteModel(context.Background(), model.ModelID)
+	if err != nil {
+		t.Errorf("DeleteModel() error = %v", err)
+	}
+
+	_, err = service.GetModel(context.Background(), model.ModelID)
+	if err == nil {
+		t.Error("GetModel() should return error after deletion")
+	}
+}
+
+func TestAIModelLifecycleService_CreateVersion(t *testing.T) {
+	service := NewAIModelLifecycleService()
+
+	model := &AIModel{
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
+	}
+
+	version := &ModelVersion{
+		Version: "1.0.0",
+		Name:   "Initial Version",
+		Metrics: &ModelVersionMetrics{
+			Accuracy:  0.95,
+			Precision: 0.93,
+			Recall:   0.94,
 		},
 	}
 
-	model, err := service.UploadModel(ctx, req)
+	err = service.CreateVersion(context.Background(), model.ModelID, version)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Errorf("CreateVersion() error = %v", err)
 	}
 
-	if model == nil {
-		t.Fatal("Expected model, got nil")
+	versions, err := service.ListVersions(context.Background(), model.ModelID)
+	if err != nil {
+		t.Errorf("ListVersions() error = %v", err)
 	}
 
-	if model.Name != req.Name {
-		t.Errorf("Expected name %s, got %s", req.Name, model.Name)
-	}
-
-	if model.Version != req.Version {
-		t.Errorf("Expected version %s, got %s", req.Version, model.Version)
-	}
-
-	if model.Status != "draft" {
-		t.Errorf("Expected status 'draft', got %s", model.Status)
+	if len(versions) != 1 {
+		t.Errorf("Expected 1 version, got %d", len(versions))
 	}
 }
 
-func TestUpdateModel(t *testing.T) {
+func TestAIModelLifecycleService_DeployModel(t *testing.T) {
 	service := NewAIModelLifecycleService()
-	ctx := context.Background()
 
-	testID := uint(1)
-	req := &ModelUploadRequest{
-		Name:        "Updated Model",
-		Description: "Updated Description",
-		Type:        "detection",
-		Version:     "v2.0.0",
-	}
-
-	model, err := service.UpdateModel(ctx, testID, req)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if model == nil {
-		t.Fatal("Expected model, got nil")
-	}
-
-	if model.ID != testID {
-		t.Errorf("Expected ID %d, got %d", testID, model.ID)
-	}
-
-	if model.Name != req.Name {
-		t.Errorf("Expected name %s, got %s", req.Name, model.Name)
-	}
-}
-
-func TestDeleteModel(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	testID := uint(1)
-	err := service.DeleteModel(ctx, testID)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-}
-
-func TestListVersions(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	modelID := uint(1)
-	versions, err := service.ListVersions(ctx, modelID)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if len(versions) == 0 {
-		t.Error("Expected at least one version, got none")
-	}
-
-	for _, version := range versions {
-		if version.ModelID != modelID {
-			t.Errorf("Expected model ID %d, got %d", modelID, version.ModelID)
-		}
-		if version.Version == "" {
-			t.Error("Expected version string to be set")
-		}
-	}
-}
-
-func TestDeployModel(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	req := &ModelDeployRequest{
-		ModelID:       1,
-		VersionID:     1,
-		Environment:   "production",
-		TrafficWeight: 1.0,
-	}
-
-	deployment, err := service.DeployModel(ctx, req)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if deployment == nil {
-		t.Fatal("Expected deployment, got nil")
-	}
-
-	if deployment.ModelID != req.ModelID {
-		t.Errorf("Expected model ID %d, got %d", req.ModelID, deployment.ModelID)
-	}
-
-	if deployment.Environment != req.Environment {
-		t.Errorf("Expected environment %s, got %s", req.Environment, deployment.Environment)
-	}
-}
-
-func TestGetDeployment(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	testID := uint(1)
-	deployment, err := service.GetDeployment(ctx, testID)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if deployment == nil {
-		t.Fatal("Expected deployment, got nil")
-	}
-
-	if deployment.ID != testID {
-		t.Errorf("Expected ID %d, got %d", testID, deployment.ID)
-	}
-}
-
-func TestListDeployments(t *testing.T) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-
-	modelID := uint(1)
-	deployments, err := service.ListDeployments(ctx, modelID)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	if len(deployments) == 0 {
-		t.Error("Expected at least one deployment, got none")
-	}
-
-	for _, deployment := range deployments {
-		if deployment.ModelID != modelID {
-			t.Errorf("Expected model ID %d, got %d", modelID, deployment.ModelID)
-		}
-	}
-}
-
-func TestModelStructFields(t *testing.T) {
 	model := &AIModel{
-		ID:          1,
-		Name:        "Test",
-		Version:     "v1.0",
-		Description: "Desc",
-		Status:      "deployed",
+		Name:        "Test Model",
+		Description: "A test model",
 		Type:        "classification",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		Metadata:    map[string]interface{}{"key": "value"},
 	}
 
-	if model.ID != 1 {
-		t.Error("ID field not set correctly")
-	}
-	if model.Name != "Test" {
-		t.Error("Name field not set correctly")
-	}
-	if model.Version != "v1.0" {
-		t.Error("Version field not set correctly")
-	}
-	if model.Status != "deployed" {
-		t.Error("Status field not set correctly")
-	}
-}
-
-func TestModelVersionStruct(t *testing.T) {
-	version := &ModelVersion{
-		ID:         1,
-		ModelID:    2,
-		Version:    "v1.0",
-		Checksum:   "sha256:abc123",
-		FilePath:   "/path/to/model",
-		Status:     "deployed",
-		CreatedAt:  time.Now(),
-		DeployedAt: time.Now(),
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
 	}
 
-	if version.ID != 1 {
-		t.Error("ID field not set correctly")
-	}
-	if version.ModelID != 2 {
-		t.Error("ModelID field not set correctly")
-	}
-	if version.Version != "v1.0" {
-		t.Error("Version field not set correctly")
-	}
-}
-
-func TestModelDeploymentStruct(t *testing.T) {
 	deployment := &ModelDeployment{
-		ID:            1,
-		ModelID:       1,
-		VersionID:     1,
-		Environment:   "production",
-		Status:        "deployed",
-		TrafficWeight: 0.5,
-		DeployedAt:    time.Now(),
+		ModelID:    model.ModelID,
+		Name:      "Production Deployment",
+		Replicas:  3,
+		Resources: &DeploymentResources{
+			CPU:    "2",
+			Memory: "4Gi",
+		},
 	}
 
-	if deployment.ID != 1 {
-		t.Error("ID field not set correctly")
+	result, err := service.DeployModel(context.Background(), deployment)
+	if err != nil {
+		t.Errorf("DeployModel() error = %v", err)
 	}
-	if deployment.Environment != "production" {
-		t.Error("Environment field not set correctly")
-	}
-	if deployment.TrafficWeight != 0.5 {
-		t.Error("TrafficWeight field not set correctly")
-	}
-}
 
-func BenchmarkListModels(b *testing.B) {
-	service := NewAIModelLifecycleService()
-	ctx := context.Background()
+	if !result.Success {
+		t.Error("DeployModel() should succeed")
+	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = service.ListModels(ctx)
+	if result.DeploymentID == "" {
+		t.Error("DeploymentID should be set")
 	}
 }
 
-func BenchmarkGetModel(b *testing.B) {
+func TestAIModelLifecycleService_MonitorModel(t *testing.T) {
 	service := NewAIModelLifecycleService()
-	ctx := context.Background()
-	testID := uint(1)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = service.GetModel(ctx, testID)
+	model := &AIModel{
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+	}
+
+	err := service.RegisterModel(context.Background(), model)
+	if err != nil {
+		t.Fatalf("RegisterModel() error = %v", err)
+	}
+
+	metrics, err := service.MonitorModel(context.Background(), model.ModelID)
+	if err != nil {
+		t.Errorf("MonitorModel() error = %v", err)
+	}
+
+	if metrics.RequestsCount == 0 {
+		t.Error("MonitorModel() should return metrics")
+	}
+}
+
+func TestABTestingPlatformService_CreateExperiment(t *testing.T) {
+	service := NewABTestingPlatformService()
+
+	experiment := &Experiment{
+		Name:        "Test Experiment",
+		Description: "A/B test experiment",
+		Type:       "ab_test",
+		Variants: []Variant{
+			{
+				VariantID:  "control-variant",
+				Name:       "Control",
+				Allocation: 50,
+				Control:   true,
+				Metrics:   &VariantMetrics{},
+			},
+			{
+				VariantID:  "variant-a",
+				Name:       "Variant A",
+				Allocation: 50,
+				Control:   false,
+				Metrics:   &VariantMetrics{},
+			},
+		},
+	}
+
+	err := service.CreateExperiment(context.Background(), experiment)
+	if err != nil {
+		t.Errorf("CreateExperiment() error = %v", err)
+	}
+
+	if experiment.ExperimentID == "" {
+		t.Error("ExperimentID should be set")
+	}
+}
+
+func TestABTestingPlatformService_AllocateVariant(t *testing.T) {
+	service := NewABTestingPlatformService()
+
+	experiment := &Experiment{
+		Name:        "Test Experiment",
+		Description: "A/B test experiment",
+		Type:       "ab_test",
+		Variants: []Variant{
+			{
+				VariantID:  "control-variant",
+				Name:       "Control",
+				Allocation: 50,
+				Control:   true,
+				Metrics:   &VariantMetrics{},
+			},
+			{
+				VariantID:  "variant-a",
+				Name:       "Variant A",
+				Allocation: 50,
+				Control:   false,
+				Metrics:   &VariantMetrics{},
+			},
+		},
+	}
+
+	err := service.CreateExperiment(context.Background(), experiment)
+	if err != nil {
+		t.Fatalf("CreateExperiment() error = %v", err)
+	}
+
+	err = service.StartExperiment(context.Background(), experiment.ExperimentID)
+	if err != nil {
+		t.Fatalf("StartExperiment() error = %v", err)
+	}
+
+	allocation, err := service.AllocateVariant(context.Background(), experiment.ExperimentID, "user-123")
+	if err != nil {
+		t.Errorf("AllocateVariant() error = %v", err)
+	}
+
+	if allocation == nil || allocation.VariantID == "" {
+		t.Error("VariantID should be set")
+	}
+}
+
+func TestExperimentTrackingService_CreateRun(t *testing.T) {
+	service := NewExperimentTrackingService()
+
+	run := &ExperimentRun{
+		ExperimentID: "exp-123",
+		Name:         "Test Run",
+		Description:  "A test run",
+	}
+
+	err := service.CreateRun(context.Background(), run)
+	if err != nil {
+		t.Errorf("CreateRun() error = %v", err)
+	}
+
+	if run.RunID == "" {
+		t.Error("RunID should be set")
+	}
+}
+
+func TestExperimentTrackingService_LogMetric(t *testing.T) {
+	service := NewExperimentTrackingService()
+
+	run := &ExperimentRun{
+		ExperimentID: "exp-123",
+		Name:         "Test Run",
+	}
+
+	err := service.CreateRun(context.Background(), run)
+	if err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+
+	metric := &MetricLog{
+		Name:  "accuracy",
+		Value: 0.95,
+		Step: 1,
+	}
+
+	err = service.LogMetric(context.Background(), run.RunID, metric)
+	if err != nil {
+		t.Errorf("LogMetric() error = %v", err)
+	}
+
+	metrics, err := service.GetMetrics(context.Background(), run.RunID)
+	if err != nil {
+		t.Errorf("GetMetrics() error = %v", err)
+	}
+
+	if len(metrics) != 1 {
+		t.Errorf("Expected 1 metric, got %d", len(metrics))
+	}
+}
+
+func TestModelMonitoringService_CreateMonitor(t *testing.T) {
+	service := NewModelMonitoringService()
+
+	monitor := &ModelMonitor{
+		ModelID:    "model-123",
+		Name:       "Test Monitor",
+		Description: "A test monitor",
+		Type:       "performance",
+		Metrics:    []string{"latency", "accuracy"},
+		Thresholds: []Threshold{
+			{
+				Metric:    "latency",
+				Operator:  ">",
+				Value:     100,
+				Severity:  "warning",
+			},
+		},
+	}
+
+	err := service.CreateMonitor(context.Background(), monitor)
+	if err != nil {
+		t.Errorf("CreateMonitor() error = %v", err)
+	}
+
+	if monitor.MonitorID == "" {
+		t.Error("MonitorID should be set")
+	}
+}
+
+func TestModelMonitoringService_CreateAlert(t *testing.T) {
+	service := NewModelMonitoringService()
+
+	monitor := &ModelMonitor{
+		ModelID:    "model-123",
+		Name:       "Test Monitor",
+		Type:       "performance",
+		Metrics:    []string{"latency"},
+	}
+
+	err := service.CreateMonitor(context.Background(), monitor)
+	if err != nil {
+		t.Fatalf("CreateMonitor() error = %v", err)
+	}
+
+	alert := &MonitoringAlert{
+		MonitorID:   monitor.MonitorID,
+		Name:        "High Latency Alert",
+		Description: "Alert when latency exceeds threshold",
+		Condition:   "latency > 100",
+		Threshold:  100,
+		Severity:   "warning",
+	}
+
+	err = service.CreateAlert(context.Background(), alert)
+	if err != nil {
+		t.Errorf("CreateAlert() error = %v", err)
+	}
+
+	if alert.AlertID == "" {
+		t.Error("AlertID should be set")
+	}
+}
+
+func TestAIModel_Filters(t *testing.T) {
+	service := NewAIModelLifecycleService()
+
+	models := []*AIModel{
+		{Name: "Model 1", Type: "classification", Team: "team-a"},
+		{Name: "Model 2", Type: "regression", Team: "team-b"},
+		{Name: "Model 3", Type: "classification", Team: "team-a"},
+	}
+
+	for _, model := range models {
+		service.RegisterModel(context.Background(), model)
+	}
+
+	filters := &ModelFilters{
+		Type: "classification",
+		Team: "team-a",
+	}
+
+	results, err := service.ListModels(context.Background(), filters)
+	if err != nil {
+		t.Errorf("ListModels() error = %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results, got %d", len(results))
+	}
+}
+
+func TestExperiment_CompareRuns(t *testing.T) {
+	service := NewExperimentTrackingService()
+
+	runs := []*ExperimentRun{
+		{ExperimentID: "exp-1", Name: "Run 1", Metrics: map[string]float64{"accuracy": 0.9}},
+		{ExperimentID: "exp-1", Name: "Run 2", Metrics: map[string]float64{"accuracy": 0.95}},
+		{ExperimentID: "exp-1", Name: "Run 3", Metrics: map[string]float64{"accuracy": 0.85}},
+	}
+
+	for _, run := range runs {
+		service.CreateRun(context.Background(), run)
+	}
+
+	runIDs := []string{runs[0].RunID, runs[1].RunID, runs[2].RunID}
+	comparison, err := service.CompareRuns(context.Background(), runIDs)
+	if err != nil {
+		t.Errorf("CompareRuns() error = %v", err)
+	}
+
+	if comparison.BestRunID != runs[1].RunID {
+		t.Error("Best run should be Run 2 with highest accuracy")
+	}
+}
+
+func TestMonitorData_Generation(t *testing.T) {
+	service := NewModelMonitoringService()
+
+	monitor := &ModelMonitor{
+		ModelID:   "model-123",
+		Name:      "Test Monitor",
+		Type:      "performance",
+		Metrics:   []string{"latency", "accuracy"},
+		Thresholds: []Threshold{
+			{Metric: "latency", Operator: ">", Value: 100, Severity: "warning"},
+		},
+	}
+
+	err := service.CreateMonitor(context.Background(), monitor)
+	if err != nil {
+		t.Fatalf("CreateMonitor() error = %v", err)
+	}
+
+	period := &MonitoringPeriod{
+		Start:       time.Now().Add(-24 * time.Hour),
+		End:         time.Now(),
+		Granularity: "1h",
+	}
+
+	data, err := service.GetMonitorData(context.Background(), monitor.MonitorID, period)
+	if err != nil {
+		t.Errorf("GetMonitorData() error = %v", err)
+	}
+
+	if len(data.DataPoints) == 0 {
+		t.Error("MonitorData should contain data points")
+	}
+}
+
+func TestAIModel_Serialization(t *testing.T) {
+	model := &AIModel{
+		ModelID:     "model-123",
+		Name:        "Test Model",
+		Description: "A test model",
+		Type:        "classification",
+		Stage:       StageDevelopment,
+		Tags:        []string{"nlp", "transformer"},
+		Metadata:    map[string]interface{}{"version": "1.0"},
+	}
+
+	data, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("Failed to marshal model: %v", err)
+	}
+
+	var unmarshaled AIModel
+	err = json.Unmarshal(data, &unmarshaled)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal model: %v", err)
+	}
+
+	if unmarshaled.Name != model.Name {
+		t.Errorf("Expected name '%s', got '%s'", model.Name, unmarshaled.Name)
 	}
 }
