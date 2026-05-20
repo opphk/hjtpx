@@ -13,11 +13,11 @@ import (
 type OptimizedQueryAnalyzer struct {
 	db                 *gorm.DB
 	slowThreshold      time.Duration
-	queryPatterns      map[string]*QueryPattern
+	queryPatterns      map[string]*AnalyzedQueryPattern
 	mu                 sync.RWMutex
 }
 
-type QueryPattern struct {
+type AnalyzedQueryPattern struct {
 	Pattern       string
 	Count         int64
 	TotalDuration time.Duration
@@ -34,7 +34,7 @@ func NewOptimizedQueryAnalyzer(db *gorm.DB, threshold time.Duration) *OptimizedQ
 	return &OptimizedQueryAnalyzer{
 		db:            db,
 		slowThreshold: threshold,
-		queryPatterns: make(map[string]*QueryPattern),
+		queryPatterns: make(map[string]*AnalyzedQueryPattern),
 	}
 }
 
@@ -115,7 +115,7 @@ func (a *OptimizedQueryAnalyzer) RecordQuery(query string, duration time.Duratio
 			p.MinDuration = duration
 		}
 	} else {
-		a.queryPatterns[pattern] = &QueryPattern{
+		a.queryPatterns[pattern] = &AnalyzedQueryPattern{
 			Pattern:       pattern,
 			Count:         1,
 			TotalDuration: duration,
@@ -126,11 +126,11 @@ func (a *OptimizedQueryAnalyzer) RecordQuery(query string, duration time.Duratio
 	}
 }
 
-func (a *OptimizedQueryAnalyzer) GetTopPatterns(limit int) []*QueryPattern {
+func (a *OptimizedQueryAnalyzer) GetTopPatterns(limit int) []*AnalyzedQueryPattern {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	patterns := make([]*QueryPattern, 0, len(a.queryPatterns))
+	patterns := make([]*AnalyzedQueryPattern, 0, len(a.queryPatterns))
 	for _, p := range a.queryPatterns {
 		patterns = append(patterns, p)
 	}

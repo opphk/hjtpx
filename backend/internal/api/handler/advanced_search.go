@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/response"
 	"gorm.io/gorm"
@@ -147,7 +148,7 @@ func (h *AdvancedSearchHandler) Search(c *gin.Context) {
 
 func (h *AdvancedSearchHandler) searchLogs(req SearchRequest) ([]interface{}, int, error) {
 	var logs []models.VerificationLog
-	query := models.DB.Model(&models.VerificationLog{})
+	query := database.DB.Model(&models.VerificationLog{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "logs")
@@ -181,7 +182,7 @@ func (h *AdvancedSearchHandler) searchLogs(req SearchRequest) ([]interface{}, in
 
 func (h *AdvancedSearchHandler) searchApplications(req SearchRequest) ([]interface{}, int, error) {
 	var apps []models.Application
-	query := models.DB.Model(&models.Application{})
+	query := database.DB.Model(&models.Application{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "applications")
@@ -215,7 +216,7 @@ func (h *AdvancedSearchHandler) searchApplications(req SearchRequest) ([]interfa
 
 func (h *AdvancedSearchHandler) searchUsers(req SearchRequest) ([]interface{}, int, error) {
 	var users []models.User
-	query := models.DB.Model(&models.User{})
+	query := database.DB.Model(&models.User{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "users")
@@ -249,7 +250,7 @@ func (h *AdvancedSearchHandler) searchUsers(req SearchRequest) ([]interface{}, i
 
 func (h *AdvancedSearchHandler) searchRiskRules(req SearchRequest) ([]interface{}, int, error) {
 	var rules []models.RiskRule
-	query := models.DB.Model(&models.RiskRule{})
+	query := database.DB.Model(&models.RiskRule{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "risk_rules")
@@ -283,7 +284,7 @@ func (h *AdvancedSearchHandler) searchRiskRules(req SearchRequest) ([]interface{
 
 func (h *AdvancedSearchHandler) searchBlacklist(req SearchRequest) ([]interface{}, int, error) {
 	var entries []models.Blacklist
-	query := models.DB.Model(&models.Blacklist{})
+	query := database.DB.Model(&models.Blacklist{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "blacklist")
@@ -317,7 +318,7 @@ func (h *AdvancedSearchHandler) searchBlacklist(req SearchRequest) ([]interface{
 
 func (h *AdvancedSearchHandler) searchAuditLogs(req SearchRequest) ([]interface{}, int, error) {
 	var logs []models.AdminLoginLog
-	query := models.DB.Model(&models.AdminLoginLog{})
+	query := database.DB.Model(&models.AdminLoginLog{})
 
 	if req.Query != "" {
 		query = h.addFullTextSearch(query, req.Query, "audit_logs")

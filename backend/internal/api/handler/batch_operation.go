@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
@@ -182,25 +185,24 @@ func (h *BatchOperationHandler) batchUpdateApplications(ids []uint, data []strin
 }
 
 func (h *BatchOperationHandler) updateApplicationStatus(id uint, enabled bool) error {
-	var app models.Application
-	if err := app.UpdateStatus(id, enabled); err != nil {
+	if err := database.DB.Model(&models.Application{}).Where("id = ?", id).Update("enabled", enabled).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (h *BatchOperationHandler) deleteApplication(id uint) error {
-	var app models.Application
-	if err := app.Delete(id); err != nil {
+	if err := database.DB.Delete(&models.Application{}, id).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (h *BatchOperationHandler) updateApplicationConfig(id uint, data []string) error {
-	var app models.Application
-	if err := app.UpdateConfig(id, data); err != nil {
-		return err
+	if len(data) > 0 {
+		if err := database.DB.Model(&models.Application{}).Where("id = ?", id).Update("config", data[0]).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -319,16 +321,14 @@ func (h *BatchOperationHandler) batchDeleteUsers(ids []uint) BatchOperationRespo
 }
 
 func (h *BatchOperationHandler) updateUserStatus(id uint, status string) error {
-	var user models.User
-	if err := user.UpdateStatus(id, status); err != nil {
+	if err := database.DB.Model(&models.User{}).Where("id = ?", id).Update("status", status).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (h *BatchOperationHandler) deleteUser(id uint) error {
-	var user models.User
-	if err := user.Delete(id); err != nil {
+	if err := database.DB.Delete(&models.User{}, id).Error; err != nil {
 		return err
 	}
 	return nil
@@ -373,8 +373,7 @@ func (h *BatchOperationHandler) BatchDeleteLogs(c *gin.Context) {
 }
 
 func (h *BatchOperationHandler) deleteLog(id uint) error {
-	var log models.VerificationLog
-	if err := log.Delete(id); err != nil {
+	if err := database.DB.Delete(&models.VerificationLog{}, id).Error; err != nil {
 		return err
 	}
 	return nil
@@ -494,16 +493,14 @@ func (h *BatchOperationHandler) batchDeleteRiskRules(ids []uint) BatchOperationR
 }
 
 func (h *BatchOperationHandler) updateRiskRuleStatus(id uint, enabled bool) error {
-	var rule models.RiskRule
-	if err := rule.UpdateStatus(id, enabled); err != nil {
+	if err := database.DB.Model(&models.RiskRule{}).Where("id = ?", id).Update("enabled", enabled).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (h *BatchOperationHandler) deleteRiskRule(id uint) error {
-	var rule models.RiskRule
-	if err := rule.Delete(id); err != nil {
+	if err := database.DB.Delete(&models.RiskRule{}, id).Error; err != nil {
 		return err
 	}
 	return nil
@@ -563,8 +560,7 @@ func (h *BatchOperationHandler) batchDeleteBlacklist(ids []uint) BatchOperationR
 }
 
 func (h *BatchOperationHandler) deleteBlacklist(id uint) error {
-	var entry models.Blacklist
-	if err := entry.Delete(id); err != nil {
+	if err := database.DB.Delete(&models.Blacklist{}, id).Error; err != nil {
 		return err
 	}
 	return nil
@@ -630,7 +626,7 @@ func (h *BatchOperationHandler) generateExportData(req BatchExportRequest) ([]ma
 
 func (h *BatchOperationHandler) getApplicationsExportData(req BatchExportRequest) ([]map[string]interface{}, error) {
 	var apps []models.Application
-	query := models.DB.Model(&models.Application{})
+	query := database.DB.Model(&models.Application{})
 
 	if len(req.IDs) > 0 {
 		query = query.Where("id IN ?", req.IDs)
@@ -645,8 +641,8 @@ func (h *BatchOperationHandler) getApplicationsExportData(req BatchExportRequest
 		data[i] = map[string]interface{}{
 			"ID":           app.ID,
 			"Name":         app.Name,
-			"AppID":        app.AppID,
-			"Status":       app.Status,
+			"APIKey":       app.APIKey,
+			"IsActive":     app.IsActive,
 			"CreatedAt":    app.CreatedAt,
 			"UpdatedAt":    app.UpdatedAt,
 		}
@@ -657,7 +653,7 @@ func (h *BatchOperationHandler) getApplicationsExportData(req BatchExportRequest
 
 func (h *BatchOperationHandler) getUsersExportData(req BatchExportRequest) ([]map[string]interface{}, error) {
 	var users []models.User
-	query := models.DB.Model(&models.User{})
+	query := database.DB.Model(&models.User{})
 
 	if len(req.IDs) > 0 {
 		query = query.Where("id IN ?", req.IDs)
@@ -684,7 +680,7 @@ func (h *BatchOperationHandler) getUsersExportData(req BatchExportRequest) ([]ma
 
 func (h *BatchOperationHandler) getLogsExportData(req BatchExportRequest) ([]map[string]interface{}, error) {
 	var logs []models.VerificationLog
-	query := models.DB.Model(&models.VerificationLog{})
+	query := database.DB.Model(&models.VerificationLog{})
 
 	if len(req.IDs) > 0 {
 		query = query.Where("id IN ?", req.IDs)
@@ -701,11 +697,11 @@ func (h *BatchOperationHandler) getLogsExportData(req BatchExportRequest) ([]map
 	data := make([]map[string]interface{}, len(logs))
 	for i, log := range logs {
 		data[i] = map[string]interface{}{
-			"ID":           log.ID,
-			"AppID":        log.AppID,
-			"UserID":       log.UserID,
-			"Status":       log.Status,
-			"CreatedAt":    log.CreatedAt,
+			"ID":               log.ID,
+			"VerificationID":   log.VerificationID,
+			"ApplicationID":  log.ApplicationID,
+			"Status":           log.Status,
+			"CreatedAt":        log.CreatedAt,
 		}
 	}
 
@@ -714,7 +710,7 @@ func (h *BatchOperationHandler) getLogsExportData(req BatchExportRequest) ([]map
 
 func (h *BatchOperationHandler) getRiskRulesExportData(req BatchExportRequest) ([]map[string]interface{}, error) {
 	var rules []models.RiskRule
-	query := models.DB.Model(&models.RiskRule{})
+	query := database.DB.Model(&models.RiskRule{})
 
 	if len(req.IDs) > 0 {
 		query = query.Where("id IN ?", req.IDs)
@@ -729,8 +725,8 @@ func (h *BatchOperationHandler) getRiskRulesExportData(req BatchExportRequest) (
 		data[i] = map[string]interface{}{
 			"ID":           rule.ID,
 			"Name":         rule.Name,
-			"Type":         rule.Type,
-			"Status":       rule.Status,
+			"RuleType":     rule.RuleType,
+			"IsEnabled":    rule.IsEnabled,
 			"Priority":     rule.Priority,
 			"CreatedAt":    rule.CreatedAt,
 		}
@@ -741,7 +737,7 @@ func (h *BatchOperationHandler) getRiskRulesExportData(req BatchExportRequest) (
 
 func (h *BatchOperationHandler) getBlacklistExportData(req BatchExportRequest) ([]map[string]interface{}, error) {
 	var entries []models.Blacklist
-	query := models.DB.Model(&models.Blacklist{})
+	query := database.DB.Model(&models.Blacklist{})
 
 	if len(req.IDs) > 0 {
 		query = query.Where("id IN ?", req.IDs)
@@ -755,7 +751,7 @@ func (h *BatchOperationHandler) getBlacklistExportData(req BatchExportRequest) (
 	for i, entry := range entries {
 		data[i] = map[string]interface{}{
 			"ID":           entry.ID,
-			"Value":        entry.Value,
+			"Target":       entry.Target,
 			"Type":         entry.Type,
 			"Reason":       entry.Reason,
 			"CreatedAt":    entry.CreatedAt,
@@ -798,7 +794,7 @@ func (h *BatchOperationHandler) exportCSV(c *gin.Context, data []map[string]inte
 
 	for _, row := range data {
 		line := ""
-		for key, value := range row {
+		for _, value := range row {
 			line += "," + fmt.Sprintf("%v", value)
 		}
 		csv += line[1:] + "\n"

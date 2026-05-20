@@ -484,47 +484,7 @@ func (h *ConfigHandler) parseInt(s string) int {
 	return result
 }
 
-func containsIgnoreCase(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
 
-	sLower := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 32
-		}
-		sLower[i] = c
-	}
-
-	substrLower := make([]byte, len(substr))
-	for i := 0; i < len(substr); i++ {
-		c := substr[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 32
-		}
-		substrLower[i] = c
-	}
-
-	for i := 0; i <= len(sLower)-len(substrLower); i++ {
-		match := true
-		for j := 0; j < len(substrLower); j++ {
-			if sLower[i+j] != substrLower[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-
-	return false
-}
 
 var _ = sort.Ints
 var _ = json.Marshal

@@ -25,8 +25,8 @@ type ChartDataResponse struct {
 type ChartDataset struct {
 	Label           string    `json:"label"`
 	Data            []float64 `json:"data"`
-	BackgroundColor string    `json:"backgroundColor,omitempty"`
-	BorderColor     string    `json:"borderColor,omitempty"`
+	BackgroundColor []string  `json:"backgroundColor,omitempty"`
+	BorderColor     []string  `json:"borderColor,omitempty"`
 	Fill            bool      `json:"fill,omitempty"`
 	Type            string    `json:"type,omitempty"`
 }
@@ -152,8 +152,8 @@ func (h *DataVisualizationHandler) generateRequestsChartData(period string) Char
 		{
 			Label:           "请求量",
 			Data:            data,
-			BackgroundColor: "rgba(54, 162, 235, 0.2)",
-			BorderColor:     "rgba(54, 162, 235, 1)",
+			BackgroundColor: []string{"rgba(54, 162, 235, 0.2)"},
+			BorderColor:     []string{"rgba(54, 162, 235, 1)"},
 			Fill:            true,
 		},
 	}
@@ -197,8 +197,8 @@ func (h *DataVisualizationHandler) generatePerformanceChartData(period string) C
 		{
 			Label:           "平均响应时间 (ms)",
 			Data:            data,
-			BackgroundColor: "rgba(255, 159, 64, 0.2)",
-			BorderColor:     "rgba(255, 159, 64, 1)",
+			BackgroundColor: []string{"rgba(255, 159, 64, 0.2)"},
+			BorderColor:     []string{"rgba(255, 159, 64, 1)"},
 			Fill:            true,
 		},
 	}
@@ -219,15 +219,15 @@ func (h *DataVisualizationHandler) generateUsersChartData(period string) ChartDa
 		{
 			Label:           "新增用户",
 			Data:            newUsers,
-			BackgroundColor: "rgba(54, 162, 235, 0.2)",
-			BorderColor:     "rgba(54, 162, 235, 1)",
+			BackgroundColor: []string{"rgba(54, 162, 235, 0.2)"},
+			BorderColor:     []string{"rgba(54, 162, 235, 1)"},
 			Fill:            true,
 		},
 		{
 			Label:           "活跃用户",
 			Data:            activeUsers,
-			BackgroundColor: "rgba(75, 192, 192, 0.2)",
-			BorderColor:     "rgba(75, 192, 192, 1)",
+			BackgroundColor: []string{"rgba(75, 192, 192, 0.2)"},
+			BorderColor:     []string{"rgba(75, 192, 192, 1)"},
 			Fill:            true,
 		},
 	}
@@ -271,8 +271,8 @@ func (h *DataVisualizationHandler) generateRevenueChartData(period string) Chart
 		{
 			Label:           "收入 (元)",
 			Data:            data,
-			BackgroundColor: "rgba(153, 102, 255, 0.2)",
-			BorderColor:     "rgba(153, 102, 255, 1)",
+			BackgroundColor: []string{"rgba(153, 102, 255, 0.2)"},
+			BorderColor:     []string{"rgba(153, 102, 255, 1)"},
 			Fill:            true,
 		},
 	}
@@ -295,8 +295,8 @@ func (h *DataVisualizationHandler) generateDefaultChartData(period string) Chart
 		{
 			Label:           "数据",
 			Data:            data,
-			BackgroundColor: "rgba(201, 203, 207, 0.2)",
-			BorderColor:     "rgba(201, 203, 207, 1)",
+			BackgroundColor: []string{"rgba(201, 203, 207, 0.2)"},
+			BorderColor:     []string{"rgba(201, 203, 207, 1)"},
 			Fill:            true,
 		},
 	}

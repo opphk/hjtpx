@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
@@ -118,7 +119,7 @@ func (h *ReportExportHandler) generateReportData(req ReportRequest) ([]map[strin
 
 func (h *ReportExportHandler) getVerificationReportData(req ReportRequest) ([]map[string]interface{}, error) {
 	var logs []models.VerificationLog
-	query := models.DB.Model(&models.VerificationLog{})
+	query := database.DB.Model(&models.VerificationLog{})
 
 	if req.StartDate != "" && req.EndDate != "" {
 		query = query.Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
@@ -140,13 +141,12 @@ func (h *ReportExportHandler) getVerificationReportData(req ReportRequest) ([]ma
 	data := make([]map[string]interface{}, len(logs))
 	for i, log := range logs {
 		record := map[string]interface{}{
-			"ID":          log.ID,
-			"AppID":       log.AppID,
-			"UserID":      log.UserID,
-			"Status":      log.Status,
-			"IP":          log.IP,
-			"UserAgent":   log.UserAgent,
-			"CreatedAt":   log.CreatedAt.Format("2006-01-02 15:04:05"),
+			"ID":              log.ID,
+			"ApplicationID":  log.ApplicationID,
+			"Status":          log.Status,
+			"IPAddress":       log.IPAddress,
+			"UserAgent":       log.UserAgent,
+			"CreatedAt":       log.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
 
 		if len(req.Fields) == 0 || containsField(req.Fields, "risk_score") {
@@ -161,11 +161,11 @@ func (h *ReportExportHandler) getVerificationReportData(req ReportRequest) ([]ma
 
 func (h *ReportExportHandler) getApplicationReportData(req ReportRequest) ([]map[string]interface{}, error) {
 	var apps []models.Application
-	query := models.DB.Model(&models.Application{})
+	query := database.DB.Model(&models.Application{})
 
 	if req.Filters != nil {
 		if status, ok := req.Filters["status"]; ok {
-			query = query.Where("status = ?", status)
+			query = query.Where("is_active = ?", status)
 		}
 	}
 
@@ -178,13 +178,9 @@ func (h *ReportExportHandler) getApplicationReportData(req ReportRequest) ([]map
 		record := map[string]interface{}{
 			"ID":           app.ID,
 			"Name":         app.Name,
-			"AppID":        app.AppID,
-			"Status":       app.Status,
+			"APIKey":       app.APIKey,
+			"IsActive":     app.IsActive,
 			"CreatedAt":    app.CreatedAt.Format("2006-01-02 15:04:05"),
-		}
-
-		if len(req.Fields) == 0 || containsField(req.Fields, "api_calls") {
-			record["ApiCalls"] = app.ApiCalls
 		}
 
 		data[i] = record
@@ -195,7 +191,7 @@ func (h *ReportExportHandler) getApplicationReportData(req ReportRequest) ([]map
 
 func (h *ReportExportHandler) getUserReportData(req ReportRequest) ([]map[string]interface{}, error) {
 	var users []models.User
-	query := models.DB.Model(&models.User{})
+	query := database.DB.Model(&models.User{})
 
 	if req.Filters != nil {
 		if status, ok := req.Filters["status"]; ok {
@@ -223,7 +219,7 @@ func (h *ReportExportHandler) getUserReportData(req ReportRequest) ([]map[string
 
 func (h *ReportExportHandler) getRiskReportData(req ReportRequest) ([]map[string]interface{}, error) {
 	var rules []models.RiskRule
-	query := models.DB.Model(&models.RiskRule{})
+	query := database.DB.Model(&models.RiskRule{})
 
 	if err := query.Find(&rules).Error; err != nil {
 		return nil, err
@@ -234,10 +230,9 @@ func (h *ReportExportHandler) getRiskReportData(req ReportRequest) ([]map[string
 		data[i] = map[string]interface{}{
 			"ID":          rule.ID,
 			"Name":        rule.Name,
-			"Type":        rule.Type,
-			"Status":      rule.Status,
+			"RuleType":    rule.RuleType,
+			"IsEnabled":   rule.IsEnabled,
 			"Priority":    rule.Priority,
-			"HitCount":    rule.HitCount,
 			"CreatedAt":   rule.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
 	}
@@ -292,7 +287,7 @@ func (h *ReportExportHandler) getFinancialReportData(req ReportRequest) ([]map[s
 
 func (h *ReportExportHandler) getAuditReportData(req ReportRequest) ([]map[string]interface{}, error) {
 	var logs []models.AdminLoginLog
-	query := models.DB.Model(&models.AdminLoginLog{})
+	query := database.DB.Model(&models.AdminLoginLog{})
 
 	if req.StartDate != "" && req.EndDate != "" {
 		query = query.Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
@@ -307,7 +302,7 @@ func (h *ReportExportHandler) getAuditReportData(req ReportRequest) ([]map[strin
 		data[i] = map[string]interface{}{
 			"ID":           log.ID,
 			"AdminID":      log.AdminID,
-			"IP":           log.IP,
+			"IPAddress":    log.IPAddress,
 			"UserAgent":    log.UserAgent,
 			"Status":       log.Status,
 			"CreatedAt":    log.CreatedAt.Format("2006-01-02 15:04:05"),

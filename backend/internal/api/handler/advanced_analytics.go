@@ -258,7 +258,7 @@ func generateAlerts() []AlertItem {
 
 // ========== 风险报告生成 ==========
 
-type ReportRequest struct {
+type RiskReportRequest struct {
 	ReportType string `json:"report_type" binding:"required"`
 	StartDate  string `json:"start_date"`
 	EndDate    string `json:"end_date"`
@@ -301,7 +301,7 @@ type Anomaly struct {
 }
 
 func GenerateRiskReport(c *gin.Context) {
-	var req ReportRequest
+	var req RiskReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "无效的请求参数")
 		return

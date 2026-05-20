@@ -82,7 +82,7 @@ func SecurityMiddleware(configs ...SecurityMiddlewareConfig) gin.HandlerFunc {
 
 func validateSQLInjection(c *gin.Context, cfg SecurityMiddlewareConfig) {
 	query := c.Request.URL.Query()
-	for key, values := range query {
+	for _, values := range query {
 		for _, value := range values {
 			valid, pattern, severity := sqlProtection.ValidateInput(value)
 			if !valid {
@@ -111,7 +111,7 @@ func validateSQLInjection(c *gin.Context, cfg SecurityMiddlewareConfig) {
 
 	if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" {
 		if err := c.Request.ParseForm(); err == nil {
-			for key, values := range c.Request.PostForm {
+			for _, values := range c.Request.PostForm {
 				for _, value := range values {
 					valid, pattern, severity := sqlProtection.ValidateInput(value)
 					if !valid {
@@ -143,7 +143,7 @@ func validateSQLInjection(c *gin.Context, cfg SecurityMiddlewareConfig) {
 
 func validateXSS(c *gin.Context, cfg SecurityMiddlewareConfig) {
 	query := c.Request.URL.Query()
-	for key, values := range query {
+	for _, values := range query {
 		for _, value := range values {
 			detected, pattern, severity := xssProtection.DetectXSS(value)
 			if detected {
@@ -172,7 +172,7 @@ func validateXSS(c *gin.Context, cfg SecurityMiddlewareConfig) {
 
 	if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" {
 		if err := c.Request.ParseForm(); err == nil {
-			for key, values := range c.Request.PostForm {
+			for _, values := range c.Request.PostForm {
 				for _, value := range values {
 					detected, pattern, severity := xssProtection.DetectXSS(value)
 					if detected {
