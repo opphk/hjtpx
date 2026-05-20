@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,14 +31,38 @@ type SliderCaptchaRequest struct {
 
 // SliderVerifyRequest 滑动验证码验证请求
 type SliderVerifyRequest struct {
-	SessionID     string          `json:"session_id" binding:"required"` // 会话 ID
-	PositionX     int             `json:"position_x" binding:"required"` // X 坐标
-	PositionY     int             `json:"position_y" binding:"required"` // Y 坐标
-	RiskScore     float64         `json:"risk_score"`                    // 风险评分
-	TraceScore    float64         `json:"trace_score"`                   // 轨迹评分
-	EnvScore      float64         `json:"env_score"`                     // 环境评分
-	Trajectory    []TrajectoryPoint `json:"trajectory"`                  // 轨迹数据
-	BehaviorData  SliderBehaviorData `json:"behavior_data"`              // 行为数据
+	SessionID          string                    `json:"session_id" binding:"required"`    // 会话 ID
+	PositionX          float64                   `json:"position_x" binding:"required"`    // X 坐标
+	PositionY          float64                   `json:"position_y" binding:"required"`    // Y 坐标
+	RiskScore          float64                   `json:"risk_score"`                       // 风险评分
+	TraceScore         float64                   `json:"trace_score"`                      // 轨迹评分
+	EnvScore           float64                   `json:"env_score"`                        // 环境评分
+	Trajectory         []TrajectoryPoint          `json:"trajectory"`                       // 轨迹数据
+	BehaviorData       SliderBehaviorData         `json:"behavior_data"`                    // 行为数据
+	TrajectoryMetadata  *TrajectoryMetadata       `json:"trajectory_metadata,omitempty"`    // 轨迹元数据
+	DeviceInfo         *DeviceInfoRequest         `json:"device_info,omitempty"`            // 设备信息
+	EncryptedPayload   string                    `json:"encrypted_payload,omitempty"`      // 加密载荷
+}
+
+type TrajectoryMetadata struct {
+	Version         string  `json:"version"`
+	PointCount      int     `json:"point_count"`
+	StartTime       float64 `json:"start_time"`
+	EndTime         float64 `json:"end_time"`
+	Duration        int64   `json:"duration"`
+	SamplingQuality float64 `json:"sampling_quality"`
+}
+
+type DeviceInfoRequest struct {
+	TouchCapable     bool    `json:"touch_capable"`
+	MaxTouchPoints   int     `json:"max_touch_points"`
+	DevicePixelRatio float64 `json:"device_pixel_ratio"`
+	ScreenWidth      int     `json:"screen_width"`
+	ScreenHeight     int     `json:"screen_height"`
+	ColorDepth       int     `json:"color_depth"`
+	Language         string  `json:"language"`
+	Platform         string  `json:"platform"`
+	Timezone         string  `json:"timezone"`
 }
 
 type TrajectoryPoint struct {
@@ -130,9 +156,14 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
+	if err := validateSliderVerifyRequest(&req); err != nil {
+		response.Fail(c, response.CodeInvalidParams, err.Error())
+		return
+	}
+
 	session, err := sliderVerifierService.GetSessionStatus(c.Request.Context(), req.SessionID)
 	if err != nil {
-		response.Fail(c, response.CodeNotFound, "会话不存在")
+		response.Fail(c, response.CodeNotFound, "会话不存在或已过期")
 		return
 	}
 
@@ -177,26 +208,27 @@ func VerifySliderCaptcha(c *gin.Context) {
 	}
 
 	resultData := map[string]interface{}{
-		"success":            result.Success,
-		"message":            result.Message,
-		"score":              result.Score,
-		"position_diff":      result.PositionDiff,
-		"trajectory_analysis": nil,
-		"behavior_summary":   nil,
+		"success":             result.Success,
+		"message":             result.Message,
+		"score":               result.Score,
+		"position_diff":       result.PositionDiff,
+		"trajectory_analysis":  nil,
+		"behavior_summary":    nil,
 	}
 
 	if analysisResult != nil {
 		resultData["trajectory_analysis"] = map[string]interface{}{
-			"is_bot":            analysisResult.IsBot,
-			"confidence":        analysisResult.Confidence,
-			"anomaly_score":     analysisResult.AnomalyScore,
-			"risk_indicators":   analysisResult.RiskIndicators,
-			"overall_score":     analysisResult.OverallRiskScore,
-			"pattern":           analysisResult.TrajectoryPattern,
-			"speed_profile":     analysisResult.SpeedProfile,
-			"sampling_rate":     calculateSamplingRate(req.Trajectory),
-			"direction_changes": countDirectionChanges(req.Trajectory),
-			"path_length":       calculatePathLength(req.Trajectory),
+			"is_bot":             analysisResult.IsBot,
+			"confidence":         analysisResult.Confidence,
+			"anomaly_score":      analysisResult.AnomalyScore,
+			"risk_indicators":    analysisResult.RiskIndicators,
+			"overall_score":      analysisResult.OverallRiskScore,
+			"pattern":            analysisResult.TrajectoryPattern,
+			"speed_profile":      analysisResult.SpeedProfile,
+			"sampling_rate":      calculateSamplingRate(req.Trajectory),
+			"direction_changes":  countDirectionChanges(req.Trajectory),
+			"path_length":        calculatePathLength(req.Trajectory),
+			"path_efficiency":    calculatePathEfficiency(req.Trajectory),
 		}
 	}
 
@@ -216,6 +248,14 @@ func VerifySliderCaptcha(c *gin.Context) {
 			"network_type":  req.BehaviorData.NetworkType,
 			"latency_ms":    req.BehaviorData.Latency,
 		}
+	}
+
+	if req.TrajectoryMetadata != nil {
+		resultData["trajectory_metadata"] = req.TrajectoryMetadata
+	}
+
+	if req.DeviceInfo != nil {
+		resultData["device_info"] = req.DeviceInfo
 	}
 
 	response.Success(c, resultData)
@@ -253,6 +293,60 @@ func calculatePathLength(trajectory []TrajectoryPoint) float64 {
 		length += float64(time.Duration(trajectory[i].Timestamp-trajectory[i-1].Timestamp).Seconds()) * (dx*dx + dy*dy)
 	}
 	return length
+}
+
+func validateSliderVerifyRequest(req *SliderVerifyRequest) error {
+	if req.SessionID == "" {
+		return fmt.Errorf("session_id不能为空")
+	}
+
+	if req.PositionX < 0 || req.PositionX > 1000 {
+		return fmt.Errorf("position_x超出有效范围")
+	}
+
+	if req.PositionY < 0 || req.PositionY > 1000 {
+		return fmt.Errorf("position_y超出有效范围")
+	}
+
+	if len(req.Trajectory) > 1000 {
+		return fmt.Errorf("轨迹点数量过多，最多支持1000个点")
+	}
+
+	if req.TrajectoryMetadata != nil {
+		if req.TrajectoryMetadata.Duration < 0 || req.TrajectoryMetadata.Duration > 60000 {
+			return fmt.Errorf("轨迹持续时间超出有效范围")
+		}
+	}
+
+	return nil
+}
+
+func calculatePathEfficiency(trajectory []TrajectoryPoint) float64 {
+	if len(trajectory) < 2 {
+		return 0
+	}
+
+	directDistance := math.Sqrt(
+		math.Pow(float64(trajectory[len(trajectory)-1].X-trajectory[0].X), 2) +
+		math.Pow(float64(trajectory[len(trajectory)-1].Y-trajectory[0].Y), 2),
+	)
+
+	if directDistance == 0 {
+		return 0
+	}
+
+	var pathLength float64
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		pathLength += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	if pathLength == 0 {
+		return 0
+	}
+
+	return directDistance / pathLength
 }
 
 func analyzeTrajectory(trajectory []TrajectoryPoint, targetPosition int) *service.SliderAnalysisResult {

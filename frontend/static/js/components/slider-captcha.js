@@ -35,6 +35,10 @@ class SliderCaptcha {
             distance: 0,
             maxSpeed: 0
         };
+        
+        this.lastTrajectoryTime = 0;
+        this.minTrajectoryInterval = 8;
+        this.trajectoryVersion = '2.0';
 
         this.sessionId = null;
         this.canvas = null;
@@ -101,13 +105,27 @@ class SliderCaptcha {
 
             this.speedData = {
                 points: [],
-                startTime: Date.now(),
+                startTime: performance.now(),
                 endTime: 0,
                 distance: 0,
                 maxSpeed: 0
             };
             this.trajectoryData = [];
-            this.addTrajectoryPoint(0, this.sliderState.puzzleY, 'start');
+            this.lastTrajectoryTime = 0;
+            
+            let extraData = {};
+            if (e.type === 'touchstart' && e.touches[0]) {
+                const touch = e.touches[0];
+                if (touch.force !== undefined) {
+                    extraData.pressure = touch.force;
+                }
+                if (touch.tiltX !== undefined) {
+                    extraData.tiltX = touch.tiltX;
+                    extraData.tiltY = touch.tiltY;
+                }
+            }
+            
+            this.addTrajectoryPoint(0, this.sliderState.puzzleY, 'start', extraData);
 
             button.classList.add('dragging');
             container.classList.add('is-dragging');
@@ -125,7 +143,7 @@ class SliderCaptcha {
             const prevX = this.sliderState.currentX;
             this.sliderState.currentX = deltaX;
 
-            const currentTime = Date.now();
+            const currentTime = performance.now();
             const dt = currentTime - (this.speedData.points.length > 0 ?
                 this.speedData.points[this.speedData.points.length - 1].time : this.speedData.startTime);
             const dx = deltaX - prevX;
@@ -137,7 +155,19 @@ class SliderCaptcha {
                 this.speedData.maxSpeed = Math.abs(speed);
             }
 
-            this.addTrajectoryPoint(deltaX, this.sliderState.puzzleY, 'move');
+            let extraData = {};
+            if (e.type === 'touchmove' && e.touches[0]) {
+                const touch = e.touches[0];
+                if (touch.force !== undefined) {
+                    extraData.pressure = touch.force;
+                }
+                if (touch.tiltX !== undefined) {
+                    extraData.tiltX = touch.tiltX;
+                    extraData.tiltY = touch.tiltY;
+                }
+            }
+
+            this.addTrajectoryPoint(deltaX, this.sliderState.puzzleY, 'move', extraData);
             this.animateSliderPosition(deltaX);
             this.updateAccessibility();
         };
@@ -146,7 +176,7 @@ class SliderCaptcha {
             if (!this.sliderState.isDragging) return;
 
             this.sliderState.isDragging = false;
-            this.speedData.endTime = Date.now();
+            this.speedData.endTime = performance.now();
             button.classList.remove('dragging');
             container.classList.remove('is-dragging');
 
@@ -192,13 +222,60 @@ class SliderCaptcha {
         });
     }
 
-    addTrajectoryPoint(x, y, event) {
-        this.trajectoryData.push({
-            x: Math.round(x),
-            y: Math.round(y),
-            timestamp: Date.now(),
-            event
-        });
+    addTrajectoryPoint(x, y, event, extraData = {}) {
+        const currentTime = performance.now();
+        
+        if (event !== 'start' && this.lastTrajectoryTime > 0) {
+            const interval = currentTime - this.lastTrajectoryTime;
+            if (interval < this.minTrajectoryInterval && event === 'move') {
+                return;
+            }
+        }
+        
+        this.lastTrajectoryTime = currentTime;
+        
+        const point = {
+            x: Math.round(x * 100) / 100,
+            y: Math.round(y * 100) / 100,
+            timestamp: Math.round(currentTime),
+            event: event,
+            version: this.trajectoryVersion
+        };
+        
+        if (this.trajectoryData.length > 0) {
+            const lastPoint = this.trajectoryData[this.trajectoryData.length - 1];
+            const dx = point.x - lastPoint.x;
+            const dy = point.y - lastPoint.y;
+            const dt = point.timestamp - lastPoint.timestamp;
+            
+            if (dt > 0) {
+                point.velocity_x = Math.round((dx / dt) * 1000 * 100) / 100;
+                point.velocity_y = Math.round((dy / dt) * 1000 * 100) / 100;
+                point.velocity_magnitude = Math.round(Math.sqrt(dx * dx + dy * dy) / dt * 1000 * 100) / 100;
+            }
+        }
+        
+        if (event === 'start') {
+            point.touch_capable = 'ontouchstart' in window;
+            point.pointers = navigator.maxTouchPoints || 0;
+        }
+        
+        if (extraData.pressure !== undefined) {
+            point.pressure = extraData.pressure;
+        }
+        
+        if (extraData.tiltX !== undefined) {
+            point.tilt_x = extraData.tiltX;
+            point.tilt_y = extraData.tiltY;
+        }
+        
+        this.trajectoryData.push(point);
+        
+        if (this.trajectoryData.length > 500) {
+            this.trajectoryData = this.trajectoryData.filter((_, index) => {
+                return index % 2 === 0 || index < 50 || index > this.trajectoryData.length - 50;
+            });
+        }
     }
 
     animateSliderPosition(x) {
@@ -376,10 +453,19 @@ class SliderCaptcha {
         
         const payload = {
             session_id: this.sessionId,
-            x: Math.round(this.sliderState.currentX),
-            y: this.sliderState.puzzleY,
+            x: Math.round(this.sliderState.currentX * 100) / 100,
+            y: Math.round(this.sliderState.puzzleY * 100) / 100,
             behavior_data: this.trajectoryData,
-            speed_data: this.calculateSpeedData()
+            speed_data: this.calculateSpeedData(),
+            trajectory_metadata: {
+                version: this.trajectoryVersion,
+                point_count: this.trajectoryData.length,
+                start_time: this.speedData.startTime,
+                end_time: this.speedData.endTime,
+                duration: Math.round(this.speedData.endTime - this.speedData.startTime),
+                sampling_quality: this.calculateSamplingQuality()
+            },
+            device_info: this.collectDeviceInfo()
         };
 
         try {
@@ -404,12 +490,42 @@ class SliderCaptcha {
 
     calculateSpeedData() {
         const duration = (this.speedData.endTime - this.speedData.startTime) / 1000;
+        const totalVelocity = this.speedData.points.reduce((sum, p) => sum + Math.abs(p.speed), 0);
+        const avgVelocity = this.speedData.points.length > 0 ? totalVelocity / this.speedData.points.length : 0;
+        
         return {
-            start_time: this.speedData.startTime,
-            end_time: this.speedData.endTime,
-            distance: this.speedData.distance,
-            average_speed: duration > 0 ? this.speedData.distance / duration : 0,
-            max_speed: this.speedData.maxSpeed
+            start_time: Math.round(this.speedData.startTime),
+            end_time: Math.round(this.speedData.endTime),
+            distance: Math.round(this.speedData.distance * 100) / 100,
+            average_speed: Math.round(avgVelocity * 100) / 100,
+            max_speed: Math.round(this.speedData.maxSpeed * 100) / 100,
+            point_count: this.speedData.points.length
+        };
+    }
+    
+    calculateSamplingQuality() {
+        if (this.trajectoryData.length < 2) return 0;
+        
+        const duration = this.speedData.endTime - this.speedData.startTime;
+        if (duration <= 0) return 0;
+        
+        const expectedRate = 60;
+        const actualRate = (this.trajectoryData.length / duration) * 1000;
+        
+        return Math.min(1, actualRate / expectedRate);
+    }
+    
+    collectDeviceInfo() {
+        return {
+            touch_capable: 'ontouchstart' in window,
+            max_touch_points: navigator.maxTouchPoints || 0,
+            device_pixel_ratio: window.devicePixelRatio || 1,
+            screen_width: window.screen.width,
+            screen_height: window.screen.height,
+            color_depth: window.screen.colorDepth,
+            language: navigator.language,
+            platform: navigator.platform,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         };
     }
 
