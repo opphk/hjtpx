@@ -5,8 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: standard
       args:
-        - BUILD_VERSION=${BUILD_VERSION:-dev}
+        - BUILD_VERSION=${BUILD_VERSION:-v20.0}
         - BUILD_TIME=${BUILD_TIME:-}
         - BUILD_FLAGS=${BUILD_FLAGS:--s -w}
     container_name: hjtpx_app
@@ -44,6 +45,9 @@ services:
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
       - METRICS_PATH=${METRICS_PATH:-/metrics}
       - HEALTH_CHECK_PATH=${HEALTH_CHECK_PATH:-/health}
+      - AGI_ENABLED=${AGI_ENABLED:-true}
+      - MULTIMODAL_ENABLED=${MULTIMODAL_ENABLED:-true}
+      - TRAJECTORY_ENCRYPTION=${TRAJECTORY_ENCRYPTION:-true}
     volumes:
       - ./logs:/var/log/hjtpx
       - ./config.yaml:/app/config.yaml:ro
@@ -74,7 +78,7 @@ services:
         labels: "service,instance"
     labels:
       - "hjtpx.service=app"
-      - "hjtpx.version=${BUILD_VERSION:-dev}"
+      - "hjtpx.version=${BUILD_VERSION:-v20.0}"
       - "hjtpx.environment=${ENVIRONMENT:-development}"
     extra_hosts:
       - "host.docker.internal:host-gateway"

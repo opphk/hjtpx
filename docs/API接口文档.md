@@ -1,4 +1,4 @@
-# API 接口文档 v15.0
+# API 接口文档 v20.0
 
 ## 目录
 
@@ -16,14 +16,261 @@
    - [语音验证码](#语音验证码)
    - [无感验证](#无感验证)
    - [环境检测](#环境检测)
-4. [v15.0 新增接口](#v150-新增接口)
+4. [v20.0 新增接口](#v200-新增接口)
 5. [管理端 API](#管理端-api)
 6. [错误码](#错误码)
 7. [示例](#示例)
 
 ---
 
-## v15.0 新增接口
+## v20.0 新增接口
+
+### AGI智能验证接口
+#### 智能验证请求
+```
+POST /api/v1/agi/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_20_xxx",
+  "captcha_type": "slider",
+  "trajectory_data": [...],
+  "environment_data": {
+    "fingerprint": {...},
+    "behavior_signals": [...]
+  },
+  "user_context": {
+    "device_id": "device_123",
+    "ip_address": "192.168.1.100",
+    "user_agent": "Mozilla/5.0..."
+  }
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "verification_result": {
+      "passed": true,
+      "confidence": 0.95,
+      "risk_level": "low"
+    },
+    "agi_analysis": {
+      "human_probability": 0.97,
+      "behavior_score": 8.5,
+      "environment_score": 9.2,
+      "comprehensive_score": 8.9
+    },
+    "processing_time_ms": 45
+  }
+}
+```
+
+---
+
+### 增强轨迹加密接口
+#### 获取加密密钥
+```
+POST /api/v1/trajectory/encryption-key
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "session_id": "sess_20_xxx",
+  "algorithm": "aes-256-gcm"
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "public_key": "base64_encoded_public_key",
+    "session_key": "encrypted_session_key",
+    "algorithm": "aes-256-gcm",
+    "key_id": "key_xxx",
+    "expires_at": "2026-05-20T12:00:00Z"
+  }
+}
+```
+
+#### 加密轨迹验证
+```
+POST /api/v1/trajectory/verify-encrypted
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "session_id": "sess_20_xxx",
+  "encrypted_trajectory": "base64_encrypted_trajectory_data",
+  "key_id": "key_xxx",
+  "signature": "base64_signature"
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "verified": true,
+    "decryption_time_ms": 12,
+    "trajectory_analysis": {
+      "human_probability": 0.94,
+      "features": {...}
+    }
+  }
+}
+```
+
+---
+
+### 多模态验证接口
+#### 生成多模态验证码
+```
+POST /api/v1/multimodal/generate
+Content-Type: application/json
+
+{
+  "mode": "image_voice",
+  "difficulty": "medium",
+  "options": {
+    "image_type": "3d_scene",
+    "voice_type": "mixed",
+    "require_gesture": true
+  }
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_multimodal_xxx",
+    "challenge": {
+      "image": {
+        "type": "3d_scene",
+        "data": "base64_image_data",
+        "target_objects": ["cat", "dog"]
+      },
+      "voice": {
+        "type": "mixed",
+        "audio_url": "data:audio/mp3;base64,...",
+        "text": "点击猫咪并说出验证码"
+      },
+      "gesture": {
+        "pattern": "circular",
+        "hint": "画圆圈"
+      }
+    },
+    "timeout": 300
+  }
+}
+```
+
+#### 验证多模态验证码
+```
+POST /api/v1/multimodal/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_multimodal_xxx",
+  "image_answer": {
+    "click_positions": [[150, 200], [300, 250]]
+  },
+  "voice_answer": {
+    "text": "点击猫咪",
+    "confidence": 0.92
+  },
+  "gesture_answer": {
+    "path": [[100, 100], [150, 150], [100, 200], [150, 250]],
+    "pattern_match": 0.85
+  },
+  "trajectory_data": [...]
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "passed": true,
+    "scores": {
+      "image": 0.95,
+      "voice": 0.92,
+      "gesture": 0.85
+    },
+    "comprehensive_score": 0.91,
+    "risk_level": "low"
+  }
+}
+```
+
+---
+
+### 增强行为预测接口
+#### 行为预测请求
+```
+POST /api/v1/behavior/predict
+Content-Type: application/json
+
+{
+  "session_id": "sess_20_xxx",
+  "sequence_data": [
+    {"event": "page_load", "timestamp": 1716000000000},
+    {"event": "mouse_move", "timestamp": 1716000001000, "position": {"x": 100, "y": 200}},
+    {"event": "focus_input", "timestamp": 1716000002000}
+  ],
+  "model_version": "v3",
+  "prediction_type": "real-time"
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "predictions": {
+      "intent": {
+        "primary": "login",
+        "confidence": 0.88,
+        "alternatives": ["register", "reset_password"]
+      },
+      "risk": {
+        "level": "low",
+        "score": 15.5,
+        "factors": [...]
+      },
+      "behavior": {
+        "is_human": true,
+        "human_probability": 0.95,
+        "automation_signs": []
+      }
+    },
+    "model_info": {
+      "version": "v3",
+      "accuracy": 0.97,
+      "latency_ms": 23
+    }
+  }
+}
+```
+
+---
+
+### v15.0 新增接口
 
 ### 增强行为分析接口
 #### 获取高级行为分析报告
@@ -2427,8 +2674,8 @@ if (error.code === 40001) {
 
 ---
 
-**最后更新**: 2026-05-18
-**当前版本**: v14.0
+**最后更新**: 2026-05-20
+**当前版本**: v20.0
 
 ---
 
@@ -3683,5 +3930,5 @@ func main() {
 
 ---
 
-**最后更新**: 2026-05-18
-**当前版本**: v15.0
+**最后更新**: 2026-05-20
+**当前版本**: v20.0
