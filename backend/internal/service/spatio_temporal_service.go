@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hjtpx/hjtpx/backend/internal/model"
+	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 type SpatioTemporalService struct {
@@ -656,7 +656,11 @@ func (s *SpatioTemporalService) calculateRiskScore(userID string, pattern *model
 		riskFactors = append(riskFactors, fmt.Sprintf("%d_anomalies_detected", len(flow.Anomalies)))
 	}
 
-	recommendations := s.generateRiskRecommendations(nil, flow.Anomalies if flow != nil else nil)
+	var flowAnomalies []model.AnomalousBehavior
+	if flow != nil {
+		flowAnomalies = flow.Anomalies
+	}
+	recommendations := s.generateRiskRecommendations(nil, flowAnomalies)
 
 	return &model.RiskScore{
 		ScoreID:         scoreID,

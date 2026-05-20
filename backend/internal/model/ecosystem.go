@@ -1,7 +1,5 @@
 package model
 
-import "time"
-
 type DifficultyLevel string
 
 const (
@@ -181,7 +179,7 @@ type AdaptiveVerifyResponse struct {
 	Message         string                 `json:"message"`
 	NextDifficulty  DifficultyLevel        `json:"next_difficulty"`
 	LearningUpdate  *LearningUpdate        `json:"learning_update"`
-	Feedback        *VerificationFeedback  `json:"feedback"`
+	Feedback        *AdaptiveFeedback     `json:"feedback"`
 }
 
 type LearningUpdate struct {

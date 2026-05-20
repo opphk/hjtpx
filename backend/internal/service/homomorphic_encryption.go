@@ -217,40 +217,40 @@ func (s *HomomorphicEncryptionService) Encrypt(ctx context.Context, contextID st
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	context, exists := s.contexts[contextID]
+	heContext, exists := s.contexts[contextID]
 	if !exists {
 		return nil, fmt.Errorf("context %s not found", contextID)
 	}
 
-	if context.publicKey == nil {
+	if heContext.publicKey == nil {
 		return nil, ErrHEKeyGenerationFailed
 	}
 
-	if plaintext.Cmp(big.NewInt(0)) < 0 || plaintext.Cmp(context.publicKey.N) >= 0 {
+	if plaintext.Cmp(big.NewInt(0)) < 0 || plaintext.Cmp(heContext.publicKey.N) >= 0 {
 		return nil, ErrHEInvalidPlaintext
 	}
 
-	n := context.publicKey.N
-	g := context.publicKey.NSquared
+	n := heContext.publicKey.N
+	g := heContext.publicKey.NSquared
 
 	r := new(big.Int)
 	for r.BitLen() < n.BitLen()/2 {
 		r, _ = rand.Int(rand.Reader, n)
 	}
 
-	c1 := new(big.Int).Exp(g, plaintext, nSquared)
-	rN := new(big.Int).Exp(r, n, nSquared)
+	c1 := new(big.Int).Exp(g, plaintext, heContext.publicKey.NSquared)
+	rN := new(big.Int).Exp(r, n, heContext.publicKey.NSquared)
 	c1 = new(big.Int).Mod(
 		new(big.Int).Mul(c1, rN),
-		nSquared,
+		heContext.publicKey.NSquared,
 	)
 
-	c2 := new(big.Int).Exp(g, big.NewInt(1), nSquared)
+	c2 := new(big.Int).Exp(g, big.NewInt(1), heContext.publicKey.NSquared)
 
 	return &HECiphertext{
 		C1:        c1,
 		C2:        c2,
-		Algorithm: context.params.Algorithm,
+		Algorithm: heContext.params.Algorithm,
 		Depth:     1,
 		Scale:     1.0,
 	}, nil
@@ -610,7 +610,7 @@ func (s *HomomorphicEncryptionService) ComputeMean(ctx context.Context, contextI
 	}
 
 	count := big.NewInt(int64(len(ciphertexts)))
-	invCount := new(big.Int).ModInverse(count, contexts[contextID].publicKey.N)
+	invCount := new(big.Int).ModInverse(count, s.contexts[contextID].publicKey.N)
 
 	if invCount == nil {
 		return nil, errors.New("failed to compute inverse")
