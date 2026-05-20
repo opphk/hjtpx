@@ -327,7 +327,7 @@ func (p *PreparedQueryExecutor) ExecutePrepared(ctx context.Context, query strin
 }
 
 type QueryCacheManager struct {
-	cache      *QueryCache
+	cache      *OptimizedQueryCache
 	optimizer  *QueryOptimizer
 	expiration time.Duration
 }
@@ -339,7 +339,7 @@ func NewQueryCacheManager(cfg *config.Config) *QueryCacheManager {
 	}
 
 	return &QueryCacheManager{
-		cache:      GetQueryCache(),
+		cache:      GetOptimizedQueryCache(),
 		optimizer:  nil,
 		expiration: ttl,
 	}

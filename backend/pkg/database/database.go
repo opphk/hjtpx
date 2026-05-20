@@ -110,15 +110,20 @@ func InitDB(cfg *config.Config) error {
 }
 
 func InitializeDatabaseFeatures(cfg *config.Config) error {
-	InitQueryCache(cfg)
 	InitPerformanceMonitor(cfg)
 	InitConnectionPool(cfg)
-	// InitDataArchiving(cfg) // Temporarily disabled due to compilation issues
+	InitOptimizedQueryCache(cfg)
+	InitOptimizedQueryAnalyzer(DB, cfg.Database.SlowQueryThresholdMs)
 	InitReadWriteSeparation(cfg)
 
 	GormQueryCallback(DB)
 
 	if DB != nil {
+		sqlDB, err := DB.DB()
+		if err == nil {
+			InitOptimizedConnectionPool(sqlDB, cfg)
+		}
+
 		InitPerformanceOptimizer(DB, cfg)
 		if optimizer := GetPerformanceOptimizer(); optimizer != nil {
 			if err := optimizer.OptimizeAll(); err != nil {
@@ -139,12 +144,6 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 		} else {
 			log.Println("Query optimization completed successfully")
 		}
-
-		// enhancedPoolOptimizer := NewEnhancedConnectionPoolOptimizer(DB, nil) // Temporarily disabled
-		// enhancedPoolOptimizer.Start() // Temporarily disabled
-		// if err := enhancedPoolOptimizer.WarmUpConnections(5); err != nil { // Temporarily disabled
-		// 	log.Printf("Warning: Connection pool warmup failed: %v", err) // Temporarily disabled
-		// } // Temporarily disabled
 	}
 	return nil
 }
