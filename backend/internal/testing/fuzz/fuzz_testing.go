@@ -149,6 +149,6 @@ func EdgeCases() [][]byte {
 		[]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
 		[]byte("<script>alert('xss')</script>"),
 		[]byte("' OR '1'='1"),
-		[]byte(github.com/hjtpx/hjtpx/../../../etc/passwd"),
+		[]byte("github.com/hjtpx/hjtpx/../../../etc/passwd"),
 	}
 }
