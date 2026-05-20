@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 )
 
 type KeyboardAnalyzer struct {

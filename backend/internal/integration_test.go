@@ -569,7 +569,7 @@ func TestIntegration_SecurityValidation(t *testing.T) {
 
 	t.Run("路径遍历防护", func(t *testing.T) {
 		maliciousInputs := []string{
-			"../../../etc/passwd",
+			github.com/hjtpx/hjtpx/../../etc/passwd",
 			"..\\..\\..\\windows\\system32",
 			"....//....//....//etc/passwd",
 		}

@@ -80,9 +80,9 @@ func TestPathTraversalScan(t *testing.T) {
 	scanner := NewSecurityScanner()
 
 	testCases := []string{
-		"../../etc/passwd",
-		"../../../../etc/passwd",
-		"./../file.txt",
+		github.com/hjtpx/hjtpx/../etc/passwd",
+		github.com/hjtpx/hjtpx/../../../etc/passwd",
+		github.com/hjtpx/hjtpx/file.txt",
 		"/etc/passwd",
 	}
 

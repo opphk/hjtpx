@@ -102,7 +102,7 @@ func (s *SecurityScanner) ScanCommandInjection(input string) ([]Vulnerability, e
 		"| whoami",
 		"$(",
 		"`rm",
-		"../",
+		github.com/hjtpx/hjtpx/",
 		"/etc/passwd",
 	}
 
@@ -123,7 +123,7 @@ func (s *SecurityScanner) ScanCommandInjection(input string) ([]Vulnerability, e
 
 func (s *SecurityScanner) ScanPathTraversal(input string) ([]Vulnerability, error) {
 	pathPatterns := []string{
-		"../",
+		github.com/hjtpx/hjtpx/",
 		"/etc/passwd",
 		"windows/win.ini",
 		"system32",
@@ -415,7 +415,7 @@ func RunOWASPSecurityTests(t *testing.T) {
 func TestBrokenAccessControl(t *testing.T) {
 	t.Run("UnauthorizedAccess", func(t *testing.T) {
 		scanner := NewSecurityScanner()
-		payload := "../../../etc/passwd"
+		payload := github.com/hjtpx/hjtpx/../../etc/passwd"
 		vulnerable, _ := scanner.ScanPathTraversal(payload)
 		assertTrue(t, len(vulnerable) > 0, "Path traversal should be detected")
 	})

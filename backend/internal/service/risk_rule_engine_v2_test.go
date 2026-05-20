@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

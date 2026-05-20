@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestNewMouseBehaviorExtractor(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"gorm.io/gorm"

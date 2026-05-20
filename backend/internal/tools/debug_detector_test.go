@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 )
 
 func TestNewDebugDetector(t *testing.T) {

@@ -90,7 +90,7 @@ type pluginSystem struct {
 
 func NewPluginSystem(pluginDir string) (PluginSystem, error) {
 	if pluginDir == "" {
-		pluginDir = "./plugins"
+		pluginDir = github.com/hjtpx/hjtpx/plugins"
 	}
 
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {

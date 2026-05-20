@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hjtpx/hjtpx/internal/pkg/logger"
+	github.com/hjtpx/hjtpx/internal/pkg/logger"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 

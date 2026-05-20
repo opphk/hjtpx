@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hjtpx/hjtpx/internal/service/captcha"
+	github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hjtpx/hjtpx/backend/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 )
 
 type SpatioTemporalService struct {

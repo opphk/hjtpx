@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hjtpx/hjtpx/internal/service"
+	github.com/hjtpx/hjtpx/internal/service"
 )
 
 var (

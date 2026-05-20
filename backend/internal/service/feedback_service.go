@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hjtpx/hjtpx/internal/model"
+	github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"gorm.io/gorm"
 )

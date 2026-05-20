@@ -31,7 +31,7 @@ func TestInit(t *testing.T) {
 func setupTranslations() {
 	Init(LocaleConfig{
 		DefaultLang:     "zh-CN",
-		TranslationsDir: "../../translations",
+		TranslationsDir: github.com/hjtpx/hjtpx/../translations",
 	})
 }
 

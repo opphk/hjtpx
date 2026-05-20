@@ -71,7 +71,7 @@ type StorageConfig struct {
 }
 
 var defaultStorageConfig = &StorageConfig{
-	BasePath:       "./uploads",
+	BasePath:       github.com/hjtpx/hjtpx/uploads",
 	MaxFileSize:    10 * 1024 * 1024,
 	AllowedTypes:   []string{".jpg", ".jpeg", ".png", ".gif", ".webp"},
 	StorageType:    StorageTypeLocal,
