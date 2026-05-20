@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	translations   map[string]map[string]string
+	translations   map[string]map[string]interface{}
 	mu             sync.RWMutex
 	defaultLang    = "zh-CN"
 	supportedLangs = []string{
@@ -277,7 +277,7 @@ func Init(config LocaleConfig) error {
 		supportedLangs = config.SupportedLangs
 	}
 
-	translations = make(map[string]map[string]string)
+	translations = make(map[string]map[string]interface{})
 
 	dir := config.TranslationsDir
 	if dir == "" {
@@ -297,7 +297,7 @@ func Init(config LocaleConfig) error {
 				return fmt.Errorf("failed to read translation file %s: %w", entry.Name(), err)
 			}
 
-			var langTrans map[string]string
+			var langTrans map[string]interface{}
 			if err := json.Unmarshal(data, &langTrans); err != nil {
 				return fmt.Errorf("failed to parse translation file %s: %w", entry.Name(), err)
 			}
@@ -354,23 +354,45 @@ func Translate(lang, key string, args ...interface{}) string {
 		return key
 	}
 
-	value, ok := trans[key]
-	if !ok {
+	value := getNestedValue(trans, key)
+	if value == key {
 		if defaultTrans, ok := translations[defaultLang]; ok {
-			if defaultValue, ok := defaultTrans[key]; ok {
+			if defaultValue := getNestedValue(defaultTrans, key); defaultValue != key {
 				value = defaultValue
-			} else {
-				value = key
 			}
-		} else {
-			value = key
 		}
 	}
 
-	if len(args) > 0 {
-		return fmt.Sprintf(value, args...)
+	if strValue, ok := value.(string); ok {
+		if len(args) > 0 {
+			return fmt.Sprintf(strValue, args...)
+		}
+		return strValue
 	}
-	return value
+	return key
+}
+
+func getNestedValue(data map[string]interface{}, key string) interface{} {
+	parts := strings.Split(key, ".")
+	current := data
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			if val, ok := current[part]; ok {
+				return val
+			}
+			return key
+		}
+		if val, ok := current[part]; ok {
+			if nextMap, ok := val.(map[string]interface{}); ok {
+				current = nextMap
+			} else {
+				return key
+			}
+		} else {
+			return key
+		}
+	}
+	return key
 }
 
 func T(lang, key string, args ...interface{}) string {
@@ -392,10 +414,22 @@ func GetAllTranslations(lang string) map[string]string {
 	}
 
 	result := make(map[string]string)
-	for k, v := range trans {
-		result[k] = v
-	}
+	flattenMap(trans, "", result)
 	return result
+}
+
+func flattenMap(data map[string]interface{}, prefix string, result map[string]string) {
+	for k, v := range data {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if strVal, ok := v.(string); ok {
+			result[key] = strVal
+		} else if nestedMap, ok := v.(map[string]interface{}); ok {
+			flattenMap(nestedMap, key, result)
+		}
+	}
 }
 
 func GetLangInfo(lang string) LangInfo {
