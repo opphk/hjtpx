@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · AI管理平台</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            width: 260px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.7);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 12px;
+            transition: all 0.2s;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: #fff;
+            background: rgba(200, 170, 110, 0.2);
+        }
+        .sidebar .nav-link i {
+            width: 24px;
+            margin-right: 10px;
+        }
+        .logo-section {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .logo {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #c23a2b, #8b2a1e);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #c9a96e;
+        }
+        .main-content {
+            flex: 1;
+            min-height: 100vh;
+        }
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e9ecef;
+            padding: 16px 24px;
+        }
+        .page-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+        }
+        .page-title .badge {
+            font-size: 9px;
+            font-weight: 900;
+            transform: rotate(-8deg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border: 1.5px solid #c23a2b;
+            color: #c23a2b;
+            border-radius: 2px;
+            margin-left: 8px;
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 12px 20px;
+            position: relative;
+        }
+        .nav-tabs .nav-link:hover {
+            color: #c23a2b;
+        }
+        .nav-tabs .nav-link.active {
+            color: #c23a2b;
+            background: transparent;
+        }
+        .nav-tabs .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #c23a2b;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        .card-header {
+            background: #fff;
+            border-bottom: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-radius: 12px 12px 0 0 !important;
+        }
+        .model-card:hover,
+        .experiment-card:hover,
+        .abtest-card:hover,
+        .monitor-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+        }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="sidebar d-flex flex-column">
+            <div class="logo-section">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="logo">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 18px; color: #c9a96e;">墨盾验证</div>
+                        <div style="font-size: 11px; color: rgba(201, 170, 110, 0.5);">AI管理平台</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="flex-grow-1 p-2">
+                <a class="nav-link" href="/admin/">
+                    <i class="fas fa-home"></i> 仪表盘
+                </a>
+                <a class="nav-link active" href="/admin/ai-management">
+                    <i class="fas fa-brain"></i> AI管理
+                </a>
+                <a class="nav-link" href="/admin/stats">
+                    <i class="fas fa-chart-line"></i> 统计分析
+                </a>
+                <a class="nav-link" href="/admin/applications">
+                    <i class="fas fa-mobile-alt"></i> 应用管理
+                </a>
+                <a class="nav-link" href="/admin/logs">
+                    <i class="fas fa-clipboard-list"></i> 日志查询
+                </a>
+                <a class="nav-link" href="/admin/monitoring">
+                    <i class="fas fa-tachometer-alt"></i> 实时监控
+                </a>
+            </nav>
+            <div class="mt-auto p-3 border-top border-secondary">
+                <a href="#" class="nav-link" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> 退出登录
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <h1 class="page-title">
+                            AI管理平台
+                            <span class="badge">AI</span>
+                        </h1>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button id="refreshBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-sync me-1"></i> 刷新
+                        </button>
+                        <div class="d-flex align-items-center gap-2 ms-3">
+                            <span class="text-secondary">管理员</span>
+                            <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; font-weight: 700;">
+                                A
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div style="height: 4px; background: linear-gradient(90deg, #c9a96e, transparent);"></div>
+
+            <!-- Content -->
+            <div class="p-4">
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-4" id="aiTabs">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-tab="models" type="button">
+                            <i class="fas fa-brain me-2"></i> 模型管理
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-tab="experiments" type="button">
+                            <i class="fas fa-flask me-2"></i> 实验追踪
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-tab="abtesting" type="button">
+                            <i class="fas fa-code-branch me-2"></i> A/B测试
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-tab="monitoring" type="button">
+                            <i class="fas fa-heartbeat me-2"></i> 模型监控
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Models Tab -->
+                    <div class="tab-pane fade show active" id="models">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="mb-0">模型列表</h5>
+                            <button class="btn btn-primary btn-sm" id="createModelBtn">
+                                <i class="fas fa-plus me-1"></i> 上传模型
+                            </button>
+                        </div>
+                        <div id="modelsList">
+                            <!-- Models will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Experiments Tab -->
+                    <div class="tab-pane fade" id="experiments">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="mb-0">实验列表</h5>
+                            <button class="btn btn-primary btn-sm" id="createExperimentBtn">
+                                <i class="fas fa-plus me-1"></i> 创建实验
+                            </button>
+                        </div>
+                        <div id="experimentsList">
+                            <!-- Experiments will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- A/B Testing Tab -->
+                    <div class="tab-pane fade" id="abtesting">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="mb-0">A/B测试</h5>
+                            <button class="btn btn-primary btn-sm" id="createABTestBtn">
+                                <i class="fas fa-plus me-1"></i> 创建测试
+                            </button>
+                        </div>
+                        <div id="abTestsList">
+                            <!-- A/B Tests will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Monitoring Tab -->
+                    <div class="tab-pane fade" id="monitoring">
+                        <div class="mb-4">
+                            <h5 class="mb-0">模型监控概览</h5>
+                        </div>
+                        <div id="monitoringOverview" class="mb-4">
+                            <!-- Monitoring overview will be rendered here -->
+                        </div>
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-clock me-2 text-success"></i> 延迟趋势</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="latencyChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-bolt me-2 text-primary"></i> 吞吐量</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="throughputChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2 text-danger"></i> 错误率</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="errorRateChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Model Modal -->
+    <div class="modal fade" id="createModelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">上传模型</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createModelForm">
+                        <div class="mb-3">
+                            <label class="form-label">模型名称</label>
+                            <input type="text" class="form-control" id="modelName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">版本号</label>
+                            <input type="text" class="form-control" id="modelVersion" required placeholder="例如: v1.0.0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">模型类型</label>
+                            <select class="form-select" id="modelType" required>
+                                <option value="">选择类型</option>
+                                <option value="classification">分类模型</option>
+                                <option value="detection">检测模型</option>
+                                <option value="regression">回归模型</option>
+                                <option value="analysis">分析模型</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" id="modelDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">模型文件</label>
+                            <input type="file" class="form-control" id="modelFile">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary">上传</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Experiment Modal -->
+    <div class="modal fade" id="createExperimentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建实验</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createExperimentForm">
+                        <div class="mb-3">
+                            <label class="form-label">实验名称</label>
+                            <input type="text" class="form-control" id="experimentName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">实验类型</label>
+                            <select class="form-select" id="experimentType" required>
+                                <option value="">选择类型</option>
+                                <option value="optimization">优化实验</option>
+                                <option value="research">研究实验</option>
+                                <option value="ablation">消融实验</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" id="experimentDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">标签</label>
+                            <input type="text" class="form-control" id="experimentTags" placeholder="逗号分隔">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create A/B Test Modal -->
+    <div class="modal fade" id="createABTestModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建A/B测试</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createABTestForm">
+                        <div class="mb-3">
+                            <label class="form-label">测试名称</label>
+                            <input type="text" class="form-control" id="abTestName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" id="abTestDescription" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">关联模型</label>
+                            <select class="form-select" id="abTestModel" required>
+                                <option value="">选择模型</option>
+                            </select>
+                        </div>
+                        <hr>
+                        <h6 class="mb-3">变体配置</h6>
+                        <div id="variantsContainer">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control" placeholder="变体名称" value="Control">
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select">
+                                        <option>选择模型版本</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="number" class="form-control" placeholder="流量权重" value="50" min="1" max="100">
+                                </div>
+                                <div class="col-md-1">
+                                    <span class="badge bg-info">对照</span>
+                                </div>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control" placeholder="变体名称" value="Treatment">
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select">
+                                        <option>选择模型版本</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="number" class="form-control" placeholder="流量权重" value="50" min="1" max="100">
+                                </div>
+                                <div class="col-md-1"></div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm mb-3">
+                            <i class="fas fa-plus me-1"></i> 添加变体
+                        </button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/ai-management-platform.js"></script>
+</body>
+</html>

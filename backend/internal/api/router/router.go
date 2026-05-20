@@ -63,6 +63,11 @@ func SetupRoutes(r *gin.Engine) {
 		c.HTML(200, "vrcaptcha.html", gin.H{"title": "VR 沉浸式验证码"})
 	})
 
+	// 多感官验证码页面
+	r.GET("/multisensory", func(c *gin.Context) {
+		c.HTML(200, "multisensory.html", gin.H{"title": "多感官融合验证码"})
+	})
+
 	api := r.Group("/api/v1")
 	{
 		api.GET("/health", func(c *gin.Context) {
@@ -151,6 +156,12 @@ func SetupRoutes(r *gin.Engine) {
 		// 增强的组合验证码系统
 		api.POST("/captcha/combo/generate", handler.ComboCaptchaGenerate)
 		api.GET("/captcha/combo/options", handler.ComboCaptchaOptions)
+
+		// ============ v20.0 新增验证码路由 ============
+		// 多感官融合验证码
+		api.POST("/captcha/multisensory/create", handler.CreateMultisensoryCaptcha)
+		api.POST("/captcha/multisensory/verify", handler.VerifyMultisensoryCaptcha)
+		api.GET("/captcha/multisensory/status/:session_id", handler.GetMultisensoryCaptchaStatus)
 
 		// ============ v17.0 新增 AI 模型 v3 路由 ============
 		api.POST("/ai/v3/smart-captcha/generate", aiModelV3Handler.GenerateSmartCaptcha)

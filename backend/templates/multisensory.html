@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="墨盾验证 - 多感官融合验证码">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>多感官验证码 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-primary-light: #d4b87a;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+            --captcha-gray: #6c757d;
+            --captcha-border: #dee2e6;
+            --captcha-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-bs-theme="dark"] {
+            --captcha-light: #2d2d44;
+            --captcha-dark: #f8f9fa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 2rem 1rem;
+        }
+
+        .page-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: white;
+        }
+
+        .page-header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            opacity: 0.8;
+            font-size: 0.95rem;
+        }
+
+        .captcha-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, var(--captcha-primary-light) 100%);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .card-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        .multisensory-wrapper {
+            width: 100%;
+        }
+
+        .captcha-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--captcha-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--captcha-gray);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: var(--captcha-transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            position: relative;
+        }
+
+        .tab-button:hover {
+            color: var(--captcha-primary);
+            background: rgba(201, 169, 110, 0.1);
+        }
+
+        .tab-button.active {
+            color: var(--captcha-primary);
+            font-weight: 600;
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -0.5rem;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--captcha-primary);
+        }
+
+        .status-icon {
+            font-size: 0.8rem;
+            width: 1.2rem;
+            height: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-icon.verified {
+            color: var(--captcha-success);
+        }
+
+        .captcha-content {
+            min-height: 250px;
+            padding: 1rem;
+            background: var(--captcha-light);
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+
+        .visual-captcha,
+        .audio-captcha,
+        .tactile-captcha {
+            text-align: center;
+        }
+
+        .instruction {
+            color: var(--captcha-gray);
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .slider-image-container {
+            position: relative;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto 1.5rem;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .background-image {
+            width: 100%;
+            display: block;
+        }
+
+        .slider-piece {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            height: 60px;
+            transition: left 0.1s ease-out;
+        }
+
+        .slider-control {
+            padding: 0 1rem;
+        }
+
+        .slider-control input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--captcha-border);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--captcha-primary);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(201, 169, 110, 0.4);
+            transition: var(--captcha-transition);
+        }
+
+        .slider-control input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(201, 169, 110, 0.5);
+        }
+
+        .target-emoji {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--captcha-dark);
+        }
+
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            max-width: 250px;
+            margin: 0 auto;
+        }
+
+        .emoji-button {
+            padding: 1rem;
+            font-size: 2rem;
+            border: 2px solid var(--captcha-border);
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+        }
+
+        .emoji-button:hover {
+            border-color: var(--captcha-primary);
+            background: rgba(201, 169, 110, 0.1);
+            transform: scale(1.05);
+        }
+
+        .emoji-button.selected {
+            border-color: var(--captcha-primary);
+            background: rgba(201, 169, 110, 0.2);
+        }
+
+        .audio-player,
+        .vibration-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .play-button,
+        .vibrate-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, var(--captcha-primary-light) 100%);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+            box-shadow: 0 8px 24px rgba(201, 169, 110, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-button:hover,
+        .vibrate-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 32px rgba(201, 169, 110, 0.5);
+        }
+
+        .play-button.playing {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 8px 24px rgba(201, 169, 110, 0.4); }
+            50% { box-shadow: 0 8px 32px rgba(201, 169, 110, 0.7); }
+        }
+
+        .audio-input-container,
+        .tactile-input-container {
+            margin-top: 1.5rem;
+        }
+
+        .captcha-input {
+            font-size: 1.25rem;
+            text-align: center;
+            letter-spacing: 0.5rem;
+            padding: 1rem;
+            border: 2px solid var(--captcha-border);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 200px;
+            transition: var(--captcha-transition);
+        }
+
+        .captcha-input:focus {
+            border-color: var(--captcha-primary);
+            box-shadow: 0 0 0 0.2rem rgba(201, 169, 110, 0.25);
+            outline: none;
+        }
+
+        .vibration-display {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .vibration-pulse {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--captcha-primary);
+            animation: vibrate 0.5s ease-in-out infinite;
+        }
+
+        .vibration-pulse.short {
+            animation-duration: 0.3s;
+        }
+
+        .vibration-pulse.long {
+            animation-duration: 0.7s;
+        }
+
+        @keyframes vibrate {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: var(--captcha-gray);
+            margin-top: 0.25rem;
+        }
+
+        .captcha-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: var(--captcha-transition);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, var(--captcha-primary-light) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(201, 169, 110, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--captcha-border);
+            color: var(--captcha-gray);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--captcha-primary);
+            color: var(--captcha-primary);
+            background: rgba(201, 169, 110, 0.1);
+        }
+
+        .result-message {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+
+        .result-message.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-message.success {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: var(--captcha-success);
+        }
+
+        .result-message.error {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: var(--captcha-danger);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 576px) {
+            body {
+                padding: 1rem 0.5rem;
+            }
+
+            .card-body {
+                padding: 1.5rem 1rem;
+            }
+
+            .captcha-tabs {
+                gap: 0.25rem;
+            }
+
+            .tab-button {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.8rem;
+            }
+
+            .emoji-grid {
+                gap: 0.5rem;
+            }
+
+            .emoji-button {
+                padding: 0.75rem;
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="page-header">
+            <h1><i class="fas fa-shield-alt me-2"></i>多感官融合验证码</h1>
+            <p>通过视觉、听觉、触觉三种方式验证您的身份</p>
+        </div>
+
+        <div class="captcha-card">
+            <div class="card-header">
+                <h2>安全验证</h2>
+            </div>
+            <div class="card-body">
+                <div id="multisensory-container"></div>
+            </div>
+        </div>
+
+        <div class="page-footer">
+            <p>© 2024 墨盾验证 - 多感官验证码系统</p>
+        </div>
+    </div>
+
+    <script src="/static/js/multisensory-captcha.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const captcha = new MultisensoryCaptcha({
+                types: ['visual', 'audio', 'tactile'],
+                visualType: 'slider',
+                language: 'zh-CN',
+                requireAll: true,
+                onSuccess: function(result) {
+                    console.log('验证成功:', result);
+                    setTimeout(function() {
+                        captcha.generateCaptcha();
+                    }, 2000);
+                }
+            });
+            
+            captcha.init();
+        });
+    </script>
+</body>
+</html>
