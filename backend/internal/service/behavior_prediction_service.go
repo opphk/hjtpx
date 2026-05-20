@@ -9,12 +9,18 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/models"
 )
 
+// ============================================
+// 第一部分：行为预测服务核心（任务3.4）
+// ============================================
+
 type BehaviorPredictionService struct {
-	intentPredictor  *IntentPredictor
-	riskAssessor     *ProactiveRiskAssessor
-	smartInterceptor *SmartInterceptor
-	sequenceAnalyzer *SequenceAnalyzer
-	mu               sync.RWMutex
+	intentPredictor     *IntentPredictor
+	riskAssessor        *ProactiveRiskAssessor
+	smartInterceptor    *SmartInterceptor
+	sequenceAnalyzer    *SequenceAnalyzer
+	neuralPredictor    *NeuralBehaviorPredictor
+	onlineLearner       *OnlineLearningEngine
+	mu                 sync.RWMutex
 }
 
 type IntentPredictor struct {
@@ -272,6 +278,8 @@ func NewBehaviorPredictionService() *BehaviorPredictionService {
 			sequences: make(map[string]*ActionSequence),
 			patterns:  make(map[string]*SequencePattern),
 		},
+		neuralPredictor: NewNeuralBehaviorPredictor(),
+		onlineLearner:   NewOnlineLearningEngine(),
 	}
 	
 	service.initializeDefaultModels()
@@ -1048,4 +1056,600 @@ func containsSubstr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ============================================
+// 第二部分：神经网络行为预测器（任务3.4）
+// ============================================
+
+// NeuralBehaviorPredictor 神经网络行为预测器
+type NeuralBehaviorPredictor struct {
+	inputSize     int
+	hiddenSize    int
+	outputSize    int
+	learningRate  float64
+	weights       *NeuralWeights
+	activationHist []float64
+	mu            sync.RWMutex
+}
+
+// NeuralWeights 神经网络权重
+type NeuralWeights struct {
+	InputHidden  [][]float64  // 输入层到隐藏层权重
+	HiddenOutput [][]float64  // 隐藏层到输出层权重
+	HiddenBias   []float64    // 隐藏层偏置
+	OutputBias   []float64    // 输出层偏置
+}
+
+// NeuralPredictionResult 神经网络预测结果
+type NeuralPredictionResult struct {
+	BotProbability   float64            // 机器人概率
+	HumanLikelihood  float64            // 人类可能性
+	IntentPrediction *IntentPrediction   // 意图预测
+	Confidence       float64            // 置信度
+	FeatureAnalysis  map[string]float64 // 特征分析
+	RiskIndicators   []string           // 风险指标
+}
+
+// IntentPrediction 意图预测
+type IntentPrediction struct {
+	PrimaryIntent   string
+	SecondaryIntent string
+	IntentConfidence float64
+	IntentSequence  []string
+}
+
+// NewNeuralBehaviorPredictor 创建神经网络预测器
+func NewNeuralBehaviorPredictor() *NeuralBehaviorPredictor {
+	return &NeuralBehaviorPredictor{
+		inputSize:     100,
+		hiddenSize:    50,
+		outputSize:    3,
+		learningRate:  0.01,
+		weights:       nil,
+		activationHist: make([]float64, 0),
+	}
+}
+
+// InitializeWeights 初始化神经网络权重
+func (n *NeuralBehaviorPredictor) InitializeWeights() {
+	n.weights = &NeuralWeights{
+		InputHidden:  make([][]float64, n.inputSize),
+		HiddenOutput: make([][]float64, n.hiddenSize),
+		HiddenBias:   make([]float64, n.hiddenSize),
+		OutputBias:   make([]float64, n.outputSize),
+	}
+
+	// 初始化输入层到隐藏层权重
+	for i := 0; i < n.inputSize; i++ {
+		n.weights.InputHidden[i] = make([]float64, n.hiddenSize)
+		for j := 0; j < n.hiddenSize; j++ {
+			n.weights.InputHidden[i][j] = (math.rand.Float64() - 0.5) * 0.5
+		}
+	}
+
+	// 初始化隐藏层到输出层权重
+	for i := 0; i < n.hiddenSize; i++ {
+		n.weights.HiddenOutput[i] = make([]float64, n.outputSize)
+		for j := 0; j < n.outputSize; j++ {
+			n.weights.HiddenOutput[i][j] = (math.rand.Float64() - 0.5) * 0.5
+		}
+	}
+
+	// 初始化偏置
+	for i := 0; i < n.hiddenSize; i++ {
+		n.weights.HiddenBias[i] = (math.rand.Float64() - 0.5) * 0.1
+	}
+	for i := 0; i < n.outputSize; i++ {
+		n.weights.OutputBias[i] = (math.rand.Float64() - 0.5) * 0.1
+	}
+}
+
+// Predict 使用神经网络进行行为预测
+func (n *NeuralBehaviorPredictor) Predict(features []float64) *NeuralPredictionResult {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.weights == nil {
+		n.InitializeWeights()
+	}
+
+	// 确保特征数量匹配
+	if len(features) < n.inputSize {
+		padded := make([]float64, n.inputSize)
+		copy(padded, features)
+		features = padded
+	} else if len(features) > n.inputSize {
+		features = features[:n.inputSize]
+	}
+
+	// 前向传播
+	hiddenActivations := n.forwardHiddenLayer(features)
+	outputActivations := n.forwardOutputLayer(hiddenActivations)
+
+	// 解析输出
+	result := &NeuralPredictionResult{
+		BotProbability:  outputActivations[0],
+		HumanLikelihood: outputActivations[1],
+		Confidence:      outputActivations[2],
+		IntentPrediction: &IntentPrediction{
+			PrimaryIntent:   n.classifyIntent(outputActivations),
+			IntentConfidence: outputActivations[2],
+		},
+		FeatureAnalysis: make(map[string]float64),
+		RiskIndicators: []string{},
+	}
+
+	// 分析关键特征
+	result.FeatureAnalysis = n.analyzeKeyFeatures(features)
+
+	// 生成风险指标
+	result.RiskIndicators = n.generateRiskIndicators(result.BotProbability, features)
+
+	return result
+}
+
+// forwardHiddenLayer 前向传播到隐藏层
+func (n *NeuralBehaviorPredictor) forwardHiddenLayer(inputs []float64) []float64 {
+	hidden := make([]float64, n.hiddenSize)
+
+	for j := 0; j < n.hiddenSize; j++ {
+		sum := n.weights.HiddenBias[j]
+		for i := 0; i < n.inputSize; i++ {
+			sum += inputs[i] * n.weights.InputHidden[i][j]
+		}
+		// ReLU激活函数
+		hidden[j] = math.Max(0, sum)
+	}
+
+	return hidden
+}
+
+// forwardOutputLayer 前向传播到输出层
+func (n *NeuralBehaviorPredictor) forwardOutputLayer(hidden []float64) []float64 {
+	output := make([]float64, n.outputSize)
+
+	for k := 0; k < n.outputSize; k++ {
+		sum := n.weights.OutputBias[k]
+		for j := 0; j < n.hiddenSize; j++ {
+			sum += hidden[j] * n.weights.HiddenOutput[j][k]
+		}
+		// Sigmoid激活函数
+		output[k] = 1.0 / (1.0 + math.Exp(-sum))
+	}
+
+	return output
+}
+
+// classifyIntent 根据输出分类意图
+func (n *NeuralBehaviorPredictor) classifyIntent(outputs []float64) string {
+	maxIdx := 0
+	maxVal := outputs[0]
+	for i := 1; i < len(outputs); i++ {
+		if outputs[i] > maxVal {
+			maxVal = outputs[i]
+			maxIdx = i
+		}
+	}
+
+	intents := []string{"normal_user", "suspicious", "bot"}
+	if maxIdx < len(intents) {
+		return intents[maxIdx]
+	}
+	return "unknown"
+}
+
+// analyzeKeyFeatures 分析关键特征
+func (n *NeuralBehaviorPredictor) analyzeKeyFeatures(features []float64) map[string]float64 {
+	analysis := make(map[string]float64)
+
+	// 分析速度特征（前20个特征）
+	if len(features) >= 20 {
+		speedSum := 0.0
+		for i := 0; i < 20; i++ {
+			speedSum += features[i]
+		}
+		analysis["avg_speed"] = speedSum / 20.0
+	}
+
+	// 分析加速度特征（20-40）
+	if len(features) >= 40 {
+		accelSum := 0.0
+		for i := 20; i < 40; i++ {
+			accelSum += features[i]
+		}
+		analysis["avg_acceleration"] = accelSum / 20.0
+	}
+
+	// 分析轨迹特征（40-60）
+	if len(features) >= 60 {
+		trajSum := 0.0
+		for i := 40; i < 60; i++ {
+			trajSum += features[i]
+		}
+		analysis["avg_trajectory"] = trajSum / 20.0
+	}
+
+	// 分析时间特征（60-80）
+	if len(features) >= 80 {
+		timeSum := 0.0
+		for i := 60; i < 80; i++ {
+			timeSum += features[i]
+		}
+		analysis["avg_timing"] = timeSum / 20.0
+	}
+
+	// 分析模式特征（80-100）
+	if len(features) >= 100 {
+		patternSum := 0.0
+		for i := 80; i < 100; i++ {
+			patternSum += features[i]
+		}
+		analysis["avg_pattern"] = patternSum / 20.0
+	}
+
+	return analysis
+}
+
+// generateRiskIndicators 生成风险指标
+func (n *NeuralBehaviorPredictor) generateRiskIndicators(botProb float64, features []float64) []string {
+	indicators := []string{}
+
+	if botProb > 0.7 {
+		indicators = append(indicators, "high_bot_probability")
+	}
+
+	if len(features) >= 20 {
+		// 检查异常速度
+		speedVariance := 0.0
+		speedSum := 0.0
+		for i := 0; i < 20; i++ {
+			speedSum += features[i]
+		}
+		speedMean := speedSum / 20.0
+		for i := 0; i < 20; i++ {
+			speedVariance += (features[i] - speedMean) * (features[i] - speedMean)
+		}
+		if speedVariance < 0.01 {
+			indicators = append(indicators, "abnormal_speed_consistency")
+		}
+	}
+
+	if len(features) >= 100 {
+		// 检查异常模式
+		patternVariance := 0.0
+		patternSum := 0.0
+		for i := 80; i < 100; i++ {
+			patternSum += features[i]
+		}
+		patternMean := patternSum / 20.0
+		for i := 80; i < 100; i++ {
+			patternVariance += (features[i] - patternMean) * (features[i] - patternMean)
+		}
+		if patternVariance < 0.005 {
+			indicators = append(indicators, "mechanical_pattern_detected")
+		}
+	}
+
+	return indicators
+}
+
+// Train 训练神经网络
+func (n *NeuralBehaviorPredictor) Train(features []float64, expectedOutput []float64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.weights == nil {
+		n.InitializeWeights()
+	}
+
+	// 确保特征数量匹配
+	if len(features) < n.inputSize {
+		padded := make([]float64, n.inputSize)
+		copy(padded, features)
+		features = padded
+	} else if len(features) > n.inputSize {
+		features = features[:n.inputSize]
+	}
+
+	// 前向传播
+	hiddenActivations := n.forwardHiddenLayer(features)
+	outputActivations := n.forwardOutputLayer(hiddenActivations)
+
+	// 反向传播
+	n.backpropagate(features, hiddenActivations, outputActivations, expectedOutput)
+}
+
+// backpropagate 反向传播算法
+func (n *NeuralBehaviorPredictor) backpropagate(inputs, hidden, output, expected []float64) {
+	// 计算输出层误差
+	outputErrors := make([]float64, n.outputSize)
+	for k := 0; k < n.outputSize; k++ {
+		if k < len(expected) {
+			outputErrors[k] = (expected[k] - output[k]) * output[k] * (1.0 - output[k])
+		}
+	}
+
+	// 计算隐藏层误差
+	hiddenErrors := make([]float64, n.hiddenSize)
+	for j := 0; j < n.hiddenSize; j++ {
+		errorSum := 0.0
+		for k := 0; k < n.outputSize; k++ {
+			errorSum += outputErrors[k] * n.weights.HiddenOutput[j][k]
+		}
+		hiddenErrors[j] = hidden[j] * (1.0 - hidden[j]) * errorSum
+	}
+
+	// 更新隐藏层到输出层权重
+	for j := 0; j < n.hiddenSize; j++ {
+		for k := 0; k < n.outputSize; k++ {
+			n.weights.HiddenOutput[j][k] += n.learningRate * outputErrors[k] * hidden[j]
+		}
+	}
+
+	// 更新输入层到隐藏层权重
+	for i := 0; i < n.inputSize; i++ {
+		for j := 0; j < n.hiddenSize; j++ {
+			n.weights.InputHidden[i][j] += n.learningRate * hiddenErrors[j] * inputs[i]
+		}
+	}
+
+	// 更新偏置
+	for k := 0; k < n.outputSize; k++ {
+		n.weights.OutputBias[k] += n.learningRate * outputErrors[k]
+	}
+	for j := 0; j < n.hiddenSize; j++ {
+		n.weights.HiddenBias[j] += n.learningRate * hiddenErrors[j]
+	}
+}
+
+// ============================================
+// 第三部分：在线学习引擎（任务3.4）
+// ============================================
+
+// OnlineLearningEngine 在线学习引擎
+type OnlineLearningEngine struct {
+	trainingBuffer   []TrainingSample
+	bufferSize       int
+	updateFrequency  int
+	modelVersion     int
+	learningRate     float64
+	mu               sync.RWMutex
+}
+
+// TrainingSample 训练样本
+type TrainingSample struct {
+	Features       []float64
+	Label         float64
+	Timestamp     time.Time
+	Confidence    float64
+	Source        string
+}
+
+// NewOnlineLearningEngine 创建在线学习引擎
+func NewOnlineLearningEngine() *OnlineLearningEngine {
+	return &OnlineLearningEngine{
+		trainingBuffer:  make([]TrainingSample, 0),
+		bufferSize:      1000,
+		updateFrequency: 100,
+		modelVersion:    1,
+		learningRate:    0.01,
+	}
+}
+
+// AddSample 添加训练样本
+func (o *OnlineLearningEngine) AddSample(features []float64, label float64, confidence float64, source string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	sample := TrainingSample{
+		Features:    features,
+		Label:       label,
+		Timestamp:   time.Now(),
+		Confidence:  confidence,
+		Source:      source,
+	}
+
+	o.trainingBuffer = append(o.trainingBuffer, sample)
+
+	// 保持缓冲区大小
+	if len(o.trainingBuffer) > o.bufferSize {
+		o.trainingBuffer = o.trainingBuffer[len(o.trainingBuffer)-o.bufferSize:]
+	}
+
+	// 检查是否需要更新模型
+	if len(o.trainingBuffer)%o.updateFrequency == 0 {
+		go o.triggerModelUpdate()
+	}
+}
+
+// triggerModelUpdate 触发模型更新
+func (o *OnlineLearningEngine) triggerModelUpdate() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// 清理过期样本（超过24小时的样本）
+	cutoff := time.Now().Add(-24 * time.Hour)
+	validSamples := make([]TrainingSample, 0)
+	for _, sample := range o.trainingBuffer {
+		if sample.Timestamp.After(cutoff) {
+			validSamples = append(validSamples, sample)
+		}
+	}
+	o.trainingBuffer = validSamples
+
+	// 更新模型版本
+	o.modelVersion++
+}
+
+// GetRecentSamples 获取最近的样本
+func (o *OnlineLearningEngine) GetRecentSamples(count int) []TrainingSample {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	if count >= len(o.trainingBuffer) {
+		return o.trainingBuffer
+	}
+
+	return o.trainingBuffer[len(o.trainingBuffer)-count:]
+}
+
+// GetModelVersion 获取当前模型版本
+func (o *OnlineLearningEngine) GetModelVersion() int {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.modelVersion
+}
+
+// GetBufferSize 获取缓冲区大小
+func (o *OnlineLearningEngine) GetBufferSize() int {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return len(o.trainingBuffer)
+}
+
+// CalculateStatistics 计算样本统计信息
+func (o *OnlineLearningEngine) CalculateStatistics() map[string]interface{} {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	stats := make(map[string]interface{})
+
+	if len(o.trainingBuffer) == 0 {
+		return stats
+	}
+
+	// 计算标签分布
+	positiveCount := 0
+	negativeCount := 0
+	totalConfidence := 0.0
+
+	for _, sample := range o.trainingBuffer {
+		if sample.Label > 0.5 {
+			positiveCount++
+		} else {
+			negativeCount++
+		}
+		totalConfidence += sample.Confidence
+	}
+
+	stats["total_samples"] = len(o.trainingBuffer)
+	stats["positive_samples"] = positiveCount
+	stats["negative_samples"] = negativeCount
+	stats["avg_confidence"] = totalConfidence / float64(len(o.trainingBuffer))
+	stats["positive_ratio"] = float64(positiveCount) / float64(len(o.trainingBuffer))
+
+	// 计算特征统计
+	if len(o.trainingBuffer) > 0 {
+		featureMeans := make([]float64, 0)
+		featureStds := make([]float64, 0)
+
+		if len(o.trainingBuffer[0].Features) > 0 {
+			nFeatures := len(o.trainingBuffer[0].Features)
+			featureMeans = make([]float64, nFeatures)
+			featureStds = make([]float64, nFeatures)
+
+			// 计算均值
+			for _, sample := range o.trainingBuffer {
+				for i := 0; i < nFeatures && i < len(sample.Features); i++ {
+					featureMeans[i] += sample.Features[i]
+				}
+			}
+			for i := range featureMeans {
+				featureMeans[i] /= float64(len(o.trainingBuffer))
+			}
+
+			// 计算标准差
+			for _, sample := range o.trainingBuffer {
+				for i := 0; i < nFeatures && i < len(sample.Features); i++ {
+					diff := sample.Features[i] - featureMeans[i]
+					featureStds[i] += diff * diff
+				}
+			}
+			for i := range featureStds {
+				featureStds[i] = math.Sqrt(featureStds[i] / float64(len(o.trainingBuffer)))
+			}
+
+			stats["feature_means"] = featureMeans
+			stats["feature_stds"] = featureStds
+		}
+	}
+
+	return stats
+}
+
+// OptimizeLearningRate 自适应优化学习率
+func (o *OnlineLearningEngine) OptimizeLearningRate() float64 {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	// 根据样本数量调整学习率
+	if len(o.trainingBuffer) < 100 {
+		o.learningRate = 0.1
+	} else if len(o.trainingBuffer) < 500 {
+		o.learningRate = 0.05
+	} else if len(o.trainingBuffer) < 1000 {
+		o.learningRate = 0.01
+	} else {
+		o.learningRate = 0.005
+	}
+
+	return o.learningRate
+}
+
+// ClearBuffer 清除缓冲区
+func (o *OnlineLearningEngine) ClearBuffer() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.trainingBuffer = make([]TrainingSample, 0)
+	o.modelVersion++
+}
+
+// GetTrainingData 获取训练数据
+func (o *OnlineLearningEngine) GetTrainingData() ([][]float64, []float64) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	features := make([][]float64, len(o.trainingBuffer))
+	labels := make([]float64, len(o.trainingBuffer))
+
+	for i, sample := range o.trainingBuffer {
+		features[i] = sample.Features
+		labels[i] = sample.Label
+	}
+
+	return features, labels
+}
+
+// CalculateLabelDistribution 计算标签分布
+func (o *OnlineLearningEngine) CalculateLabelDistribution() map[string]float64 {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	distribution := make(map[string]float64)
+	total := float64(len(o.trainingBuffer))
+
+	if total == 0 {
+		return distribution
+	}
+
+	positiveCount := 0
+	negativeCount := 0
+	uncertainCount := 0
+
+	for _, sample := range o.trainingBuffer {
+		if sample.Label > 0.7 {
+			positiveCount++
+		} else if sample.Label < 0.3 {
+			negativeCount++
+		} else {
+			uncertainCount++
+		}
+	}
+
+	distribution["positive"] = float64(positiveCount) / total
+	distribution["negative"] = float64(negativeCount) / total
+	distribution["uncertain"] = float64(uncertainCount) / total
+
+	return distribution
 }

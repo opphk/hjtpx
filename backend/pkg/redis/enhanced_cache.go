@@ -40,7 +40,7 @@ const (
 	CacheLevelBoth
 )
 
-type CacheConfig struct {
+type EnhancedCacheConfig struct {
 	Enabled           bool
 	L1Enabled         bool
 	L2Enabled         bool
@@ -55,7 +55,7 @@ type CacheConfig struct {
 	BreakerTimeout    time.Duration
 }
 
-var DefaultCacheConfig = &CacheConfig{
+var DefaultCacheConfig = &EnhancedCacheConfig{
 	Enabled:           true,
 	L1Enabled:         true,
 	L2Enabled:         true,
@@ -78,10 +78,10 @@ type l1Entry struct {
 }
 
 type EnhancedCache struct {
-	config         *CacheConfig
+	config         *EnhancedCacheConfig
 	l1Cache        *sync.Map
 	l1Metrics      *l1Metrics
-	stats          *CacheStats
+	stats          *EnhancedCacheStats
 	breaker        *CircuitBreaker
 	hotKeys        *sync.Map
 	bloomFilter    *BloomFilter
@@ -97,7 +97,7 @@ type l1Metrics struct {
 	size      atomic.Int64
 }
 
-type CacheStats struct {
+type EnhancedCacheStats struct {
 	Hits         atomic.Int64
 	Misses       atomic.Int64
 	Sets         atomic.Int64
@@ -162,7 +162,7 @@ type DeleteOptions struct {
 	ByTag bool
 }
 
-func NewEnhancedCache(config *CacheConfig) *EnhancedCache {
+func NewEnhancedCache(config *EnhancedCacheConfig) *EnhancedCache {
 	if config == nil {
 		config = DefaultCacheConfig
 	}
@@ -171,7 +171,7 @@ func NewEnhancedCache(config *CacheConfig) *EnhancedCache {
 		config:         config,
 		l1Cache:        &sync.Map{},
 		l1Metrics:      &l1Metrics{},
-		stats:          &CacheStats{},
+		stats:          &EnhancedCacheStats{},
 		breaker:        NewCircuitBreaker(config.BreakerThreshold, config.BreakerTimeout),
 		hotKeys:        &sync.Map{},
 		bloomFilter:    NewBloomFilter(100000, 0.01),
@@ -1135,8 +1135,8 @@ func NewTieredCache(config *TieredCacheConfig) *TieredCache {
 
 	return &TieredCache{
 		config:  config,
-		l1Cache: NewEnhancedCache(&CacheConfig{L1Enabled: true, L2Enabled: false}),
-		l2Cache: NewEnhancedCache(&CacheConfig{L1Enabled: false, L2Enabled: true}),
+		l1Cache: NewEnhancedCache(&EnhancedCacheConfig{L1Enabled: true, L2Enabled: false}),
+		l2Cache: NewEnhancedCache(&EnhancedCacheConfig{L1Enabled: false, L2Enabled: true}),
 		l1Stats: &TierStats{},
 		l2Stats: &TierStats{},
 	}
@@ -1256,7 +1256,7 @@ func GetTieredCache() *TieredCache {
 var globalEnhancedCache *EnhancedCache
 var globalEnhancedCacheOnce sync.Once
 
-func InitEnhancedCache(config *CacheConfig) {
+func InitEnhancedCache(config *EnhancedCacheConfig) {
 	globalEnhancedCacheOnce.Do(func() {
 		globalEnhancedCache = NewEnhancedCache(config)
 	})

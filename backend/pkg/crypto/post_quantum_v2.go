@@ -287,7 +287,7 @@ func (k *PQV2KyberEngine) GenerateKeyPair(algorithm PQV2Algorithm) (*PQV2KeyPair
 		return nil, fmt.Errorf("%w: %v", ErrPQV2KeyGenFailed, err)
 	}
 
-	keyID := generateKeyID(pk)
+	keyID := generateKeyID()
 
 	return &PQV2KeyPair{
 		PublicKey:  pk,
@@ -400,7 +400,7 @@ func (d *PQV2DilithiumEngine) GenerateKeyPair(algorithm PQV2Algorithm) (*PQV2Key
 		return nil, fmt.Errorf("%w: %v", ErrPQV2KeyGenFailed, err)
 	}
 
-	keyID := generateKeyID(pk)
+	keyID := generateKeyID()
 
 	return &PQV2KeyPair{
 		PublicKey:  pk,
@@ -663,7 +663,7 @@ func (km *PQV2KeyManager) RotateKey(namespace, keyID string) (*PQV2KeyRotation, 
 
 	rotation := &PQV2KeyRotation{
 		OldKeyID:     keyID,
-		NewKeyID:     generateKeyID([]byte(time.Now().String())),
+		NewKeyID:     generateKeyID(),
 		RotationTime: time.Now(),
 		Reason:       "scheduled_rotation",
 		GracePeriod:  24 * time.Hour,
@@ -976,10 +976,6 @@ func (v PQV2ProtocolVersion) String() string {
 	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
 }
 
-func generateKeyID(seed []byte) string {
-	hash := sha256.Sum256(seed)
-	return base64.URLEncoding.EncodeToString(hash[:16])[:16]
-}
 
 type PQV2EncryptionRequest struct {
 	Plaintext     []byte

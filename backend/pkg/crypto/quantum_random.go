@@ -219,11 +219,9 @@ func (q *QuantumRandomGenerator) GenerateQuantumRandomString(config *QuantumCapt
 			quantumBits++
 		}
 
-		phaseSpace := float64(charCount) * (1.0 + q.noiseSource.amplitude*math.Sin(float64(i)))
 		charIndex := int(value % uint64(charCount))
 		
-		if config.AntiAI && i > 0 {
-			prevIndex := int(characters[i-1])
+		if config.AntiAI {
 			chaosFactor := math.Sin(float64(value) * 0.1)
 			charIndex = int(float64(charIndex) * (1 + chaosFactor*0.1))
 			if charIndex >= charCount {
