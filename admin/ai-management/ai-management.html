@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI管理平台 - 模型生命周期管理</title>
+    <link rel="stylesheet" href="https://www.bootcdn.cn/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://www.bootcdn.cn/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f5f7fa;
+        }
+        .sidebar {
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 12px;
+            transition: all 0.3s;
+        }
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .sidebar .nav-link.active {
+            background: rgba(99, 102, 241, 0.8);
+            color: #fff;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .stat-card.success {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .stat-card.warning {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .stat-card.info {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .model-card {
+            border-left: 4px solid #667eea;
+        }
+        .model-card.deployed {
+            border-left-color: #43e97b;
+        }
+        .model-card.training {
+            border-left-color: #4facfe;
+        }
+        .badge-training {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .badge-deployed {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .badge-draft {
+            background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar">
+                <div class="p-4">
+                    <h4 class="mb-4">
+                        <i class="fas fa-brain me-2"></i>AI平台
+                    </h4>
+                    <nav class="nav flex-column">
+                        <a class="nav-link active" href="#models" data-tab="models">
+                            <i class="fas fa-robot me-2"></i>模型管理
+                        </a>
+                        <a class="nav-link" href="#training" data-tab="training">
+                            <i class="fas fa-graduation-cap me-2"></i>训练任务
+                        </a>
+                        <a class="nav-link" href="#deployment" data-tab="deployment">
+                            <i class="fas fa-cloud me-2"></i>部署管理
+                        </a>
+                        <a class="nav-link" href="#experiments" data-tab="experiments">
+                            <i class="fas fa-flask me-2"></i>实验追踪
+                        </a>
+                        <a class="nav-link" href="#monitoring" data-tab="monitoring">
+                            <i class="fas fa-chart-line me-2"></i>监控告警
+                        </a>
+                        <a class="nav-link" href="#ab-testing" data-tab="ab-testing">
+                            <i class="fas fa-code-branch me-2"></i>A/B测试
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <div class="col-md-10 p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>AI模型生命周期管理</h2>
+                    <button class="btn btn-primary" onclick="aiPlatform.showCreateModelModal()">
+                        <i class="fas fa-plus me-2"></i>创建模型
+                    </button>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="mb-1" id="totalModels">0</h3>
+                                    <p class="mb-0">总模型数</p>
+                                </div>
+                                <i class="fas fa-brain fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card success">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="mb-1" id="deployedModels">0</h3>
+                                    <p class="mb-0">已部署</p>
+                                </div>
+                                <i class="fas fa-cloud-upload-alt fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card warning">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="mb-1" id="trainingJobs">0</h3>
+                                    <p class="mb-0">训练中</p>
+                                </div>
+                                <i class="fas fa-spinner fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card info">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="mb-1" id="activeAlerts">0</h3>
+                                    <p class="mb-0">活跃告警</p>
+                                </div>
+                                <i class="fas fa-bell fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">模型列表</h5>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-primary active" data-filter="all">全部</button>
+                                <button class="btn btn-sm btn-outline-primary" data-filter="deployed">已部署</button>
+                                <button class="btn btn-sm btn-outline-primary" data-filter="training">训练中</button>
+                                <button class="btn btn-sm btn-outline-primary" data-filter="draft">草稿</button>
+                            </div>
+                        </div>
+                        <div id="modelsList" class="row">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">
+                                    <i class="fas fa-chart-line me-2 text-primary"></i>模型性能趋势
+                                </h5>
+                                <div class="chart-container">
+                                    <canvas id="performanceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">
+                                    <i class="fas fa-tachometer-alt me-2 text-success"></i>资源使用率
+                                </h5>
+                                <div class="chart-container">
+                                    <canvas id="resourceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="createModelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建新模型</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">模型名称</label>
+                        <input type="text" class="form-control" id="modelName" placeholder="输入模型名称">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">模型类型</label>
+                        <select class="form-select" id="modelType">
+                            <option value="classification">分类模型</option>
+                            <option value="detection">检测模型</option>
+                            <option value="generation">生成模型</option>
+                            <option value="nlp">NLP模型</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">框架</label>
+                        <select class="form-select" id="modelFramework">
+                            <option value="pytorch">PyTorch</option>
+                            <option value="tensorflow">TensorFlow</option>
+                            <option value="sklearn">Scikit-learn</option>
+                            <option value="xgboost">XGBoost</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="modelDescription" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="aiPlatform.createModel()">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.bootcdn.cn/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://www.bootcdn.cn/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/ai-management-v2.js"></script>
+</body>
+</html>
