@@ -1,0 +1,1437 @@
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 日志与监控{% endblock %}
+{% block page_title %}日志与监控{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group mr-2">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+        <i class="fas fa-download"></i> 导出
+    </button>
+    <div class="dropdown-menu">
+        <a class="dropdown-item" href="#" onclick="exportLogs('csv')">
+            <i class="fas fa-file-csv"></i> CSV
+        </a>
+        <a class="dropdown-item" href="#" onclick="exportLogs('json')">
+            <i class="fas fa-file-code"></i> JSON
+        </a>
+        <a class="dropdown-item" href="#" onclick="exportLogs('excel')">
+            <i class="fas fa-file-excel"></i> Excel
+        </a>
+        <a class="dropdown-item" href="#" onclick="exportLogs('pdf')">
+            <i class="fas fa-file-pdf"></i> PDF
+        </a>
+    </div>
+</div>
+<button type="button" class="btn btn-default" id="toggleAdvancedSearch">
+    <i class="fas fa-filter"></i> 高级搜索
+</button>
+<button type="button" class="btn btn-default" id="realtimeMonitorBtn">
+    <i class="fas fa-broadcast-tower"></i> 实时监控
+</button>
+<button type="button" class="btn btn-default" id="alertSettingsBtn">
+    <i class="fas fa-bell"></i> 告警设置
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-success">
+            <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">成功数</span>
+                <span class="info-box-number counter-value" id="successCount">0</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-danger">
+            <span class="info-box-icon"><i class="fas fa-times-circle"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">失败数</span>
+                <span class="info-box-number counter-value" id="failedCount">0</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-warning">
+            <span class="info-box-icon"><i class="fas fa-ban"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">拦截数</span>
+                <span class="info-box-number counter-value" id="blockedCount">0</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-info">
+            <span class="info-box-icon"><i class="fas fa-chart-line"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">平均耗时</span>
+                <span class="info-box-number" id="avgDuration">0ms</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-primary">
+            <span class="info-box-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">风险评分</span>
+                <span class="info-box-number" id="avgRiskScore">0.0</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="info-box bg-gradient-secondary">
+            <span class="info-box-icon"><i class="fas fa-clock"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">最后更新</span>
+                <span class="info-box-number" id="lastUpdate">-</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    <span id="chartTitle">实时流量监控</span>
+                    <span class="badge badge-success ml-2" id="realtimeIndicator">
+                        <i class="fas fa-circle text-success"></i> 实时
+                    </span>
+                </h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-sm mr-2">
+                        <button type="button" class="btn btn-tool active" data-monitor="requests">
+                            请求量
+                        </button>
+                        <button type="button" class="btn btn-tool" data-monitor="latency">
+                            延迟
+                        </button>
+                        <button type="button" class="btn btn-tool" data-monitor="errors">
+                            错误率
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-tool" id="toggleRealtimeMonitor">
+                        <i class="fas fa-pause"></i>
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="realtimeMonitorChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3" id="advancedSearchSection" style="display: none;">
+    <div class="col-md-12">
+        <div class="card card-outline card-info">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-search mr-2"></i>
+                    高级搜索
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>搜索条件组合</label>
+                            <div id="searchConditionsBuilder">
+                                <div class="search-condition mb-2">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <select class="form-control condition-field">
+                                                <option value="">选择字段</option>
+                                                <option value="session_id">会话ID</option>
+                                                <option value="ip_address">IP地址</option>
+                                                <option value="app_id">应用ID</option>
+                                                <option value="user_agent">用户代理</option>
+                                                <option value="captcha_type">验证类型</option>
+                                                <option value="status">状态</option>
+                                                <option value="risk_level">风险等级</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select class="form-control condition-operator">
+                                                <option value="equals">等于</option>
+                                                <option value="contains">包含</option>
+                                                <option value="starts_with">开头是</option>
+                                                <option value="ends_with">结尾是</option>
+                                                <option value="greater_than">大于</option>
+                                                <option value="less_than">小于</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <input type="text" class="form-control condition-value" placeholder="输入值">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button class="btn btn-danger btn-sm" onclick="removeCondition(this)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-success mt-2" onclick="addSearchCondition()">
+                                <i class="fas fa-plus"></i> 添加条件
+                            </button>
+                        </div>
+                        <div class="form-group">
+                            <label>条件逻辑</label>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary active" data-logic="AND">AND</button>
+                                <button class="btn btn-outline-primary" data-logic="OR">OR</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>排序选项</label>
+                            <div id="sortOptionsBuilder">
+                                <div class="sort-option mb-2">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <select class="form-control sort-field">
+                                                <option value="created_at">创建时间</option>
+                                                <option value="response_time">响应时间</option>
+                                                <option value="risk_score">风险评分</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select class="form-control sort-order">
+                                                <option value="desc">降序</option>
+                                                <option value="asc">升序</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button class="btn btn-danger btn-sm" onclick="removeSortOption(this)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-success mt-2" onclick="addSortOption()">
+                                <i class="fas fa-plus"></i> 添加排序
+                            </button>
+                        </div>
+                        <div class="form-group">
+                            <label>保存的搜索</label>
+                            <select class="form-control" id="savedSearchSelect">
+                                <option value="">选择保存的搜索</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <button class="btn btn-primary" onclick="executeAdvancedSearch()">
+                            <i class="fas fa-search"></i> 执行搜索
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearAllConditions()">
+                            <i class="fas fa-times"></i> 清空条件
+                        </button>
+                        <button class="btn btn-info" onclick="saveCurrentSearch()">
+                            <i class="fas fa-save"></i> 保存搜索
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-list mr-2"></i>
+                    验证日志列表
+                </h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-sm mr-2">
+                        <button type="button" class="btn btn-tool active" data-logs-view="table">
+                            <i class="fas fa-table"></i>
+                        </button>
+                        <button type="button" class="btn btn-tool" data-logs-view="card">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button type="button" class="btn btn-tool" data-logs-view="timeline">
+                            <i class="fas fa-stream"></i>
+                        </button>
+                    </div>
+                    <div class="input-group input-group-sm" style="width: 250px;">
+                        <input type="text" class="form-control" id="quickSearchInput" placeholder="快速搜索...">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-default" id="quickSearchBtn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="logsTableView">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" id="selectAllLogs">
+                                    </th>
+                                    <th style="width: 160px;">时间</th>
+                                    <th style="width: 100px;">状态</th>
+                                    <th style="width: 80px;">类型</th>
+                                    <th style="width: 100px;">应用</th>
+                                    <th>会话ID</th>
+                                    <th style="width: 120px;">IP地址</th>
+                                    <th style="width: 80px;">风险</th>
+                                    <th style="width: 80px;">耗时</th>
+                                    <th style="width: 150px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div id="logsCardView" style="display: none;">
+                    <div class="row" id="logsCardContainer">
+                    </div>
+                </div>
+                
+                <div id="logsTimelineView" style="display: none;">
+                    <div class="timeline" id="logsTimelineContainer">
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-default" id="batchExportBtn">
+                            <i class="fas fa-download"></i> 批量导出
+                        </button>
+                        <button type="button" class="btn btn-default" id="batchDeleteBtn">
+                            <i class="fas fa-trash"></i> 批量删除
+                        </button>
+                    </div>
+                    <nav id="logsPagination">
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-success card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-pie mr-2"></i>
+                    日志分布统计
+                </h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-tool active" data-stats="status">
+                            状态
+                        </button>
+                        <button type="button" class="btn btn-tool" data-stats="type">
+                            类型
+                        </button>
+                        <button type="button" class="btn btn-tool" data-stats="risk">
+                            风险
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="logDistributionChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card card-warning card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-bar mr-2"></i>
+                    趋势分析
+                </h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-tool active" data-trend="hour">
+                            小时
+                        </button>
+                        <button type="button" class="btn btn-tool" data-trend="day">
+                            天
+                        </button>
+                        <button type="button" class="btn btn-tool" data-trend="week">
+                            周
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="logTrendChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card card-danger card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-bell mr-2"></i>
+                    告警历史
+                </h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" id="createAlertBtn">
+                        <i class="fas fa-plus"></i> 创建告警
+                    </button>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>告警类型</th>
+                                <th>告警级别</th>
+                                <th>消息</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alertsTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script>
+let logsPage = 1;
+let logsPageSize = 20;
+let currentLogs = [];
+let currentLogsView = 'table';
+let monitorPaused = false;
+let realtimeMonitorChart, logDistributionChart, logTrendChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    loadLogsSummary();
+    loadLogs();
+    loadAlertHistory();
+    setupEventListeners();
+    startRealtimeUpdates();
+});
+
+function initCharts() {
+    initRealtimeMonitorChart();
+    initLogDistributionChart();
+    initLogTrendChart();
+}
+
+function initRealtimeMonitorChart() {
+    const container = document.getElementById('realtimeMonitorChart');
+    if (!container) return;
+    
+    realtimeMonitorChart = echarts.init(container);
+    window.addEventListener('resize', () => realtimeMonitorChart.resize());
+    
+    updateRealtimeMonitorChart('requests');
+}
+
+function updateRealtimeMonitorChart(type) {
+    const data = [];
+    const now = new Date();
+    
+    for (let i = 59; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 60000);
+        let value;
+        
+        if (type === 'requests') {
+            value = Math.floor(Math.random() * 100) + 50;
+        } else if (type === 'latency') {
+            value = Math.floor(Math.random() * 50) + 50;
+        } else {
+            value = Math.random() * 5;
+        }
+        
+        data.push({
+            time: formatTime(time),
+            value: value
+        });
+    }
+    
+    const title = type === 'requests' ? '请求量' : type === 'latency' ? '响应延迟 (ms)' : '错误率 (%)';
+    const color = type === 'requests' ? '#007bff' : type === 'latency' ? '#28a745' : '#dc3545';
+    
+    realtimeMonitorChart.setOption({
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: data.map(d => d.time),
+            axisLabel: { color: '#666', show: false }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' },
+            name: title
+        },
+        series: [{
+            type: 'line',
+            data: data.map(d => d.value),
+            smooth: true,
+            areaStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: color + '4D' },
+                        { offset: 1, color: color + '0D' }
+                    ]
+                }
+            },
+            lineStyle: { color: color, width: 2 },
+            itemStyle: { color: color }
+        }]
+    });
+}
+
+function initLogDistributionChart() {
+    const container = document.getElementById('logDistributionChart');
+    if (!container) return;
+    
+    logDistributionChart = echarts.init(container);
+    window.addEventListener('resize', () => logDistributionChart.resize());
+    
+    updateLogDistributionChart('status');
+}
+
+function updateLogDistributionChart(type) {
+    let data;
+    
+    if (type === 'status') {
+        data = [
+            { name: '成功', value: 8500 },
+            { name: '失败', value: 1200 },
+            { name: '拦截', value: 300 }
+        ];
+    } else if (type === 'type') {
+        data = [
+            { name: '滑块验证', value: 5000 },
+            { name: '点选验证', value: 3000 },
+            { name: '图片验证', value: 1500 },
+            { name: '语音验证', value: 500 }
+        ];
+    } else {
+        data = [
+            { name: '低风险', value: 7000 },
+            { name: '中风险', value: 2000 },
+            { name: '高风险', value: 800 },
+            { name: '极高风险', value: 200 }
+        ];
+    }
+    
+    logDistributionChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            bottom: '0'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2
+            },
+            label: {
+                show: true,
+                formatter: '{b}\n{d}%'
+            },
+            data: data
+        }]
+    });
+}
+
+function initLogTrendChart() {
+    const container = document.getElementById('logTrendChart');
+    if (!container) return;
+    
+    logTrendChart = echarts.init(container);
+    window.addEventListener('resize', () => logTrendChart.resize());
+    
+    updateLogTrendChart('hour');
+}
+
+function updateLogTrendChart(type) {
+    let labels = [];
+    let successData = [];
+    let failedData = [];
+    let blockedData = [];
+    
+    if (type === 'hour') {
+        for (let i = 23; i >= 0; i--) {
+            const hour = new Date();
+            hour.setHours(hour.getHours() - i);
+            labels.push(hour.getHours() + ':00');
+            successData.push(Math.floor(Math.random() * 500) + 200);
+            failedData.push(Math.floor(Math.random() * 100) + 20);
+            blockedData.push(Math.floor(Math.random() * 50) + 10);
+        }
+    } else if (type === 'day') {
+        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        labels.push(...days);
+        successData.push(...[3500, 4000, 3800, 4200, 4500, 5000, 4800]);
+        failedData.push(...[500, 600, 550, 650, 700, 800, 750]);
+        blockedData.push(...[200, 250, 230, 280, 300, 350, 320]);
+    } else {
+        for (let i = 3; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i * 7);
+            labels.push('第' + (4 - i) + '周');
+            successData.push(Math.floor(Math.random() * 5000) + 10000);
+            failedData.push(Math.floor(Math.random() * 1000) + 500);
+            blockedData.push(Math.floor(Math.random() * 300) + 100);
+        }
+    }
+    
+    logTrendChart.setOption({
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        legend: {
+            data: ['成功', '失败', '拦截'],
+            bottom: '0'
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: labels,
+            axisLabel: { color: '#666', rotate: type === 'hour' ? 45 : 0 }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [
+            {
+                name: '成功',
+                type: 'line',
+                data: successData,
+                smooth: true,
+                lineStyle: { color: '#28a745', width: 2 },
+                itemStyle: { color: '#28a745' }
+            },
+            {
+                name: '失败',
+                type: 'line',
+                data: failedData,
+                smooth: true,
+                lineStyle: { color: '#dc3545', width: 2 },
+                itemStyle: { color: '#dc3545' }
+            },
+            {
+                name: '拦截',
+                type: 'line',
+                data: blockedData,
+                smooth: true,
+                lineStyle: { color: '#ffc107', width: 2 },
+                itemStyle: { color: '#ffc107' }
+            }
+        ]
+    });
+}
+
+function setupEventListeners() {
+    document.getElementById('toggleAdvancedSearch')?.addEventListener('click', function() {
+        const section = document.getElementById('advancedSearchSection');
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    document.getElementById('quickSearchBtn')?.addEventListener('click', function() {
+        logsPage = 1;
+        loadLogs();
+    });
+    
+    document.getElementById('quickSearchInput')?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            logsPage = 1;
+            loadLogs();
+        }
+    });
+    
+    document.querySelectorAll('[data-logs-view]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-logs-view]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            switchLogsView(btn.dataset.logsView);
+        });
+    });
+    
+    document.querySelectorAll('[data-monitor]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-monitor]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateRealtimeMonitorChart(btn.dataset.monitor);
+        });
+    });
+    
+    document.querySelectorAll('[data-stats]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-stats]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateLogDistributionChart(btn.dataset.stats);
+        });
+    });
+    
+    document.querySelectorAll('[data-trend]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-trend]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateLogTrendChart(btn.dataset.trend);
+        });
+    });
+    
+    document.getElementById('toggleRealtimeMonitor')?.addEventListener('click', function() {
+        monitorPaused = !monitorPaused;
+        this.innerHTML = monitorPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        document.getElementById('realtimeIndicator').innerHTML = monitorPaused ? 
+            '<i class="fas fa-pause text-warning"></i> 已暂停' : 
+            '<i class="fas fa-circle text-success"></i> 实时';
+    });
+    
+    document.getElementById('selectAllLogs')?.addEventListener('change', function(e) {
+        document.querySelectorAll('.log-checkbox').forEach(cb => cb.checked = e.target.checked);
+    });
+}
+
+function startRealtimeUpdates() {
+    setInterval(() => {
+        if (!monitorPaused) {
+            loadLogsSummary();
+            updateRealtimeMonitorChart(document.querySelector('[data-monitor].active')?.dataset.monitor || 'requests');
+        }
+    }, 5000);
+}
+
+async function loadLogsSummary() {
+    try {
+        const response = await fetch('/admin/api/logs/summary');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            updateLogsSummary(result.data);
+        } else {
+            loadMockLogsSummary();
+        }
+    } catch (error) {
+        console.error('Load logs summary failed:', error);
+        loadMockLogsSummary();
+    }
+}
+
+function loadMockLogsSummary() {
+    updateLogsSummary({
+        success_count: Math.floor(Math.random() * 5000) + 8000,
+        failed_count: Math.floor(Math.random() * 1000) + 500,
+        blocked_count: Math.floor(Math.random() * 500) + 100,
+        avg_duration: Math.floor(Math.random() * 100) + 50,
+        avg_risk_score: (Math.random() * 0.5 + 0.2).toFixed(2)
+    });
+}
+
+function updateLogsSummary(data) {
+    animateValue('successCount', 0, data.success_count, 1000);
+    animateValue('failedCount', 0, data.failed_count, 1000);
+    animateValue('blockedCount', 0, data.blocked_count, 1000);
+    document.getElementById('avgDuration').textContent = data.avg_duration + 'ms';
+    document.getElementById('avgRiskScore').textContent = data.avg_risk_score;
+    document.getElementById('lastUpdate').textContent = formatTime(new Date());
+}
+
+async function loadLogs() {
+    try {
+        const search = document.getElementById('quickSearchInput')?.value || '';
+        const response = await fetch(`/admin/api/logs?page=${logsPage}&size=${logsPageSize}&search=${encodeURIComponent(search)}`);
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            currentLogs = result.data.logs;
+            renderLogs(result.data.logs);
+            renderLogsPagination(result.data.total, result.data.page);
+        } else {
+            loadMockLogs();
+        }
+    } catch (error) {
+        console.error('Load logs failed:', error);
+        loadMockLogs();
+    }
+}
+
+function loadMockLogs() {
+    const mockLogs = [];
+    for (let i = 0; i < 20; i++) {
+        const date = new Date();
+        date.setMinutes(date.getMinutes() - i * 5);
+        mockLogs.push({
+            id: 'log_' + i,
+            time: date.toISOString(),
+            status: ['success', 'failed', 'blocked'][Math.floor(Math.random() * 3)],
+            type: ['slider', 'click', 'image', 'voice'][Math.floor(Math.random() * 4)],
+            app_id: 'app_' + (Math.floor(Math.random() * 10) + 1),
+            session_id: 'sess_' + Math.random().toString(36).substr(2, 9),
+            ip_address: `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+            risk_level: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)],
+            response_time: Math.floor(Math.random() * 200) + 20
+        });
+    }
+    
+    currentLogs = mockLogs;
+    renderLogs(mockLogs);
+}
+
+function renderLogs(logs) {
+    if (currentLogsView === 'table') {
+        renderLogsTable(logs);
+    } else if (currentLogsView === 'card') {
+        renderLogsCards(logs);
+    } else {
+        renderLogsTimeline(logs);
+    }
+}
+
+function renderLogsTable(logs) {
+    const tbody = document.getElementById('logsTableBody');
+    if (!tbody) return;
+    
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">暂无数据</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = logs.map(log => `
+        <tr data-log-id="${log.id}">
+            <td><input type="checkbox" class="log-checkbox" data-id="${log.id}"></td>
+            <td><small>${formatDateTime(log.time)}</small></td>
+            <td><span class="badge badge-${getStatusBadgeClass(log.status)}">${getStatusText(log.status)}</span></td>
+            <td><small>${getCaptchaTypeText(log.type)}</small></td>
+            <td><small>${escapeHtml(log.app_id)}</small></td>
+            <td><code><small>${escapeHtml(log.session_id)}</small></code></td>
+            <td><small>${escapeHtml(log.ip_address)}</small></td>
+            <td><span class="badge badge-${getRiskBadgeClass(log.risk_level)}">${getRiskLevelText(log.risk_level)}</span></td>
+            <td><small>${log.response_time}ms</small></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary btn-xs" onclick="viewLogDetail('${log.id}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-info btn-xs" onclick="replayLog('${log.id}')">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderLogsCards(logs) {
+    const container = document.getElementById('logsCardContainer');
+    if (!container) return;
+    
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无数据</div>';
+        return;
+    }
+    
+    container.innerHTML = logs.map(log => `
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title">
+                        <span class="badge badge-${getStatusBadgeClass(log.status)}">${getStatusText(log.status)}</span>
+                        <span class="badge badge-${getRiskBadgeClass(log.risk_level)} ml-2">${getRiskLevelText(log.risk_level)}</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><small><strong>类型:</strong> ${getCaptchaTypeText(log.type)}</small></p>
+                    <p class="mb-1"><small><strong>应用:</strong> ${escapeHtml(log.app_id)}</small></p>
+                    <p class="mb-1"><small><strong>IP:</strong> ${escapeHtml(log.ip_address)}</small></p>
+                    <p class="mb-1"><small><strong>耗时:</strong> ${log.response_time}ms</small></p>
+                    <p class="mb-0"><small><strong>时间:</strong> ${formatDateTime(log.time)}</small></p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-primary btn-sm btn-block" onclick="viewLogDetail('${log.id}')">
+                        <i class="fas fa-eye"></i> 查看详情
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderLogsTimeline(logs) {
+    const container = document.getElementById('logsTimelineContainer');
+    if (!container) return;
+    
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">暂无数据</div>';
+        return;
+    }
+    
+    container.innerHTML = logs.map((log, index) => `
+        <div class="timeline-item">
+            <div class="timeline-badge ${log.status === 'success' ? 'bg-success' : log.status === 'failed' ? 'bg-danger' : 'bg-warning'}">
+                <i class="fas ${log.status === 'success' ? 'fa-check' : log.status === 'failed' ? 'fa-times' : 'fa-ban'}"></i>
+            </div>
+            <div class="timeline-panel">
+                <div class="timeline-heading">
+                    <span class="badge badge-${getStatusBadgeClass(log.status)} mr-2">${getStatusText(log.status)}</span>
+                    <span class="badge badge-${getRiskBadgeClass(log.risk_level)}">${getRiskLevelText(log.risk_level)}</span>
+                    <span class="float-right text-muted"><small>${formatDateTime(log.time)}</small></span>
+                </div>
+                <div class="timeline-body">
+                    <p><strong>类型:</strong> ${getCaptchaTypeText(log.type)}</p>
+                    <p><strong>应用:</strong> ${escapeHtml(log.app_id)}</p>
+                    <p><strong>会话:</strong> <code>${escapeHtml(log.session_id)}</code></p>
+                    <p><strong>IP:</strong> ${escapeHtml(log.ip_address)}</p>
+                    <p><strong>耗时:</strong> ${log.response_time}ms</p>
+                </div>
+                <div class="timeline-footer">
+                    <button class="btn btn-primary btn-xs" onclick="viewLogDetail('${log.id}')">
+                        <i class="fas fa-eye"></i> 详情
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderLogsPagination(total, page) {
+    const totalPages = Math.ceil(total / logsPageSize);
+    const container = document.getElementById('logsPagination');
+    if (!container) return;
+    
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '<ul class="pagination pagination-sm">';
+    
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="goToLogsPage(${page - 1})">&laquo;</a>
+    </li>`;
+    
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+            html += `<li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToLogsPage(${i})">${i}</a>
+            </li>`;
+        } else if (i === page - 3 || i === page + 3) {
+            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+    
+    html += `<li class="page-item ${page === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="goToLogsPage(${page + 1})">&raquo;</a>
+    </li>`;
+    
+    html += '</ul>';
+    container.innerHTML = html;
+}
+
+function goToLogsPage(page) {
+    logsPage = page;
+    loadLogs();
+}
+
+function switchLogsView(view) {
+    currentLogsView = view;
+    
+    document.getElementById('logsTableView').style.display = view === 'table' ? 'block' : 'none';
+    document.getElementById('logsCardView').style.display = view === 'card' ? 'block' : 'none';
+    document.getElementById('logsTimelineView').style.display = view === 'timeline' ? 'block' : 'none';
+    
+    renderLogs(currentLogs);
+}
+
+async function loadAlertHistory() {
+    const tbody = document.getElementById('alertsTableBody');
+    if (!tbody) return;
+    
+    try {
+        const response = await fetch('/admin/api/alerts?limit=10');
+        const result = await response.json();
+        
+        if (result.code === 0) {
+            renderAlertHistory(result.data);
+        } else {
+            renderMockAlertHistory();
+        }
+    } catch (error) {
+        console.error('Load alert history failed:', error);
+        renderMockAlertHistory();
+    }
+}
+
+function renderMockAlertHistory() {
+    const alerts = [];
+    for (let i = 0; i < 5; i++) {
+        const date = new Date();
+        date.setMinutes(date.getMinutes() - i * 10);
+        alerts.push({
+            id: 'alert_' + i,
+            time: date.toISOString(),
+            type: ['error_rate', 'latency', 'blocked_attacks'][Math.floor(Math.random() * 3)],
+            level: ['info', 'warning', 'critical'][Math.floor(Math.random() * 3)],
+            message: '系统告警消息 ' + (i + 1),
+            status: ['active', 'resolved', 'acknowledged'][Math.floor(Math.random() * 3)]
+        });
+    }
+    renderAlertHistory(alerts);
+}
+
+function renderAlertHistory(alerts) {
+    const tbody = document.getElementById('alertsTableBody');
+    if (!tbody || !alerts || alerts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = alerts.map(alert => `
+        <tr>
+            <td><small>${formatDateTime(alert.time)}</small></td>
+            <td><small>${getAlertTypeText(alert.type)}</small></td>
+            <td><span class="badge badge-${getAlertLevelBadgeClass(alert.level)}">${getAlertLevelText(alert.level)}</span></td>
+            <td><small>${escapeHtml(alert.message)}</small></td>
+            <td><span class="badge badge-${getAlertStatusBadgeClass(alert.status)}">${getAlertStatusText(alert.status)}</span></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary btn-xs" onclick="handleAlert('${alert.id}')">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-xs" onclick="acknowledgeAlert('${alert.id}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addSearchCondition() {
+    const builder = document.getElementById('searchConditionsBuilder');
+    const condition = document.createElement('div');
+    condition.className = 'search-condition mb-2';
+    condition.innerHTML = `
+        <div class="row">
+            <div class="col-md-3">
+                <select class="form-control condition-field">
+                    <option value="">选择字段</option>
+                    <option value="session_id">会话ID</option>
+                    <option value="ip_address">IP地址</option>
+                    <option value="app_id">应用ID</option>
+                    <option value="user_agent">用户代理</option>
+                    <option value="captcha_type">验证类型</option>
+                    <option value="status">状态</option>
+                    <option value="risk_level">风险等级</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control condition-operator">
+                    <option value="equals">等于</option>
+                    <option value="contains">包含</option>
+                    <option value="starts_with">开头是</option>
+                    <option value="ends_with">结尾是</option>
+                    <option value="greater_than">大于</option>
+                    <option value="less_than">小于</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" class="form-control condition-value" placeholder="输入值">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-danger btn-sm" onclick="removeCondition(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    builder.appendChild(condition);
+}
+
+function removeCondition(btn) {
+    btn.closest('.search-condition').remove();
+}
+
+function addSortOption() {
+    const builder = document.getElementById('sortOptionsBuilder');
+    const option = document.createElement('div');
+    option.className = 'sort-option mb-2';
+    option.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <select class="form-control sort-field">
+                    <option value="created_at">创建时间</option>
+                    <option value="response_time">响应时间</option>
+                    <option value="risk_score">风险评分</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <select class="form-control sort-order">
+                    <option value="desc">降序</option>
+                    <option value="asc">升序</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-danger btn-sm" onclick="removeSortOption(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    builder.appendChild(option);
+}
+
+function removeSortOption(btn) {
+    btn.closest('.sort-option').remove();
+}
+
+function executeAdvancedSearch() {
+    const conditions = [];
+    document.querySelectorAll('.search-condition').forEach(condition => {
+        const field = condition.querySelector('.condition-field').value;
+        const operator = condition.querySelector('.condition-operator').value;
+        const value = condition.querySelector('.condition-value').value;
+        
+        if (field && operator && value) {
+            conditions.push({ field, operator, value });
+        }
+    });
+    
+    console.log('Advanced search conditions:', conditions);
+    showToast('高级搜索功能开发中', 'info');
+    loadLogs();
+}
+
+function clearAllConditions() {
+    document.getElementById('searchConditionsBuilder').innerHTML = '';
+    document.getElementById('sortOptionsBuilder').innerHTML = `
+        <div class="sort-option mb-2">
+            <div class="row">
+                <div class="col-md-6">
+                    <select class="form-control sort-field">
+                        <option value="created_at">创建时间</option>
+                        <option value="response_time">响应时间</option>
+                        <option value="risk_score">风险评分</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-control sort-order">
+                        <option value="desc">降序</option>
+                        <option value="asc">升序</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-danger btn-sm" onclick="removeSortOption(this)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    showToast('条件已清空', 'info');
+}
+
+function saveCurrentSearch() {
+    showToast('保存搜索功能开发中', 'info');
+}
+
+function viewLogDetail(id) {
+    showToast(`查看日志 ${id} 详情`, 'info');
+}
+
+function replayLog(id) {
+    showToast(`重放日志 ${id}`, 'info');
+}
+
+function handleAlert(id) {
+    showToast(`处理告警 ${id}`, 'info');
+}
+
+function acknowledgeAlert(id) {
+    showToast(`确认告警 ${id}`, 'info');
+}
+
+function exportLogs(format) {
+    const data = currentLogs;
+    
+    if (format === 'json') {
+        downloadFile(JSON.stringify(data, null, 2), 'logs_export.json', 'application/json');
+    } else if (format === 'csv') {
+        const csv = '时间,状态,类型,应用,会话ID,IP地址,风险等级,响应时间\n' +
+            data.map(log => `${log.time},${log.status},${log.type},${log.app_id},${log.session_id},${log.ip_address},${log.risk_level},${log.response_time}`).join('\n');
+        downloadFile('\uFEFF' + csv, 'logs_export.csv', 'text/csv');
+    } else if (format === 'excel') {
+        showToast('Excel导出功能开发中', 'info');
+    } else if (format === 'pdf') {
+        showToast('PDF导出功能开发中', 'info');
+    }
+    
+    showToast('导出成功', 'success');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function animateValue(elementId, start, end, duration) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const value = start + (end - start) * easeProgress;
+        
+        element.textContent = formatNumber(Math.floor(value));
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+    
+    requestAnimationFrame(update);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDateTime(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function getStatusBadgeClass(status) {
+    const map = {
+        'success': 'success',
+        'failed': 'danger',
+        'blocked': 'warning'
+    };
+    return map[status] || 'secondary';
+}
+
+function getStatusText(status) {
+    const map = {
+        'success': '成功',
+        'failed': '失败',
+        'blocked': '拦截'
+    };
+    return map[status] || status;
+}
+
+function getCaptchaTypeText(type) {
+    const map = {
+        'slider': '滑块',
+        'click': '点选',
+        'image': '图片',
+        'voice': '语音',
+        'gesture': '手势'
+    };
+    return map[type] || type;
+}
+
+function getRiskBadgeClass(level) {
+    const map = {
+        'low': 'success',
+        'medium': 'warning',
+        'high': 'danger',
+        'critical': 'dark'
+    };
+    return map[level] || 'secondary';
+}
+
+function getRiskLevelText(level) {
+    const map = {
+        'low': '低',
+        'medium': '中',
+        'high': '高',
+        'critical': '极高'
+    };
+    return map[level] || level;
+}
+
+function getAlertTypeText(type) {
+    const map = {
+        'error_rate': '错误率',
+        'latency': '延迟',
+        'blocked_attacks': '攻击拦截'
+    };
+    return map[type] || type;
+}
+
+function getAlertLevelBadgeClass(level) {
+    const map = {
+        'info': 'info',
+        'warning': 'warning',
+        'critical': 'danger'
+    };
+    return map[level] || 'secondary';
+}
+
+function getAlertLevelText(level) {
+    const map = {
+        'info': '信息',
+        'warning': '警告',
+        'critical': '严重'
+    };
+    return map[level] || level;
+}
+
+function getAlertStatusBadgeClass(status) {
+    const map = {
+        'active': 'danger',
+        'acknowledged': 'warning',
+        'resolved': 'success'
+    };
+    return map[status] || 'secondary';
+}
+
+function getAlertStatusText(status) {
+    const map = {
+        'active': '活跃',
+        'acknowledged': '已确认',
+        'resolved': '已解决'
+    };
+    return map[status] || status;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'info') {
+    const container = document.querySelector('.toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show`;
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert" aria-label="关闭">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+</script>
+{% endblock %}
