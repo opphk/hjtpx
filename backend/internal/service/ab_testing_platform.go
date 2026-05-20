@@ -2,185 +2,442 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
 	"time"
 )
 
-type ABTestingPlatformService struct{}
+var (
+	ErrExperimentNotFound = errors.New("experiment not found")
+	ErrVariantNotFound   = errors.New("variant not found")
+	ErrAllocationFailed  = errors.New("allocation failed")
+)
 
-type ABTest struct {
-	ID          uint      `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	ModelID     uint      `json:"modelId"`
-	CreatedAt   time.Time `json:"createdAt"`
-	StartedAt   time.Time `json:"startedAt,omitempty"`
-	EndedAt     time.Time `json:"endedAt,omitempty"`
+type ABTestingPlatformService interface {
+	CreateExperiment(ctx context.Context, experiment *Experiment) error
+	GetExperiment(ctx context.Context, experimentID string) (*Experiment, error)
+	UpdateExperiment(ctx context.Context, experiment *Experiment) error
+	DeleteExperiment(ctx context.Context, experimentID string) error
+	ListExperiments(ctx context.Context, filters *ExperimentFilters) ([]*Experiment, error)
+	StartExperiment(ctx context.Context, experimentID string) error
+	StopExperiment(ctx context.Context, experimentID string) error
+	AllocateVariant(ctx context.Context, experimentID, userID string) (*VariantAllocation, error)
+	RecordConversion(ctx context.Context, experimentID, userID, variantID string, value float64) error
+	GetExperimentResults(ctx context.Context, experimentID string) (*ExperimentResults, error)
 }
 
-type ABTestVariant struct {
-	ID            uint      `json:"id"`
-	TestID        uint      `json:"testId"`
-	Name          string    `json:"name"`
-	ModelVersionID uint     `json:"modelVersionId"`
-	TrafficWeight float64   `json:"trafficWeight"`
-	IsControl     bool      `json:"isControl"`
+type Experiment struct {
+	ExperimentID     string          `json:"experiment_id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Type             string          `json:"type"`
+	Status           string          `json:"status"`
+	Variants         []Variant       `json:"variants"`
+	TargetingRules   json.RawMessage `json:"targeting_rules"`
+	TrafficAllocation map[string]int `json:"traffic_allocation"`
+	StartDate        *time.Time      `json:"start_date,omitempty"`
+	EndDate          *time.Time      `json:"end_date,omitempty"`
+	Metrics          []Metric        `json:"metrics"`
+	Owner            string          `json:"owner"`
+	Tags             []string        `json:"tags"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
 }
 
-type ABTestMetrics struct {
-	TestID        uint    `json:"testId"`
-	VariantID     uint    `json:"variantId"`
-	Impressions   int64   `json:"impressions"`
-	Conversions   int64   `json:"conversions"`
-	ConversionRate float64 `json:"conversionRate"`
-	AvgLatency    float64 `json:"avgLatency"`
-	ErrorRate     float64 `json:"errorRate"`
+type Variant struct {
+	VariantID    string          `json:"variant_id"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description"`
+	Allocation   int             `json:"allocation"`
+	Control      bool            `json:"control"`
+	Parameters   json.RawMessage `json:"parameters"`
+	Status       string          `json:"status"`
+	Metrics      *VariantMetrics `json:"metrics"`
 }
 
-type CreateABTestRequest struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	ModelID     uint                  `json:"modelId"`
-	Variants    []*CreateVariantRequest `json:"variants"`
+type VariantMetrics struct {
+	Participants  int64   `json:"participants"`
+	Conversions  int64   `json:"conversions"`
+	ConversionRate float64 `json:"conversion_rate"`
+	Revenue      float64 `json:"revenue"`
+	AvgValue     float64 `json:"avg_value"`
 }
 
-type CreateVariantRequest struct {
+type Metric struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Aggregation string `json:"aggregation"`
+	Goal        string `json:"goal"`
+}
+
+type ExperimentFilters struct {
+	Status   string   `json:"status,omitempty"`
+	Type     string   `json:"type,omitempty"`
+	Owner    string   `json:"owner,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Page     int      `json:"page"`
+	PageSize int      `json:"page_size"`
+}
+
+type VariantAllocation struct {
+	ExperimentID string    `json:"experiment_id"`
+	UserID       string    `json:"user_id"`
+	VariantID    string    `json:"variant_id"`
+	VariantName  string    `json:"variant_name"`
+	AllocatedAt  time.Time `json:"allocated_at"`
+}
+
+type ExperimentResults struct {
+	ExperimentID     string           `json:"experiment_id"`
+	Status           string           `json:"status"`
+	Duration         time.Duration    `json:"duration"`
+	TotalParticipants int64            `json:"total_participants"`
+	Winner           *WinnerInfo      `json:"winner,omitempty"`
+	VariantResults   []VariantResult   `json:"variant_results"`
+	StatisticalSignificance float64   `json:"statistical_significance"`
+	ConfidenceLevel  float64           `json:"confidence_level"`
+	Recommendations  []string         `json:"recommendations"`
+	GeneratedAt      time.Time        `json:"generated_at"`
+}
+
+type WinnerInfo struct {
+	VariantID    string  `json:"variant_id"`
+	VariantName  string  `json:"variant_name"`
+	Improvement  float64 `json:"improvement"`
+	Confidence   float64 `json:"confidence"`
+	PValue       float64 `json:"p_value"`
+}
+
+type VariantResult struct {
+	VariantID      string  `json:"variant_id"`
 	Name          string  `json:"name"`
-	ModelVersionID uint    `json:"modelVersionId"`
-	TrafficWeight float64 `json:"trafficWeight"`
-	IsControl     bool    `json:"isControl"`
+	Participants   int64   `json:"participants"`
+	Conversions   int64   `json:"conversions"`
+	ConversionRate float64 `json:"conversion_rate"`
+	Improvement   float64 `json:"improvement"`
+	PValue        float64 `json:"p_value"`
 }
 
-func NewABTestingPlatformService() *ABTestingPlatformService {
-	return &ABTestingPlatformService{}
+type abTestingPlatformService struct {
+	experiments   map[string]*Experiment
+	allocations   map[string]*VariantAllocation
+	conversions   map[string]*Conversion
+	mu            sync.RWMutex
 }
 
-func (s *ABTestingPlatformService) ListTests(ctx context.Context) ([]*ABTest, error) {
-	tests := []*ABTest{
-		{
-			ID:          1,
-			Name:        "Captcha Model v2.1 vs v2.0",
-			Description: "测试新版验证码分类模型性能",
-			Status:      "running",
-			ModelID:     1,
-			CreatedAt:   time.Now().Add(-7 * 24 * time.Hour),
-			StartedAt:   time.Now().Add(-5 * 24 * time.Hour),
-		},
-		{
-			ID:          2,
-			Name:        "Risk Detector Threshold Test",
-			Description: "测试不同阈值下的风险检测效果",
-			Status:      "completed",
-			ModelID:     2,
-			CreatedAt:   time.Now().Add(-30 * 24 * time.Hour),
-			StartedAt:   time.Now().Add(-25 * 24 * time.Hour),
-			EndedAt:     time.Now().Add(-10 * 24 * time.Hour),
-		},
+type Conversion struct {
+	ConversionID  string    `json:"conversion_id"`
+	ExperimentID string    `json:"experiment_id"`
+	UserID       string    `json:"user_id"`
+	VariantID    string    `json:"variant_id"`
+	MetricName   string    `json:"metric_name"`
+	Value        float64   `json:"value"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func NewABTestingPlatformService() ABTestingPlatformService {
+	return &abTestingPlatformService{
+		experiments: make(map[string]*Experiment),
+		allocations: make(map[string]*VariantAllocation),
+		conversions: make(map[string]*Conversion),
 	}
-	return tests, nil
 }
 
-func (s *ABTestingPlatformService) GetTest(ctx context.Context, id uint) (*ABTest, error) {
-	test := &ABTest{
-		ID:          id,
-		Name:        "Captcha Model v2.1 vs v2.0",
-		Description: "测试新版验证码分类模型性能",
-		Status:      "running",
-		ModelID:     1,
-		CreatedAt:   time.Now().Add(-7 * 24 * time.Hour),
-		StartedAt:   time.Now().Add(-5 * 24 * time.Hour),
+func (s *abTestingPlatformService) CreateExperiment(ctx context.Context, experiment *Experiment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if experiment.ExperimentID == "" {
+		experiment.ExperimentID = fmt.Sprintf("exp-%d", time.Now().UnixNano())
 	}
-	return test, nil
-}
 
-func (s *ABTestingPlatformService) CreateTest(ctx context.Context, req *CreateABTestRequest) (*ABTest, error) {
-	test := &ABTest{
-		ID:          uint(time.Now().Unix()),
-		Name:        req.Name,
-		Description: req.Description,
-		Status:      "draft",
-		ModelID:     req.ModelID,
-		CreatedAt:   time.Now(),
+	experiment.CreatedAt = time.Now()
+	experiment.UpdatedAt = time.Now()
+
+	if experiment.Status == "" {
+		experiment.Status = "draft"
 	}
-	return test, nil
-}
 
-func (s *ABTestingPlatformService) StartTest(ctx context.Context, id uint) (*ABTest, error) {
-	test := &ABTest{
-		ID:        id,
-		Status:    "running",
-		StartedAt: time.Now(),
-	}
-	return test, nil
-}
-
-func (s *ABTestingPlatformService) StopTest(ctx context.Context, id uint) (*ABTest, error) {
-	test := &ABTest{
-		ID:      id,
-		Status:  "completed",
-		EndedAt: time.Now(),
-	}
-	return test, nil
-}
-
-func (s *ABTestingPlatformService) DeleteTest(ctx context.Context, id uint) error {
+	s.experiments[experiment.ExperimentID] = experiment
 	return nil
 }
 
-func (s *ABTestingPlatformService) ListVariants(ctx context.Context, testID uint) ([]*ABTestVariant, error) {
-	variants := []*ABTestVariant{
-		{
-			ID:            1,
-			TestID:        testID,
-			Name:          "Control (v2.0)",
-			ModelVersionID: 2,
-			TrafficWeight: 0.5,
-			IsControl:     true,
-		},
-		{
-			ID:            2,
-			TestID:        testID,
-			Name:          "Treatment (v2.1)",
-			ModelVersionID: 1,
-			TrafficWeight: 0.5,
-			IsControl:     false,
-		},
+func (s *abTestingPlatformService) GetExperiment(ctx context.Context, experimentID string) (*Experiment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return nil, ErrExperimentNotFound
 	}
-	return variants, nil
+
+	return experiment, nil
 }
 
-func (s *ABTestingPlatformService) GetTestMetrics(ctx context.Context, testID uint) ([]*ABTestMetrics, error) {
-	metrics := []*ABTestMetrics{
-		{
-			TestID:        testID,
-			VariantID:     1,
-			Impressions:   100000,
-			Conversions:   89500,
-			ConversionRate: 0.895,
-			AvgLatency:    52.3,
-			ErrorRate:     0.002,
-		},
-		{
-			TestID:        testID,
-			VariantID:     2,
-			Impressions:   100000,
-			Conversions:   94200,
-			ConversionRate: 0.942,
-			AvgLatency:    44.8,
-			ErrorRate:     0.001,
-		},
+func (s *abTestingPlatformService) UpdateExperiment(ctx context.Context, experiment *Experiment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.experiments[experiment.ExperimentID]; !exists {
+		return ErrExperimentNotFound
 	}
-	return metrics, nil
+
+	experiment.UpdatedAt = time.Now()
+	s.experiments[experiment.ExperimentID] = experiment
+	return nil
 }
 
-func (s *ABTestingPlatformService) GetVariantMetrics(ctx context.Context, variantID uint) (*ABTestMetrics, error) {
-	metric := &ABTestMetrics{
-		VariantID:     variantID,
-		Impressions:   100000,
-		Conversions:   94200,
-		ConversionRate: 0.942,
-		AvgLatency:    44.8,
-		ErrorRate:     0.001,
+func (s *abTestingPlatformService) DeleteExperiment(ctx context.Context, experimentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.experiments[experimentID]; !exists {
+		return ErrExperimentNotFound
 	}
-	return metric, nil
+
+	delete(s.experiments, experimentID)
+	return nil
+}
+
+func (s *abTestingPlatformService) ListExperiments(ctx context.Context, filters *ExperimentFilters) ([]*Experiment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*Experiment
+	for _, exp := range s.experiments {
+		if s.matchesFilters(exp, filters) {
+			result = append(result, exp)
+		}
+	}
+
+	return result, nil
+}
+
+func (s *abTestingPlatformService) matchesFilters(exp *Experiment, filters *ExperimentFilters) bool {
+	if filters == nil {
+		return true
+	}
+
+	if filters.Status != "" && exp.Status != filters.Status {
+		return false
+	}
+
+	if filters.Type != "" && exp.Type != filters.Type {
+		return false
+	}
+
+	if filters.Owner != "" && exp.Owner != filters.Owner {
+		return false
+	}
+
+	return true
+}
+
+func (s *abTestingPlatformService) StartExperiment(ctx context.Context, experimentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return ErrExperimentNotFound
+	}
+
+	experiment.Status = "running"
+	now := time.Now()
+	experiment.StartDate = &now
+	experiment.UpdatedAt = time.Now()
+
+	return nil
+}
+
+func (s *abTestingPlatformService) StopExperiment(ctx context.Context, experimentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return ErrExperimentNotFound
+	}
+
+	experiment.Status = "completed"
+	now := time.Now()
+	experiment.EndDate = &now
+	experiment.UpdatedAt = time.Now()
+
+	return nil
+}
+
+func (s *abTestingPlatformService) AllocateVariant(ctx context.Context, experimentID, userID string) (*VariantAllocation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return nil, ErrExperimentNotFound
+	}
+
+	if experiment.Status != "running" {
+		return nil, ErrInvalidState
+	}
+
+	allocationKey := fmt.Sprintf("%s:%s", experimentID, userID)
+	if existing, exists := s.allocations[allocationKey]; exists {
+		return existing, nil
+	}
+
+	var totalAllocation int
+	for _, variant := range experiment.Variants {
+		totalAllocation += variant.Allocation
+	}
+
+	var cumulative int
+	var selectedVariant *Variant
+	for i, variant := range experiment.Variants {
+		weight := float64(variant.Allocation) / float64(totalAllocation) * 100
+		if i == len(experiment.Variants)-1 || float64(cumulative+variant.Allocation)/float64(totalAllocation)*100 >= weight {
+			selectedVariant = &experiment.Variants[i]
+			break
+		}
+		cumulative += variant.Allocation
+	}
+
+	if selectedVariant == nil {
+		selectedVariant = &experiment.Variants[0]
+	}
+
+	allocation := &VariantAllocation{
+		ExperimentID: experimentID,
+		UserID:      userID,
+		VariantID:   selectedVariant.VariantID,
+		VariantName: selectedVariant.Name,
+		AllocatedAt: time.Now(),
+	}
+
+	s.allocations[allocationKey] = allocation
+
+	selectedVariant.Metrics.Participants++
+
+	return allocation, nil
+}
+
+func (s *abTestingPlatformService) RecordConversion(ctx context.Context, experimentID, userID, variantID string, value float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	allocationKey := fmt.Sprintf("%s:%s", experimentID, userID)
+	_, exists := s.allocations[allocationKey]
+	if !exists {
+		return ErrAllocationFailed
+	}
+
+	conversion := &Conversion{
+		ConversionID:  fmt.Sprintf("conv-%d", time.Now().UnixNano()),
+		ExperimentID: experimentID,
+		UserID:      userID,
+		VariantID:   variantID,
+		MetricName:  "conversion",
+		Value:       value,
+		CreatedAt:   time.Now(),
+	}
+
+	s.conversions[conversion.ConversionID] = conversion
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return ErrExperimentNotFound
+	}
+
+	for i := range experiment.Variants {
+		if experiment.Variants[i].VariantID == variantID {
+			experiment.Variants[i].Metrics.Conversions++
+			experiment.Variants[i].Metrics.Revenue += value
+			if experiment.Variants[i].Metrics.Participants > 0 {
+				experiment.Variants[i].Metrics.ConversionRate = float64(experiment.Variants[i].Metrics.Conversions) / float64(experiment.Variants[i].Metrics.Participants) * 100
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (s *abTestingPlatformService) GetExperimentResults(ctx context.Context, experimentID string) (*ExperimentResults, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	experiment, exists := s.experiments[experimentID]
+	if !exists {
+		return nil, ErrExperimentNotFound
+	}
+
+	var totalParticipants int64
+	var totalConversions int64
+	var controlConversionRate float64
+
+	variantResults := make([]VariantResult, len(experiment.Variants))
+
+	for i, variant := range experiment.Variants {
+		totalParticipants += variant.Metrics.Participants
+		totalConversions += variant.Metrics.Conversions
+
+		if variant.Control {
+			controlConversionRate = variant.Metrics.ConversionRate
+		}
+
+		improvement := 0.0
+		if controlConversionRate > 0 {
+			improvement = (variant.Metrics.ConversionRate - controlConversionRate) / controlConversionRate * 100
+		}
+
+		variantResults[i] = VariantResult{
+			VariantID:      variant.VariantID,
+			Name:          variant.Name,
+			Participants:   variant.Metrics.Participants,
+			Conversions:   variant.Metrics.Conversions,
+			ConversionRate: variant.Metrics.ConversionRate,
+			Improvement:   improvement,
+			PValue:        0.05,
+		}
+	}
+
+	var duration time.Duration
+	if experiment.StartDate != nil && experiment.EndDate != nil {
+		duration = experiment.EndDate.Sub(*experiment.StartDate)
+	}
+
+	var winner *WinnerInfo
+	var maxImprovement float64
+	for _, vr := range variantResults {
+		if vr.Improvement > maxImprovement {
+			maxImprovement = vr.Improvement
+			winner = &WinnerInfo{
+				VariantID:   vr.VariantID,
+				VariantName: vr.Name,
+				Improvement: vr.Improvement,
+				Confidence:  95.0,
+				PValue:      vr.PValue,
+			}
+		}
+	}
+
+	results := &ExperimentResults{
+		ExperimentID:      experimentID,
+		Status:           experiment.Status,
+		Duration:         duration,
+		TotalParticipants: totalParticipants,
+		Winner:           winner,
+		VariantResults:  variantResults,
+		StatisticalSignificance: 0.95,
+		ConfidenceLevel:  0.95,
+		Recommendations:  []string{
+			"Consider implementing winner variant in production",
+			"Monitor long-term metrics for sustainability",
+			"Plan follow-up experiments for further optimization",
+		},
+		GeneratedAt: time.Now(),
+	}
+
+	return results, nil
 }

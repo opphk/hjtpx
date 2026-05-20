@@ -6,658 +6,501 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"mime/multipart"
+	"net/http"
 	"path/filepath"
-	"plugin"
+	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var (
-	ErrPluginNotFound         = errors.New("plugin not found")
-	ErrPluginLoadFailed       = errors.New("failed to load plugin")
-	ErrPluginUnloadFailed     = errors.New("failed to unload plugin")
-	ErrPluginAlreadyLoaded    = errors.New("plugin already loaded")
-	ErrHookNotFound          = errors.New("hook not found")
-	ErrPluginIncompatible     = errors.New("plugin incompatible with platform")
+	ErrPluginNotFound      = errors.New("plugin not found")
+	ErrPluginAlreadyExists = errors.New("plugin already exists")
+	ErrPluginDisabled      = errors.New("plugin is disabled")
+	ErrInvalidPluginType   = errors.New("invalid plugin type")
+	ErrPluginExecutionFailed = errors.New("plugin execution failed")
 )
 
-type PluginSystem interface {
-	LoadPlugin(ctx context.Context, source string) (*PluginInstance, error)
-	UnloadPlugin(ctx context.Context, pluginID string) error
-	GetPlugin(ctx context.Context, pluginID string) (*PluginInstance, error)
-	ListPlugins(ctx context.Context) ([]*PluginInstance, error)
+type PluginType string
+
+const (
+	PluginTypeCaptcha     PluginType = "captcha"
+	PluginTypeAnalytics   PluginType = "analytics"
+	PluginTypeSecurity    PluginType = "security"
+	PluginTypeIntegration PluginType = "integration"
+	PluginTypeCustom      PluginType = "custom"
+)
+
+type PluginStatus string
+
+const (
+	PluginStatusActive    PluginStatus = "active"
+	PluginStatusInactive  PluginStatus = "inactive"
+	PluginStatusSuspended PluginStatus = "suspended"
+	PluginStatusPending   PluginStatus = "pending"
+)
+
+type PluginSystemService interface {
+	CreatePlugin(ctx context.Context, plugin *Plugin) error
+	GetPlugin(ctx context.Context, pluginID string) (*Plugin, error)
+	UpdatePlugin(ctx context.Context, plugin *Plugin) error
+	DeletePlugin(ctx context.Context, pluginID string) error
+	ListPlugins(ctx context.Context, filters *PluginFilters) ([]*Plugin, error)
 	EnablePlugin(ctx context.Context, pluginID string) error
 	DisablePlugin(ctx context.Context, pluginID string) error
-	CallHook(ctx context.Context, hookName string, data interface{}) ([]interface{}, error)
-	RegisterHook(ctx context.Context, hook *HookDefinition) error
+	ExecutePlugin(ctx context.Context, pluginID string, input *PluginInput) (*PluginOutput, error)
+	UploadPlugin(ctx context.Context, file multipart.File, header *multipart.FileHeader) (*Plugin, error)
+	DownloadPlugin(ctx context.Context, pluginID string) ([]byte, error)
+	GetPluginMetrics(ctx context.Context, pluginID string) (*PluginMetrics, error)
+	RegisterHook(ctx context.Context, hook *PluginHook) error
+	UnregisterHook(ctx context.Context, hookID string) error
 }
 
-type PluginInstance struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Version     string                 `json:"version"`
-	Author      string                 `json:"author"`
-	Description string                 `json:"description"`
-	Source      string                 `json:"source"`
-	Hooks       []string               `json:"hooks"`
-	Settings    map[string]interface{} `json:"settings"`
-	Enabled     bool                   `json:"enabled"`
-	Loaded      bool                   `json:"loaded"`
-	LoadedAt    time.Time              `json:"loaded_at"`
-	Status      string                 `json:"status"`
-	Error       string                 `json:"error,omitempty"`
-	Manifest    *PluginManifest       `json:"manifest,omitempty"`
+type Plugin struct {
+	PluginID      string          `json:"plugin_id"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description"`
+	Version       string          `json:"version"`
+	Type          PluginType      `json:"type"`
+	Author        string          `json:"author"`
+	Homepage      string          `json:"homepage"`
+	License       string          `json:"license"`
+	Status        PluginStatus    `json:"status"`
+	Configuration json.RawMessage `json:"configuration"`
+	Permissions   []string        `json:"permissions"`
+	Dependencies  []PluginDependency `json:"dependencies"`
+	Hooks         []string        `json:"hooks"`
+	IconURL       string          `json:"icon_url"`
+	Screenshots   []string        `json:"screenshots"`
+	DownloadCount int             `json:"download_count"`
+	Rating        float64         `json:"rating"`
+	Tags          []string        `json:"tags"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	PublishedAt   *time.Time      `json:"published_at,omitempty"`
 }
 
-type HookDefinition struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Priority    int         `json:"priority"`
-	Filter      string      `json:"filter,omitempty"`
-	Handler     interface{} `json:"-"`
+type PluginDependency struct {
+	PluginID string `json:"plugin_id"`
+	Version  string `json:"version"`
+	Required bool   `json:"required"`
 }
 
-type HookExecution struct {
-	HookName    string        `json:"hook_name"`
-	PluginID    string        `json:"plugin_id"`
-	StartedAt   time.Time     `json:"started_at"`
-	CompletedAt time.Time     `json:"completed_at"`
-	Duration    time.Duration `json:"duration"`
-	Success     bool          `json:"success"`
-	Error       string        `json:"error,omitempty"`
-	Result      interface{}   `json:"result,omitempty"`
+type PluginFilters struct {
+	Type       PluginType   `json:"type,omitempty"`
+	Status     PluginStatus `json:"status,omitempty"`
+	Author     string       `json:"author,omitempty"`
+	Tags       []string     `json:"tags,omitempty"`
+	Search     string       `json:"search,omitempty"`
+	SortBy     string       `json:"sort_by,omitempty"`
+	Order      string       `json:"order,omitempty"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"page_size"`
 }
 
-type PluginSettings struct {
-	PluginID     string                 `json:"plugin_id"`
-	Settings     map[string]interface{} `json:"settings"`
-	Secrets     map[string]string     `json:"secrets,omitempty"`
-	Environment map[string]string     `json:"environment,omitempty"`
+type PluginInput struct {
+	Context    map[string]interface{} `json:"context"`
+	Data       map[string]interface{} `json:"data"`
+	Parameters map[string]interface{} `json:"parameters"`
+	AuthToken  string                 `json:"auth_token,omitempty"`
+	UserID     string                `json:"user_id,omitempty"`
+	AppID      string                `json:"app_id,omitempty"`
 }
 
-type pluginSystem struct {
-	plugins      map[string]*PluginInstance
-	hooks        map[string][]*HookDefinition
-	hookHandlers map[string][]interface{}
-	instances    map[string]interface{}
-	mu           sync.RWMutex
-	pluginDir    string
+type PluginOutput struct {
+	Success    bool                   `json:"success"`
+	Data       map[string]interface{} `json:"data"`
+	Error      string                 `json:"error,omitempty"`
+	Metrics    *PluginExecutionMetrics `json:"metrics,omitempty"`
+	DurationMs int64                 `json:"duration_ms"`
 }
 
-func NewPluginSystem(pluginDir string) (PluginSystem, error) {
-	if pluginDir == "" {
-		pluginDir = "./plugins"
+type PluginExecutionMetrics struct {
+	ExecutionTimeMs int64  `json:"execution_time_ms"`
+	MemoryUsedMB    int64  `json:"memory_used_mb"`
+	CPUUsedPercent  float64 `json:"cpu_used_percent"`
+	CacheHit       bool   `json:"cache_hit"`
+}
+
+type PluginMetrics struct {
+	PluginID       string             `json:"plugin_id"`
+	TotalExecutions int64            `json:"total_executions"`
+	SuccessCount   int64             `json:"success_count"`
+	FailureCount   int64             `json:"failure_count"`
+	AvgLatencyMs   float64           `json:"avg_latency_ms"`
+	LastExecutedAt *time.Time        `json:"last_executed_at,omitempty"`
+	TodayMetrics   *DailyMetrics     `json:"today_metrics"`
+	WeeklyMetrics  []*DailyMetrics   `json:"weekly_metrics"`
+}
+
+type DailyMetrics struct {
+	Date         time.Time `json:"date"`
+	Executions   int64    `json:"executions"`
+	SuccessRate  float64  `json:"success_rate"`
+	AvgLatencyMs float64  `json:"avg_latency_ms"`
+}
+
+type PluginHook struct {
+	HookID     string   `json:"hook_id"`
+	PluginID   string   `json:"plugin_id"`
+	Event      string   `json:"event"`
+	Endpoint   string   `json:"endpoint"`
+	Method     string   `json:"method"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Enabled    bool     `json:"enabled"`
+	Priority   int      `json:"priority"`
+	Filters    map[string]string `json:"filters,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type pluginSystemService struct {
+	plugins    map[string]*Plugin
+	hooks      map[string]*PluginHook
+	metrics    map[string]*PluginMetrics
+	configs    map[string]json.RawMessage
+	mu         sync.RWMutex
+	httpClient *http.Client
+}
+
+func NewPluginSystemService() PluginSystemService {
+	service := &pluginSystemService{
+		plugins:  make(map[string]*Plugin),
+		hooks:    make(map[string]*PluginHook),
+		metrics:  make(map[string]*PluginMetrics),
+		configs:  make(map[string]json.RawMessage),
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+	}
+	service.initializeDefaultPlugins()
+	return service
+}
+
+func (s *pluginSystemService) initializeDefaultPlugins() {
+	defaultPlugins := []*Plugin{
+		{
+			PluginID: "builtin-analytics",
+			Name:     "Analytics Plugin",
+			Description: "Built-in analytics and reporting",
+			Version:  "1.0.0",
+			Type:     PluginTypeAnalytics,
+			Author:   "HJTPX Team",
+			Status:   PluginStatusActive,
+			Tags:     []string{"analytics", "reporting"},
+		},
+		{
+			PluginID: "builtin-security",
+			Name:     "Security Plugin",
+			Description: "Built-in security features",
+			Version:  "1.0.0",
+			Type:     PluginTypeSecurity,
+			Author:   "HJTPX Team",
+			Status:   PluginStatusActive,
+			Tags:     []string{"security", "protection"},
+		},
 	}
 
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create plugin directory: %w", err)
-	}
-
-	system := &pluginSystem{
-		plugins:      make(map[string]*PluginInstance),
-		hooks:        make(map[string][]*HookDefinition),
-		hookHandlers: make(map[string][]interface{}),
-		instances:    make(map[string]interface{}),
-		pluginDir:    pluginDir,
-	}
-
-	system.initializeBuiltinHooks()
-
-	return system, nil
-}
-
-func (s *pluginSystem) initializeBuiltinHooks() {
-	builtinHooks := []string{
-		"captcha.verify",
-		"captcha.generate",
-		"captcha.render",
-		"captcha.validate",
-		"auth.prelogin",
-		"auth.postlogin",
-		"auth.mfa",
-		"auth.session",
-		"user.created",
-		"user.updated",
-		"user.deleted",
-		"payment.process",
-		"payment.refund",
-		"webhook.receive",
-		"event.track",
-	}
-
-	for _, hookName := range builtinHooks {
-		s.hooks[hookName] = []*HookDefinition{}
-		s.hookHandlers[hookName] = []interface{}{}
+	for _, plugin := range defaultPlugins {
+		s.plugins[plugin.PluginID] = plugin
+		s.metrics[plugin.PluginID] = &PluginMetrics{
+			PluginID:        plugin.PluginID,
+			TotalExecutions: 0,
+			SuccessCount:    0,
+			FailureCount:    0,
+			AvgLatencyMs:    0,
+		}
 	}
 }
 
-func (s *pluginSystem) LoadPlugin(ctx context.Context, source string) (*PluginInstance, error) {
+func (s *pluginSystemService) CreatePlugin(ctx context.Context, plugin *Plugin) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	instance := &PluginInstance{
-		ID:        uuid.New().String(),
-		Source:    source,
-		Enabled:   true,
-		Loaded:    true,
-		LoadedAt:  time.Now(),
-		Status:    "loaded",
-		Hooks:     []string{},
-		Settings: make(map[string]interface{}),
+	if _, exists := s.plugins[plugin.PluginID]; exists {
+		return ErrPluginAlreadyExists
 	}
 
-	if manifest, err := s.loadPluginManifest(source); err == nil {
-		instance.Name = manifest.Main
-		instance.Version = manifest.EntryPoint
-		instance.Hooks = manifest.Hooks
-		instance.Manifest = manifest
+	if plugin.PluginID == "" {
+		plugin.PluginID = fmt.Sprintf("plugin-%d", time.Now().UnixNano())
 	}
 
-	s.plugins[instance.ID] = instance
+	plugin.CreatedAt = time.Now()
+	plugin.UpdatedAt = time.Now()
+	plugin.Status = PluginStatusPending
 
-	return instance, nil
-}
-
-func (s *pluginSystem) loadPluginManifest(source string) (*PluginManifest, error) {
-	manifestPath := filepath.Join(source, "manifest.json")
-
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest: %w", err)
+	s.plugins[plugin.PluginID] = plugin
+	s.metrics[plugin.PluginID] = &PluginMetrics{
+		PluginID:        plugin.PluginID,
+		TotalExecutions: 0,
+		SuccessCount:    0,
+		FailureCount:    0,
+		AvgLatencyMs:    0,
 	}
-
-	var manifest PluginManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest: %w", err)
-	}
-
-	return &manifest, nil
-}
-
-func (s *pluginSystem) UnloadPlugin(ctx context.Context, pluginID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	inst, exists := s.plugins[pluginID]
-	if !exists {
-		return ErrPluginNotFound
-	}
-
-	for _, hookName := range inst.Hooks {
-		s.unregisterPluginHooks(pluginID, hookName)
-	}
-
-	inst.Loaded = false
-	inst.Status = "unloaded"
-
-	delete(s.instances, pluginID)
 
 	return nil
 }
 
-func (s *pluginSystem) unregisterPluginHooks(pluginID string, hookName string) {
-	if hooks, exists := s.hooks[hookName]; exists {
-		var newHooks []*HookDefinition
-		for _, h := range hooks {
-			if h.ID != pluginID {
-				newHooks = append(newHooks, h)
-			}
-		}
-		s.hooks[hookName] = newHooks
-	}
-}
-
-func (s *pluginSystem) GetPlugin(ctx context.Context, pluginID string) (*PluginInstance, error) {
+func (s *pluginSystemService) GetPlugin(ctx context.Context, pluginID string) (*Plugin, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	inst, exists := s.plugins[pluginID]
+	plugin, exists := s.plugins[pluginID]
 	if !exists {
 		return nil, ErrPluginNotFound
 	}
 
-	return inst, nil
+	return plugin, nil
 }
 
-func (s *pluginSystem) ListPlugins(ctx context.Context) ([]*PluginInstance, error) {
+func (s *pluginSystemService) UpdatePlugin(ctx context.Context, plugin *Plugin) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, exists := s.plugins[plugin.PluginID]
+	if !exists {
+		return ErrPluginNotFound
+	}
+
+	plugin.UpdatedAt = time.Now()
+	plugin.CreatedAt = existing.CreatedAt
+
+	s.plugins[plugin.PluginID] = plugin
+	return nil
+}
+
+func (s *pluginSystemService) DeletePlugin(ctx context.Context, pluginID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.plugins[pluginID]; !exists {
+		return ErrPluginNotFound
+	}
+
+	delete(s.plugins, pluginID)
+	delete(s.metrics, pluginID)
+	delete(s.configs, pluginID)
+
+	return nil
+}
+
+func (s *pluginSystemService) ListPlugins(ctx context.Context, filters *PluginFilters) ([]*Plugin, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var result []*PluginInstance
-	for _, inst := range s.plugins {
-		result = append(result, inst)
+	var result []*Plugin
+	for _, plugin := range s.plugins {
+		if s.matchesFilters(plugin, filters) {
+			result = append(result, plugin)
+		}
 	}
 
 	return result, nil
 }
 
-func (s *pluginSystem) EnablePlugin(ctx context.Context, pluginID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	inst, exists := s.plugins[pluginID]
-	if !exists {
-		return ErrPluginNotFound
+func (s *pluginSystemService) matchesFilters(plugin *Plugin, filters *PluginFilters) bool {
+	if filters == nil {
+		return true
 	}
 
-	inst.Enabled = true
-	inst.Status = "enabled"
-
-	return nil
-}
-
-func (s *pluginSystem) DisablePlugin(ctx context.Context, pluginID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	inst, exists := s.plugins[pluginID]
-	if !exists {
-		return ErrPluginNotFound
+	if filters.Type != "" && plugin.Type != filters.Type {
+		return false
 	}
 
-	inst.Enabled = false
-	inst.Status = "disabled"
-
-	return nil
-}
-
-func (s *pluginSystem) CallHook(ctx context.Context, hookName string, data interface{}) ([]interface{}, error) {
-	s.mu.RLock()
-	hooks, exists := s.hooks[hookName]
-	s.mu.RUnlock()
-
-	if !exists {
-		return nil, ErrHookNotFound
+	if filters.Status != "" && plugin.Status != filters.Status {
+		return false
 	}
 
-	var results []interface{}
+	if filters.Author != "" && plugin.Author != filters.Author {
+		return false
+	}
 
-	for _, hook := range hooks {
-		if hook.Filter != "" {
-			if !s.evaluateFilter(hook.Filter, data) {
-				continue
+	if len(filters.Tags) > 0 {
+		hasTag := false
+		for _, tag := range filters.Tags {
+			for _, pluginTag := range plugin.Tags {
+				if strings.Contains(strings.ToLower(pluginTag), strings.ToLower(tag)) {
+					hasTag = true
+					break
+				}
+			}
+			if hasTag {
+				break
 			}
 		}
-
-		result, err := s.executeHook(ctx, hook, data)
-		if err != nil {
-			continue
+		if !hasTag {
+			return false
 		}
-
-		results = append(results, result)
 	}
 
-	return results, nil
-}
-
-func (s *pluginSystem) executeHook(ctx context.Context, hook *HookDefinition, data interface{}) (interface{}, error) {
-	startTime := time.Now()
-
-	execution := &HookExecution{
-		HookName:  hook.Name,
-		StartedAt: startTime,
+	if filters.Search != "" {
+		searchLower := strings.ToLower(filters.Search)
+		if !strings.Contains(strings.ToLower(plugin.Name), searchLower) &&
+			!strings.Contains(strings.ToLower(plugin.Description), searchLower) {
+			return false
+		}
 	}
 
-	result := fmt.Sprintf("Hook %s executed with data: %v", hook.Name, data)
-	execution.CompletedAt = time.Now()
-	execution.Duration = execution.CompletedAt.Sub(startTime)
-	execution.Success = true
-	execution.Result = result
-
-	_ = execution
-
-	return result, nil
-}
-
-func (s *pluginSystem) evaluateFilter(filter string, data interface{}) bool {
 	return true
 }
 
-func (s *pluginSystem) RegisterHook(ctx context.Context, hook *HookDefinition) error {
+func (s *pluginSystemService) EnablePlugin(ctx context.Context, pluginID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if hook.ID == "" {
-		hook.ID = uuid.New().String()
+	plugin, exists := s.plugins[pluginID]
+	if !exists {
+		return ErrPluginNotFound
 	}
 
-	if _, exists := s.hooks[hook.Name]; !exists {
-		s.hooks[hook.Name] = []*HookDefinition{}
-		s.hookHandlers[hook.Name] = []interface{}{}
-	}
-
-	s.hooks[hook.Name] = append(s.hooks[hook.Name], hook)
+	plugin.Status = PluginStatusActive
+	plugin.UpdatedAt = time.Now()
 
 	return nil
 }
 
-type PluginLoader struct {
-	system PluginSystem
-}
+func (s *pluginSystemService) DisablePlugin(ctx context.Context, pluginID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-func NewPluginLoader(system PluginSystem) *PluginLoader {
-	return &PluginLoader{
-		system: system,
+	plugin, exists := s.plugins[pluginID]
+	if !exists {
+		return ErrPluginNotFound
 	}
+
+	plugin.Status = PluginStatusInactive
+	plugin.UpdatedAt = time.Now()
+
+	return nil
 }
 
-func (l *PluginLoader) LoadFromFile(ctx context.Context, filePath string) (*PluginInstance, error) {
-	data, err := os.ReadFile(filePath)
+func (s *pluginSystemService) ExecutePlugin(ctx context.Context, pluginID string, input *PluginInput) (*PluginOutput, error) {
+	s.mu.RLock()
+	plugin, exists := s.plugins[pluginID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, ErrPluginNotFound
+	}
+
+	if plugin.Status != PluginStatusActive {
+		return nil, ErrPluginDisabled
+	}
+
+	startTime := time.Now()
+	output := &PluginOutput{
+		Success: true,
+		Data:    make(map[string]interface{}),
+	}
+
+	defer func() {
+		output.DurationMs = time.Since(startTime).Milliseconds()
+
+		s.mu.Lock()
+		if m, ok := s.metrics[pluginID]; ok {
+			m.TotalExecutions++
+			if output.Success {
+				m.SuccessCount++
+			} else {
+				m.FailureCount++
+			}
+			now := time.Now()
+			m.LastExecutedAt = &now
+
+			total := m.SuccessCount + m.FailureCount
+			if total > 0 {
+				m.AvgLatencyMs = (m.AvgLatencyMs*float64(total-1) + float64(output.DurationMs)) / float64(total)
+			}
+		}
+		s.mu.Unlock()
+	}()
+
+	output.Data["result"] = "success"
+	output.Data["plugin_id"] = pluginID
+	output.Data["input_received"] = len(input.Data) > 0
+
+	return output, nil
+}
+
+func (s *pluginSystemService) UploadPlugin(ctx context.Context, file multipart.File, header *multipart.FileHeader) (*Plugin, error) {
+	ext := filepath.Ext(header.Filename)
+	if ext != ".zip" && ext != ".tar.gz" {
+		return nil, fmt.Errorf("unsupported file type: %s", ext)
+	}
+
+	_, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read plugin file: %w", err)
 	}
 
-	var plugin PluginInstance
-	if err := json.Unmarshal(data, &plugin); err != nil {
-		return nil, fmt.Errorf("failed to parse plugin: %w", err)
-	}
-
-	return l.system.LoadPlugin(ctx, plugin.Source)
-}
-
-func (l *PluginLoader) LoadFromDirectory(ctx context.Context, dirPath string) ([]*PluginInstance, error) {
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read plugin directory: %w", err)
-	}
-
-	var instances []*PluginInstance
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		pluginPath := filepath.Join(dirPath, entry.Name())
-
-		inst, err := l.system.LoadPlugin(ctx, pluginPath)
-		if err != nil {
-			continue
-		}
-
-		instances = append(instances, inst)
-	}
-
-	return instances, nil
-}
-
-type PluginSandbox struct {
-	workingDir string
-	env        map[string]string
-	limits     *ResourceLimits
-}
-
-type ResourceLimits struct {
-	MaxMemoryMB     int64
-	MaxCPUPercent   int
-	MaxDiskMB      int64
-	MaxNetworkMB   int64
-	TimeoutSeconds int
-}
-
-func NewPluginSandbox(workingDir string, limits *ResourceLimits) *PluginSandbox {
-	if workingDir == "" {
-		workingDir = "/tmp/plugin-sandbox"
-	}
-
-	os.MkdirAll(workingDir, 0755)
-
-	return &PluginSandbox{
-		workingDir: workingDir,
-		env:        make(map[string]string),
-		limits:     limits,
-	}
-}
-
-func (s *PluginSandbox) Execute(ctx context.Context, code string) (string, error) {
-	return "Execution completed", nil
-}
-
-func (s *PluginSandbox) SetEnv(key, value string) {
-	s.env[key] = value
-}
-
-func (s *PluginSandbox) GetEnv(key string) string {
-	return s.env[key]
-}
-
-type PluginRepository interface {
-	Search(ctx context.Context, query string) ([]*PluginInstance, error)
-	Install(ctx context.Context, pluginID string, version string) error
-	Update(ctx context.Context, pluginID string) error
-	Uninstall(ctx context.Context, pluginID string) error
-}
-
-type pluginRepository struct {
-	registryURL string
-	authToken  string
-}
-
-func NewPluginRepository(registryURL, authToken string) PluginRepository {
-	return &pluginRepository{
-		registryURL: registryURL,
-		authToken:  authToken,
-	}
-}
-
-func (r *pluginRepository) Search(ctx context.Context, query string) ([]*PluginInstance, error) {
-	var results []*PluginInstance
-
-	results = append(results, &PluginInstance{
-		ID:          "plugin-analytics",
-		Name:        "Analytics Plugin",
+	plugin := &Plugin{
+		PluginID:    fmt.Sprintf("uploaded-%d", time.Now().UnixNano()),
+		Name:        strings.TrimSuffix(header.Filename, ext),
+		Description: "Uploaded plugin",
 		Version:     "1.0.0",
-		Description: "Advanced analytics and reporting",
-		Author:      "hjtpx",
-		Status:      "available",
-	})
-
-	return results, nil
-}
-
-func (r *pluginRepository) Install(ctx context.Context, pluginID string, version string) error {
-	return nil
-}
-
-func (r *pluginRepository) Update(ctx context.Context, pluginID string) error {
-	return nil
-}
-
-func (r *pluginRepository) Uninstall(ctx context.Context, pluginID string) error {
-	return nil
-}
-
-type PluginBuilder struct {
-	workingDir string
-	manifest   *PluginManifest
-	files      map[string]string
-}
-
-func NewPluginBuilder(name string) *PluginBuilder {
-	return &PluginBuilder{
-		workingDir: filepath.Join(os.TempDir(), "plugin-build", name),
-		manifest: &PluginManifest{
-			Main:       name,
-			EntryPoint: "1.0.0",
-			Hooks:      []string{},
-		},
-		files: make(map[string]string),
-	}
-}
-
-func (b *PluginBuilder) AddHook(hookName string) *PluginBuilder {
-	b.manifest.Hooks = append(b.manifest.Hooks, hookName)
-	return b
-}
-
-func (b *PluginBuilder) AddFile(path, content string) *PluginBuilder {
-	b.files[path] = content
-	return b
-}
-
-func (b *PluginBuilder) SetSetting(name, description, defaultValue, settingType string, required bool) *PluginBuilder {
-	b.manifest.Settings = append(b.manifest.Settings, PluginSetting{
-		Name:        name,
-		Description: description,
-		Default:     defaultValue,
-		Type:        settingType,
-		Required:    required,
-	})
-	return b
-}
-
-func (b *PluginBuilder) Build(ctx context.Context) (*PluginInstance, error) {
-	if err := os.MkdirAll(b.workingDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create working directory: %w", err)
+		Type:        PluginTypeCustom,
+		Author:      "user",
+		Status:      PluginStatusPending,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
-	manifestData, err := json.MarshalIndent(b.manifest, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal manifest: %w", err)
+	if err := s.CreatePlugin(ctx, plugin); err != nil {
+		return nil, err
 	}
 
-	if err := os.WriteFile(filepath.Join(b.workingDir, "manifest.json"), manifestData, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write manifest: %w", err)
-	}
-
-	for path, content := range b.files {
-		fullPath := filepath.Join(b.workingDir, path)
-		dir := filepath.Dir(fullPath)
-		os.MkdirAll(dir, 0755)
-
-		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-			return nil, fmt.Errorf("failed to write file %s: %w", path, err)
-		}
-	}
-
-	instance := &PluginInstance{
-		ID:          uuid.New().String(),
-		Name:        b.manifest.Main,
-		Version:     b.manifest.EntryPoint,
-		Hooks:       b.manifest.Hooks,
-		Source:      b.workingDir,
-		Manifest:    b.manifest,
-		Settings:    make(map[string]interface{}),
-		Enabled:     false,
-		Loaded:      false,
-		Status:      "built",
-	}
-
-	return instance, nil
+	return plugin, nil
 }
 
-func (b *PluginBuilder) BuildAsWASM(ctx context.Context) ([]byte, error) {
-	return []byte("WASM module placeholder"), nil
+func (s *pluginSystemService) DownloadPlugin(ctx context.Context, pluginID string) ([]byte, error) {
+	s.mu.RLock()
+	plugin, exists := s.plugins[pluginID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return nil, ErrPluginNotFound
+	}
+
+	plugin.DownloadCount++
+	return []byte(fmt.Sprintf("Plugin archive for %s v%s", plugin.Name, plugin.Version)), nil
 }
 
-type PluginMetrics struct {
-	PluginID        string  `json:"plugin_id"`
-	TotalInvocations int64  `json:"total_invocations"`
-	SuccessfulCalls  int64  `json:"successful_calls"`
-	FailedCalls     int64  `json:"failed_calls"`
-	AvgLatencyMs    float64 `json:"avg_latency_ms"`
-	P99LatencyMs    float64 `json:"p99_latency_ms"`
-	TotalErrors     int64   `json:"total_errors"`
-	LastInvoked     time.Time `json:"last_invoked"`
-}
+func (s *pluginSystemService) GetPluginMetrics(ctx context.Context, pluginID string) (*PluginMetrics, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-func (s *pluginSystem) GetPluginMetrics(ctx context.Context, pluginID string) (*PluginMetrics, error) {
-	metrics := &PluginMetrics{
-		PluginID:        pluginID,
-		TotalInvocations: 15000,
-		SuccessfulCalls:  14800,
-		FailedCalls:     200,
-		AvgLatencyMs:    12.5,
-		P99LatencyMs:    45.3,
-		TotalErrors:     15,
-		LastInvoked:     time.Now(),
+	metrics, exists := s.metrics[pluginID]
+	if !exists {
+		return nil, ErrPluginNotFound
 	}
 
 	return metrics, nil
 }
 
-func (s *pluginSystem) ExportPlugin(ctx context.Context, pluginID string, outputPath string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *pluginSystemService) RegisterHook(ctx context.Context, hook *PluginHook) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	inst, exists := s.plugins[pluginID]
-	if !exists {
+	if _, exists := s.plugins[hook.PluginID]; !exists {
 		return ErrPluginNotFound
 	}
 
-	export := map[string]interface{}{
-		"plugin":     inst,
-		"exported":   time.Now(),
-		"version":    "1.0",
+	if hook.HookID == "" {
+		hook.HookID = fmt.Sprintf("hook-%d", time.Now().UnixNano())
 	}
 
-	data, err := json.MarshalIndent(export, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal plugin: %w", err)
-	}
-
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write export file: %w", err)
-	}
+	hook.CreatedAt = time.Now()
+	s.hooks[hook.HookID] = hook
 
 	return nil
 }
 
-func (s *pluginSystem) ImportPlugin(ctx context.Context, source io.Reader) (*PluginInstance, error) {
-	data, err := io.ReadAll(source)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read plugin data: %w", err)
-	}
-
-	var importData struct {
-		Plugin   *PluginInstance `json:"plugin"`
-		Exported time.Time       `json:"exported"`
-	}
-
-	if err := json.Unmarshal(data, &importData); err != nil {
-		return nil, fmt.Errorf("failed to parse plugin: %w", err)
-	}
-
-	newInstance := &PluginInstance{
-		ID:          uuid.New().String(),
-		Name:        importData.Plugin.Name,
-		Version:     importData.Plugin.Version,
-		Author:      importData.Plugin.Author,
-		Description: importData.Plugin.Description,
-		Hooks:       importData.Plugin.Hooks,
-		Settings:    importData.Plugin.Settings,
-		Enabled:     false,
-		Loaded:      false,
-		Status:      "imported",
-	}
-
+func (s *pluginSystemService) UnregisterHook(ctx context.Context, hookID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.plugins[newInstance.ID] = newInstance
 
-	return newInstance, nil
-}
-
-func (p *plugin) Lookup(symName string) (plugin.Symbol, error) {
-	return nil, nil
-}
-
-type plugin struct{}
-
-func LoadDynamicPlugin(path string) (interface{}, error) {
-	p, err := plugin.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open plugin: %w", err)
+	if _, exists := s.hooks[hookID]; !exists {
+		return ErrPluginNotFound
 	}
 
-	sym, err := p.Lookup("Plugin")
-	if err != nil {
-		return nil, fmt.Errorf("symbol not found: %w", err)
-	}
-
-	return sym, nil
+	delete(s.hooks, hookID)
+	return nil
 }
