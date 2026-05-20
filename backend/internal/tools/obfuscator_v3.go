@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type ObfuscatorV3 struct {
@@ -39,6 +40,130 @@ type ObfuscatorOptions struct {
 	AntiTamper                bool
 	DebugProtection           bool
 	LiveRelocation            bool
+	EnhancedStringEncryption  bool
+	AdvancedControlFlow       bool
+	BreakpointDetection       bool
+	DevToolsDetection         bool
+	CodeVirtualization        bool
+	MutationObfuscation       bool
+}
+
+type enhancedStringEncryptor struct {
+	mu          sync.Mutex
+	layers      int
+	algorithms  []string
+	keys        map[int]string
+}
+
+func newEnhancedStringEncryptor() *enhancedStringEncryptor {
+	return &enhancedStringEncryptor{
+		layers:     3,
+		algorithms: []string{"aes256", "xor", "base64"},
+		keys:       make(map[int]string),
+	}
+}
+
+func (e *enhancedStringEncryptor) encrypt(content string, layer int) string {
+	if layer <= 0 {
+		return content
+	}
+	
+	key := e.getKey(layer)
+	result := content
+	
+	for i := 0; i < layer; i++ {
+		result = e.xorEncrypt(result, key)
+	}
+	
+	result = e.base64Encode(result)
+	return result
+}
+
+func (e *enhancedStringEncryptor) getKey(layer int) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	
+	if key, exists := e.keys[layer]; exists {
+		return key
+	}
+	
+	keyBytes := make([]byte, 32)
+	rand.Read(keyBytes)
+	key := hex.EncodeToString(keyBytes)
+	e.keys[layer] = key
+	return key
+}
+
+func (e *enhancedStringEncryptor) xorEncrypt(data, key string) string {
+	result := make([]byte, len(data))
+	keyBytes := []byte(key)
+	for i := 0; i < len(data); i++ {
+		result[i] = data[i] ^ keyBytes[i%len(keyBytes)]
+	}
+	return string(result)
+}
+
+func (e *enhancedStringEncryptor) base64Encode(data string) string {
+	return base64.StdEncoding.EncodeToString([]byte(data))
+}
+
+type advancedControlFlowManager struct {
+	mu           sync.Mutex
+	blocks       map[string]*advancedControlBlock
+	counter      int
+	switchCases  int
+	deadPaths    int
+}
+
+type advancedControlBlock struct {
+	ID          string
+	Body        string
+	Condition   string
+	NextBlock   string
+	JumpTarget  string
+	IsOpaque    bool
+}
+
+func newAdvancedControlFlowManager() *advancedControlFlowManager {
+	return &advancedControlFlowManager{
+		blocks:      make(map[string]*advancedControlBlock),
+		counter:     0,
+		switchCases: 5 + randInt(10),
+		deadPaths:   2 + randInt(3),
+	}
+}
+
+type enhancedAntiDebugManager struct {
+	techniques []enhancedAntiDebugTechnique
+	timestamp  int64
+}
+
+type enhancedAntiDebugTechnique struct {
+	Name         string
+	Enabled      bool
+	Weight       int
+	Complexity   int
+	Description  string
+}
+
+func newEnhancedAntiDebugManager() *enhancedAntiDebugManager {
+	return &enhancedAntiDebugManager{
+		techniques: []enhancedAntiDebugTechnique{
+			{Name: "debugger_check", Enabled: true, Weight: 10, Complexity: 5, Description: "Check for debugger presence"},
+			{Name: "console_check", Enabled: true, Weight: 8, Complexity: 4, Description: "Monitor console operations"},
+			{Name: "time_check", Enabled: true, Weight: 7, Complexity: 4, Description: "Timing attack detection"},
+			{Name: "function_wrapping", Enabled: true, Weight: 9, Complexity: 5, Description: "Wrap native functions"},
+			{Name: "eval_manipulation", Enabled: true, Weight: 6, Complexity: 4, Description: "Manipulate eval behavior"},
+			{Name: "devtools_detection", Enabled: true, Weight: 8, Complexity: 5, Description: "Detect DevTools opening"},
+			{Name: "performance_timing", Enabled: true, Weight: 7, Complexity: 4, Description: "Monitor timing anomalies"},
+			{Name: "stack_depth_check", Enabled: true, Weight: 6, Complexity: 4, Description: "Check stack depth"},
+			{Name: "breakpoint_detection", Enabled: true, Weight: 9, Complexity: 6, Description: "Detect code breakpoints"},
+			{Name: "memory_monitoring", Enabled: true, Weight: 7, Complexity: 5, Description: "Monitor memory patterns"},
+			{Name: "event_listener_check", Enabled: true, Weight: 6, Complexity: 4, Description: "Check for debug events"},
+			{Name: "source_mutation", Enabled: true, Weight: 8, Complexity: 5, Description: "Mutate source code detection"},
+		},
+		timestamp: time.Now().Unix(),
+	}
 }
 
 type keyGenerator struct {
@@ -169,26 +294,32 @@ func newAntiDebugManager() *antiDebugManager {
 func NewObfuscatorV3() *ObfuscatorV3 {
 	return &ObfuscatorV3{
 		options: &ObfuscatorOptions{
-			ControlFlowFlattening:   true,
-			StringEncryption:        true,
-			DeadCodeInjection:       true,
-			VariableNameObfuscation: true,
-			FunctionReordering:      true,
-			AntiDebug:               true,
-			StringArray:             true,
-			EncryptFunctionNames:    true,
-			EncryptNumbers:          true,
-			DomainLock:              true,
-			SelfDefending:           true,
-			DisableConsoleOutput:   true,
-			AntiTamper:              true,
-			DebugProtection:         true,
-			LiveRelocation:          true,
+			ControlFlowFlattening:      true,
+			StringEncryption:           true,
+			DeadCodeInjection:          true,
+			VariableNameObfuscation:    true,
+			FunctionReordering:         true,
+			AntiDebug:                  true,
+			StringArray:                true,
+			EncryptFunctionNames:       true,
+			EncryptNumbers:             true,
+			DomainLock:                 true,
+			SelfDefending:              true,
+			DisableConsoleOutput:       true,
+			AntiTamper:                 true,
+			DebugProtection:            true,
+			LiveRelocation:             true,
+			EnhancedStringEncryption:   true,
+			AdvancedControlFlow:       true,
+			BreakpointDetection:        true,
+			DevToolsDetection:          true,
+			CodeVirtualization:        true,
+			MutationObfuscation:        true,
 		},
-		keyGenerator:   newKeyGenerator(),
-		stringRegistry: newStringRegistry(),
-		controlFlowMgr: newControlFlowManager(),
-		antiDebugMgr:   newAntiDebugManager(),
+		keyGenerator:              newKeyGenerator(),
+		stringRegistry:            newStringRegistry(),
+		controlFlowMgr:           newControlFlowManager(),
+		antiDebugMgr:             newAntiDebugManager(),
 	}
 }
 
@@ -203,16 +334,24 @@ func (o *ObfuscatorV3) Obfuscate(jsCode string) (string, error) {
 		result = o.convertToStringArray(result)
 	}
 
-	if o.options.StringEncryption {
+	if o.options.StringEncryption || o.options.EnhancedStringEncryption {
 		result = o.encryptStringsEnhanced(result)
+	}
+
+	if o.options.EnhancedStringEncryption {
+		result = o.addMultiLayerStringEncryption(result)
 	}
 
 	if o.options.VariableNameObfuscation {
 		result = o.obfuscateVariablesAdvanced(result)
 	}
 
-	if o.options.ControlFlowFlattening {
+	if o.options.ControlFlowFlattening || o.options.AdvancedControlFlow {
 		result = o.flattenControlFlowAdvanced(result)
+	}
+
+	if o.options.AdvancedControlFlow {
+		result = o.addAdvancedControlFlowObfuscation(result)
 	}
 
 	if o.options.FunctionReordering {
@@ -223,8 +362,16 @@ func (o *ObfuscatorV3) Obfuscate(jsCode string) (string, error) {
 		result = o.injectDeadCodeAdvanced(result)
 	}
 
-	if o.options.AntiDebug {
+	if o.options.AntiDebug || o.options.BreakpointDetection || o.options.DevToolsDetection {
 		result = o.addAntiDebugAdvanced(result)
+	}
+
+	if o.options.BreakpointDetection {
+		result = o.addBreakpointDetection(result)
+	}
+
+	if o.options.DevToolsDetection {
+		result = o.addDevToolsDetection(result)
 	}
 
 	if o.options.EncryptFunctionNames {
@@ -249,6 +396,14 @@ func (o *ObfuscatorV3) Obfuscate(jsCode string) (string, error) {
 
 	if o.options.LiveRelocation {
 		result = o.addLiveRelocation(result)
+	}
+
+	if o.options.CodeVirtualization {
+		result = o.addCodeVirtualization(result)
+	}
+
+	if o.options.MutationObfuscation {
+		result = o.addMutationObfuscation(result)
 	}
 
 	result = o.minifyAdvanced(result)
@@ -957,22 +1112,29 @@ func (o *ObfuscatorV3) minifyAdvanced(code string) string {
 func (o *ObfuscatorV3) GetObfuscationStats() map[string]interface{} {
 	return map[string]interface{}{
 		"features_enabled": map[string]bool{
-			"string_array":              o.options.StringArray,
-			"string_encryption":         o.options.StringEncryption,
-			"variable_obfuscation":      o.options.VariableNameObfuscation,
-			"control_flow_flattening":   o.options.ControlFlowFlattening,
-			"function_reordering":      o.options.FunctionReordering,
-			"dead_code_injection":       o.options.DeadCodeInjection,
-			"anti_debug":                o.options.AntiDebug,
-			"function_name_encryption":  o.options.EncryptFunctionNames,
-			"number_encryption":         o.options.EncryptNumbers,
-			"domain_lock":               o.options.DomainLock,
-			"self_defending":            o.options.SelfDefending,
-			"console_disabling":         o.options.DisableConsoleOutput,
-			"live_relocation":           o.options.LiveRelocation,
+			"string_array":                o.options.StringArray,
+			"string_encryption":           o.options.StringEncryption,
+			"variable_obfuscation":        o.options.VariableNameObfuscation,
+			"control_flow_flattening":     o.options.ControlFlowFlattening,
+			"function_reordering":         o.options.FunctionReordering,
+			"dead_code_injection":         o.options.DeadCodeInjection,
+			"anti_debug":                  o.options.AntiDebug,
+			"function_name_encryption":    o.options.EncryptFunctionNames,
+			"number_encryption":           o.options.EncryptNumbers,
+			"domain_lock":                 o.options.DomainLock,
+			"self_defending":              o.options.SelfDefending,
+			"console_disabling":           o.options.DisableConsoleOutput,
+			"live_relocation":             o.options.LiveRelocation,
+			"enhanced_string_encryption":  o.options.EnhancedStringEncryption,
+			"advanced_control_flow":      o.options.AdvancedControlFlow,
+			"breakpoint_detection":        o.options.BreakpointDetection,
+			"devtools_detection":          o.options.DevToolsDetection,
+			"code_virtualization":         o.options.CodeVirtualization,
+			"mutation_obfuscation":        o.options.MutationObfuscation,
 		},
-		"version": "3.0.0",
+		"version": "3.1.0",
 		"security_level": "maximum",
+		"obfuscation_layers": 9,
 	}
 }
 
@@ -989,4 +1151,301 @@ func generateRandomString(length int) string {
 func randInt(max int) int {
 	num, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
 	return int(num.Int64())
+}
+
+func (o *ObfuscatorV3) addMultiLayerStringEncryption(code string) string {
+	encryptor := newEnhancedStringEncryptor()
+	
+	stringRegex := regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'`)
+	matches := stringRegex.FindAllStringIndex(code, -1)
+
+	if len(matches) == 0 {
+		return code
+	}
+
+	result := code
+	offset := 0
+	maxLayers := 3
+
+	for _, match := range matches {
+		original := code[match[0]:match[1]]
+		if len(original) <= 2 {
+			continue
+		}
+
+		content := code[match[0]+1 : match[1]-1]
+		if len(content) < 2 {
+			continue
+		}
+
+		layers := 2 + randInt(2)
+		if layers > maxLayers {
+			maxLayers = layers
+		}
+		encrypted := encryptor.encrypt(content, layers)
+
+		funcName := fmt.Sprintf("__m%s", o.keyGenerator.generate()[:6])
+		layerKey := encryptor.getKey(layers)
+		
+		replacement := fmt.Sprintf("%s('%s','%s')", funcName, encrypted, layerKey)
+
+		start := match[0] + offset
+		end := match[1] + offset
+
+		result = result[:start] + replacement + result[end:]
+		offset += len(replacement) - len(original)
+	}
+
+	decoder := o.generateMultiLayerDecoderFunction(encryptor, maxLayers)
+	return decoder + result
+}
+
+func (o *ObfuscatorV3) generateMultiLayerDecoderFunction(encryptor *enhancedStringEncryptor, maxLayers int) string {
+	decoderName := o.keyGenerator.generate()[:8]
+	
+	code := fmt.Sprintf(`
+var %s=function(_e,_k){
+	var _d=_e;
+	for(var _i=0;_i<_d.length;_i+=4){
+		var _c=parseInt(_d.substr(_i,4),16);
+		_d=_d.replace(_d.substr(_i,4),String.fromCharCode(_c^_k.charCodeAt(_i/4%%_k.length)));
+	}
+	return atob(_d);
+};
+`, decoderName)
+
+	return code
+}
+
+func (o *ObfuscatorV3) addAdvancedControlFlowObfuscation(code string) string {
+	funcRegex := regexp.MustCompile(`function\s+\w+\s*\(([^)]*)\)\s*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}`)
+
+	matches := funcRegex.FindAllStringSubmatchIndex(code, -1)
+	if len(matches) == 0 {
+		return code
+	}
+
+	result := code
+	offset := 0
+
+	for _, match := range matches {
+		if len(match) < 6 {
+			continue
+		}
+
+		funcBody := code[match[4]:match[5]]
+		if len(funcBody) > 100 && len(funcBody) < 1500 {
+			obfuscated := o.obfuscateControlFlowWithSwitch(funcBody)
+
+			start := match[0] + offset
+			end := match[1] + offset
+
+			original := code[match[0]:match[1]]
+			newCode := code[match[0]:match[2]] + "(" + code[match[2]:match[3]] + "){" + obfuscated + "}"
+
+			result = result[:start] + newCode + result[end:]
+			offset += len(newCode) - len(original)
+		}
+	}
+
+	return result
+}
+
+func (o *ObfuscatorV3) obfuscateControlFlowWithSwitch(body string) string {
+	statementRegex := regexp.MustCompile(`(?:[^;{}]+|\{[^}]*\})+`)
+	statements := statementRegex.FindAllString(body, -1)
+
+	if len(statements) < 3 {
+		return body
+	}
+
+	stateVar := o.keyGenerator.generate()[:6]
+	cases := make([]string, 0, len(statements))
+
+	for i, stmt := range statements {
+		trimmed := strings.TrimSpace(stmt)
+		if len(trimmed) > 0 && trimmed != "{" && trimmed != "}" {
+			cases = append(cases, fmt.Sprintf("case %d:var %s=%d;", i, stateVar, i))
+			cases = append(cases, trimmed)
+			cases = append(cases, fmt.Sprintf("if(%s<0)break;", stateVar))
+		}
+	}
+
+	defaultCase := fmt.Sprintf("default:var %s=-1;", stateVar)
+
+	switchCode := fmt.Sprintf("var %s=0;switch(%s){%s%s}", stateVar, stateVar, defaultCase, strings.Join(cases, ""))
+
+	return switchCode
+}
+
+func (o *ObfuscatorV3) addBreakpointDetection(code string) string {
+	breakpointDetection := fmt.Sprintf(`
+(function(){
+	var _bp=function(){
+		var _f=function(){};
+		var _c=_f.constructor;
+		var _a=_c("debugger");
+		_a();
+	};
+	
+	var _s=setInterval(function(){
+		var _t1=Date.now();
+		_f();
+		var _t2=Date.now();
+		if(_t2-_t1>%d){
+			document.body.innerHTML='';
+			window.location='about:blank';
+		}
+	},%d);
+	
+	var _wm=function(){
+		var _o=Object.defineProperty({},"p",{set:function(){throw new Error('bp');}});
+		try{_o.p=1;}catch(e){}
+	};
+	
+	(function(){
+		var _i=0;
+		setInterval(function(){
+			_i++;
+			if(_i>%d){
+				_wm();
+				_bp();
+				_i=0;
+			}
+		},%d);
+	})();
+})();
+`, 50+randInt(50), 200+randInt(100), 50+randInt(50), 100+randInt(50))
+
+	return code + breakpointDetection
+}
+
+func (o *ObfuscatorV3) addDevToolsDetection(code string) string {
+	devToolsDetection := `
+(function(){
+	var _dt=function(){
+		var _w=window.outerWidth-window.innerWidth;
+		var _h=window.outerHeight-window.innerHeight;
+		if(_w>%d||_h>%d){
+			document.body.innerHTML='';
+			document.body.style.background='white';
+			var _m=document.createElement('div');
+			_m.style.cssText='position:fixed;top:50%%;left:50%%;transform:translate(-50%%,-50%%);font-family:sans-serif;font-size:18px;color:#d00;';
+			_m.textContent='Developer Tools Detected';
+			document.body.appendChild(_m);
+		}
+	};
+	
+	setInterval(_dt,%d);
+	
+	var _sr=function(){
+		var _e=document.createElement('div');
+		_e.id='_dt_detector';
+		_e.style.height='1px';
+		_e.style.width='1px';
+		_e.style.position='absolute';
+		_e.style.left='-9999px';
+		document.body.appendChild(_e);
+		
+		var _o=Object.getOwnPropertyDescriptor(_e,'offsetWidth');
+		Object.defineProperty(_e,'offsetWidth',{
+			get:function(){
+				document.body.innerHTML='';
+				window.location='about:blank';
+				return 0;
+			}
+		});
+	};
+	
+	_sr();
+	
+	var _ce=function(){
+		var _ch=new PerformanceObserver(function(_l){
+			_l.getEntries().forEach(function(_e){
+				if(_e.name&&_e.name.indexOf('developertools')!==-1){
+					document.body.innerHTML='';
+				}
+			});
+		});
+		try{_ch.observe({entryType:'resource'});}catch(e){}
+	};
+	
+	_ce();
+})();
+`
+
+	devToolsDetection = fmt.Sprintf(devToolsDetection, 
+		100+randInt(50),
+		100+randInt(50),
+		100+randInt(100))
+
+	return code + devToolsDetection
+}
+
+func (o *ObfuscatorV3) addCodeVirtualization(code string) string {
+	virtualizationCode := fmt.Sprintf(`
+(function(){
+	var _v={
+		instructions:[],
+		ip:0,
+		stack:[],
+		regs:{},
+		execute:function(_pgm){
+			this.instructions=_pgm;
+			this.ip=0;
+			while(this.ip<this.instructions.length){
+				var _op=this.instructions[this.ip];
+				this.evalOp(_op);
+				this.ip++;
+			}
+		},
+		evalOp:function(_op){
+			switch(_op.t){
+				case 'push':this.stack.push(_op.v);break;
+				case 'add':var _a=this.stack.pop();var _b=this.stack.pop();this.stack.push(_a+_b);break;
+				case 'sub':var _a=this.stack.pop();var _b=this.stack.pop();this.stack.push(_b-_a);break;
+			}
+		}
+	};
+	window['%s']=_v;
+})();
+`, o.keyGenerator.generate()[:8])
+
+	return virtualizationCode + code
+}
+
+func (o *ObfuscatorV3) addMutationObfuscation(code string) string {
+	mutationPatterns := []string{
+		`(function(){var _e=%s;var _m='length';if(_e[_m]!==_e.length){_e[%s]=_e[_m];}})();`,
+		`(function(){var _o={};var _p='%s';_o[_p]=1;Object.freeze(_o);})();`,
+		`(function(){var _a=[];var _f=function(){};_a.push(_f);var _c=_a[0];_a[0]=null;})();`,
+	}
+
+	patternIdx := randInt(len(mutationPatterns))
+	pattern := mutationPatterns[patternIdx]
+	
+	varName := o.keyGenerator.generate()[:6]
+	propName := o.keyGenerator.generate()[:6]
+	
+	mutationCode := fmt.Sprintf(pattern, varName, propName)
+
+	funcRegex := regexp.MustCompile(`function\s+\w+\s*\([^)]*\)\s*\{`)
+	matches := funcRegex.FindAllStringIndex(code, -1)
+
+	if len(matches) == 0 {
+		return mutationCode + code
+	}
+
+	result := code
+	offset := 0
+
+	for _, match := range matches {
+		if randFloat() > 0.7 {
+			pos := match[1] + offset
+			result = result[:pos] + mutationCode + result[pos:]
+			offset += len(mutationCode)
+		}
+	}
+
+	return result
 }

@@ -34,6 +34,21 @@ const (
 	AuditLogAccessDenied      AuditLogType = "access_denied"
 	AuditLogSensitiveData     AuditLogType = "sensitive_data_access"
 	AuditLogAdminAction       AuditLogType = "admin_action"
+	AuditLogSystemStartup     AuditLogType = "system_startup"
+	AuditLogSystemShutdown    AuditLogType = "system_shutdown"
+	AuditLogDatabaseOperation AuditLogType = "database_operation"
+	AuditLogCacheOperation    AuditLogType = "cache_operation"
+	AuditLogExternalAPI       AuditLogType = "external_api_call"
+	AuditLogSecurityScan      AuditLogType = "security_scan"
+	AuditLogPerformanceIssue   AuditLogType = "performance_issue"
+	AuditLogError             AuditLogType = "error"
+	AuditLogWarning           AuditLogType = "warning"
+	AuditLogInfo              AuditLogType = "info"
+	AuditLogDebug             AuditLogType = "debug"
+	AuditLogVerification      AuditLogType = "verification"
+	AuditLogCaptchaChallenge  AuditLogType = "captcha_challenge"
+	AuditLogRiskDetection     AuditLogType = "risk_detection"
+	AuditLogAnomalyDetected   AuditLogType = "anomaly_detected"
 )
 
 type AuditLogLevel string
@@ -63,6 +78,40 @@ type StructuredAuditLog struct {
 	Metadata     map[string]string    `json:"metadata,omitempty"`
 	Duration     int64                `json:"duration_ms,omitempty"`
 	SessionID    string               `json:"session_id,omitempty"`
+	ServiceName  string               `json:"service_name,omitempty"`
+	TraceID      string               `json:"trace_id,omitempty"`
+	SpanID       string               `json:"span_id,omitempty"`
+	Environment  string               `json:"environment,omitempty"`
+	Region       string               `json:"region,omitempty"`
+	Version      string               `json:"version,omitempty"`
+	RequestID    string               `json:"request_id,omitempty"`
+	Method       string               `json:"method,omitempty"`
+	Path         string               `json:"path,omitempty"`
+	StatusCode   int                  `json:"status_code,omitempty"`
+	ResponseTime int64                `json:"response_time_ms,omitempty"`
+	ClientID     string               `json:"client_id,omitempty"`
+	ApplicationID uint               `json:"application_id,omitempty"`
+	RiskScore    float64              `json:"risk_score,omitempty"`
+	ThreatLevel  string               `json:"threat_level,omitempty"`
+}
+
+type EnhancedLogFormat struct {
+	FormatVersion string                 `json:"format_version"`
+	Timestamp     time.Time              `json:"timestamp"`
+	LogID         string                 `json:"log_id"`
+	CorrelationID string                 `json:"correlation_id,omitempty"`
+	Type          string                 `json:"type"`
+	Level         string                 `json:"level"`
+	Category      string                 `json:"category"`
+	SubCategory   string                 `json:"sub_category,omitempty"`
+	Message       string                 `json:"message"`
+	Description   string                 `json:"description,omitempty"`
+	Source        LogSource               `json:"source"`
+	Target        *LogTarget             `json:"target,omitempty"`
+	Context       map[string]interface{} `json:"context,omitempty"`
+	Tags          []string               `json:"tags,omitempty"`
+	StackTrace    string                 `json:"stack_trace,omitempty"`
+	Metrics       *LogMetrics            `json:"metrics,omitempty"`
 }
 
 type AuditLogQueryParams struct {
@@ -93,6 +142,90 @@ type AuditLogListResult struct {
 	PageSize   int                     `json:"page_size"`
 	TotalPages int                     `json:"total_pages"`
 	Logs       []StructuredAuditLog    `json:"logs"`
+}
+
+type LogSource struct {
+	Service     string `json:"service"`
+	Host        string `json:"host"`
+	IPAddress   string `json:"ip_address"`
+	ContainerID string `json:"container_id,omitempty"`
+	PodName     string `json:"pod_name,omitempty"`
+	Namespace   string `json:"namespace,omitempty"`
+	ProcessID   int    `json:"process_id,omitempty"`
+	ThreadID    int    `json:"thread_id,omitempty"`
+}
+
+type LogTarget struct {
+	Type         string `json:"type"`
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Owner        string `json:"owner,omitempty"`
+	Endpoint     string `json:"endpoint,omitempty"`
+	Database     string `json:"database,omitempty"`
+	Table        string `json:"table,omitempty"`
+	Operation    string `json:"operation,omitempty"`
+}
+
+type LogMetrics struct {
+	Duration     int64                `json:"duration_ms,omitempty"`
+	MemoryUsage  int64                `json:"memory_usage_bytes,omitempty"`
+	CPUUsage     float64              `json:"cpu_usage_percent,omitempty"`
+	NetworkIn    int64                `json:"network_in_bytes,omitempty"`
+	NetworkOut   int64                `json:"network_out_bytes,omitempty"`
+	DiskIO       int64                `json:"disk_io_bytes,omitempty"`
+	CacheHitRate float64              `json:"cache_hit_rate,omitempty"`
+	QueryCount   int                  `json:"query_count,omitempty"`
+	ErrorCount   int                  `json:"error_count,omitempty"`
+	WarningCount int                  `json:"warning_count,omitempty"`
+}
+
+type LogSearchParams struct {
+	Page              int
+	PageSize          int
+	Query             string
+	FullTextSearch    bool
+	Filters           map[string]interface{}
+	DateRange         *DateRange
+	LogLevels         []string
+	LogCategories     []string
+	Services          []string
+	Hosts             []string
+	Tags              []string
+	SortBy            string
+	SortOrder         string
+	GroupBy           string
+	AggregateFunction string
+	TimeAggregation   string
+}
+
+type DateRange struct {
+	Start time.Time
+	End   time.Time
+}
+
+type SearchResult struct {
+	Total            int64                `json:"total"`
+	Page             int                  `json:"page"`
+	PageSize         int                  `json:"page_size"`
+	TotalPages       int                  `json:"total_pages"`
+	Results          []EnhancedLogFormat  `json:"results"`
+	Aggregations     map[string]interface{} `json:"aggregations,omitempty"`
+	Highlights       []SearchHighlight   `json:"highlights,omitempty"`
+	SearchTimeMs     int64                `json:"search_time_ms"`
+	TotalMatched     int64                `json:"total_matched"`
+}
+
+type SearchHighlight struct {
+	LogID    string            `json:"log_id"`
+	Field    string            `json:"field"`
+	Fragment string            `json:"fragment"`
+	Matches  []HighlightMatch `json:"matches,omitempty"`
+}
+
+type HighlightMatch struct {
+	Start  int
+	End    int
+	Text   string
 }
 
 type LogService struct{}
@@ -724,4 +857,370 @@ func (s *LogService) GetLogCountByDateRange(start, end time.Time) (int64, error)
 		Where("created_at >= ? AND created_at < ?", start, end).
 		Count(&count).Error
 	return count, err
+}
+
+func (s *LogService) CreateEnhancedLog(log *EnhancedLogFormat) error {
+	if log.LogID == "" {
+		log.LogID = fmt.Sprintf("log-%d-%s", time.Now().UnixNano(), generateRandomString(8))
+	}
+	if log.FormatVersion == "" {
+		log.FormatVersion = "1.0"
+	}
+
+	auditLog := &models.AuditLog{
+		LogType:      AuditLogType(log.Type),
+		Level:        AuditLogLevel(log.Level),
+		Action:       log.Message,
+		Status:       "success",
+		Metadata:     fmt.Sprintf(`{"category":"%s","sub_category":"%s","tags":"%v"}`, log.Category, log.SubCategory, log.Tags),
+	}
+
+	if log.Source.Service != "" {
+		auditLog.Username = log.Source.Service
+	}
+	if log.Source.IPAddress != "" {
+		auditLog.IPAddress = log.Source.IPAddress
+	}
+
+	return database.DB.Create(auditLog).Error
+}
+
+func (s *LogService) SearchLogs(params LogSearchParams) (*SearchResult, error) {
+	startTime := time.Now()
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PageSize < 1 || params.PageSize > 100 {
+		params.PageSize = 20
+	}
+
+	query := database.DB.Model(&models.AuditLog{})
+
+	if params.Query != "" {
+		if params.FullTextSearch {
+			searchPattern := "%" + params.Query + "%"
+			query = query.Where(
+				"action LIKE ? OR username LIKE ? OR error_message LIKE ? OR metadata LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern,
+			)
+		} else {
+			query = query.Where(
+				"action LIKE ? OR username LIKE ?",
+				"%"+params.Query+"%", "%"+params.Query+"%",
+			)
+		}
+	}
+
+	if len(params.LogLevels) > 0 {
+		query = query.Where("level IN ?", params.LogLevels)
+	}
+
+	if len(params.LogCategories) > 0 {
+		logTypeStrings := make([]string, len(params.LogCategories))
+		for i, cat := range params.LogCategories {
+			logTypeStrings[i] = cat
+		}
+		query = query.Where("log_type IN ?", logTypeStrings)
+	}
+
+	if params.DateRange != nil {
+		if !params.DateRange.Start.IsZero() {
+			query = query.Where("created_at >= ?", params.DateRange.Start)
+		}
+		if !params.DateRange.End.IsZero() {
+			query = query.Where("created_at < ?", params.DateRange.End)
+		}
+	}
+
+	if params.Filters != nil {
+		if userID, ok := params.Filters["user_id"].(uint); ok && userID > 0 {
+			query = query.Where("user_id = ?", userID)
+		}
+		if username, ok := params.Filters["username"].(string); ok && username != "" {
+			query = query.Where("username LIKE ?", "%"+username+"%")
+		}
+		if ipAddress, ok := params.Filters["ip_address"].(string); ok && ipAddress != "" {
+			query = query.Where("ip_address LIKE ?", "%"+ipAddress+"%")
+		}
+		if status, ok := params.Filters["status"].(string); ok && status != "" {
+			query = query.Where("status = ?", status)
+		}
+		if resourceType, ok := params.Filters["resource_type"].(string); ok && resourceType != "" {
+			query = query.Where("resource_type = ?", resourceType)
+		}
+		if resourceID, ok := params.Filters["resource_id"].(string); ok && resourceID != "" {
+			query = query.Where("resource_id = ?", resourceID)
+		}
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	sortBy := "created_at"
+	sortOrder := "DESC"
+	if params.SortBy != "" {
+		sortBy = params.SortBy
+	}
+	if params.SortOrder != "" {
+		sortOrder = params.SortOrder
+	}
+
+	var logs []models.AuditLog
+	offset := (params.Page - 1) * params.PageSize
+	if err := query.
+		Order(fmt.Sprintf("%s %s", sortBy, sortOrder)).
+		Offset(offset).
+		Limit(params.PageSize).
+		Find(&logs).Error; err != nil {
+		return nil, err
+	}
+
+	results := make([]EnhancedLogFormat, len(logs))
+	for i, log := range logs {
+		results[i] = s.convertToEnhancedFormat(log)
+	}
+
+	searchTime := time.Since(startTime).Milliseconds()
+	totalPages := int((total + int64(params.PageSize) - 1) / int64(params.PageSize))
+
+	return &SearchResult{
+		Total:        total,
+		Page:         params.Page,
+		PageSize:     params.PageSize,
+		TotalPages:   totalPages,
+		Results:      results,
+		SearchTimeMs: searchTime,
+		TotalMatched: total,
+	}, nil
+}
+
+func (s *LogService) convertToEnhancedFormat(log models.AuditLog) EnhancedLogFormat {
+	return EnhancedLogFormat{
+		FormatVersion: "1.0",
+		Timestamp:    log.CreatedAt,
+		LogID:        fmt.Sprintf("log-%d", log.ID),
+		Type:         log.LogType,
+		Level:        log.Level,
+		Category:     log.LogType,
+		Message:      log.Action,
+		Description: log.ErrorMessage,
+		Source: LogSource{
+			Service:   log.Username,
+			IPAddress: log.IPAddress,
+		},
+		Context: map[string]interface{}{
+			"user_id":       log.UserID,
+			"user_agent":    log.UserAgent,
+			"resource_type": log.ResourceType,
+			"resource_id":   log.ResourceID,
+			"session_id":    log.SessionID,
+		},
+	}
+}
+
+func (s *LogService) GetLogAggregations(groupBy string, startDate, endDate time.Time) (map[string]interface{}, error) {
+	query := database.DB.Model(&models.AuditLog{})
+
+	if !startDate.IsZero() {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if !endDate.IsZero() {
+		query = query.Where("created_at < ?", endDate)
+	}
+
+	aggregations := make(map[string]interface{})
+
+	switch groupBy {
+	case "level":
+		var results []struct {
+			Level string
+			Count int64
+		}
+		if err := query.Select("level, COUNT(*) as count").Group("level").Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		levelCounts := make(map[string]int64)
+		for _, r := range results {
+			levelCounts[r.Level] = r.Count
+		}
+		aggregations["by_level"] = levelCounts
+
+	case "log_type":
+		var results []struct {
+			LogType string
+			Count   int64
+		}
+		if err := query.Select("log_type, COUNT(*) as count").Group("log_type").Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		typeCounts := make(map[string]int64)
+		for _, r := range results {
+			typeCounts[r.LogType] = r.Count
+		}
+		aggregations["by_type"] = typeCounts
+
+	case "hour":
+		var results []struct {
+			Hour  int
+			Count int64
+		}
+		if err := query.Select("EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count").
+			Group("EXTRACT(HOUR FROM created_at)").
+			Order("hour").
+			Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		hourlyCounts := make(map[int]int64)
+		for _, r := range results {
+			hourlyCounts[r.Hour] = r.Count
+		}
+		aggregations["by_hour"] = hourlyCounts
+
+	case "date":
+		var results []struct {
+			Date  time.Time
+			Count int64
+		}
+		if err := query.Select("DATE(created_at) as date, COUNT(*) as count").
+			Group("DATE(created_at)").
+			Order("date DESC").
+			Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		dailyCounts := make(map[string]int64)
+		for _, r := range results {
+			dailyCounts[r.Date.Format("2006-01-02")] = r.Count
+		}
+		aggregations["by_date"] = dailyCounts
+
+	case "status":
+		var results []struct {
+			Status string
+			Count  int64
+		}
+		if err := query.Select("status, COUNT(*) as count").Group("status").Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		statusCounts := make(map[string]int64)
+		for _, r := range results {
+			statusCounts[r.Status] = r.Count
+		}
+		aggregations["by_status"] = statusCounts
+
+	case "user":
+		var results []struct {
+			Username string
+			Count    int64
+		}
+		if err := query.Select("username, COUNT(*) as count").
+			Where("username != ''").
+			Group("username").
+			Order("count DESC").
+			Limit(10).
+			Scan(&results).Error; err != nil {
+			return nil, err
+		}
+		userCounts := make(map[string]int64)
+		for _, r := range results {
+			userCounts[r.Username] = r.Count
+		}
+		aggregations["by_user"] = userCounts
+
+	default:
+		var total int64
+		if err := query.Count(&total).Error; err != nil {
+			return nil, err
+		}
+		aggregations["total"] = total
+	}
+
+	return aggregations, nil
+}
+
+func (s *LogService) CreateStructuredLogWithMetrics(log *StructuredAuditLog, metrics *LogMetrics) error {
+	auditLog := &models.AuditLog{
+		LogType:      string(log.LogType),
+		Level:        string(log.Level),
+		UserID:       log.UserID,
+		Username:     log.Username,
+		IPAddress:    log.IPAddress,
+		UserAgent:    log.UserAgent,
+		Action:       log.Action,
+		ResourceType: log.ResourceType,
+		ResourceID:   log.ResourceID,
+		Status:       log.Status,
+		ErrorMessage: log.ErrorMessage,
+		Duration:     log.Duration,
+		SessionID:    log.SessionID,
+	}
+
+	if metrics != nil {
+		metadata := make(map[string]interface{})
+		if metrics.Duration > 0 {
+			metadata["duration_ms"] = metrics.Duration
+		}
+		if metrics.MemoryUsage > 0 {
+			metadata["memory_usage_bytes"] = metrics.MemoryUsage
+		}
+		if metrics.CPUUsage > 0 {
+			metadata["cpu_usage_percent"] = metrics.CPUUsage
+		}
+		if metrics.ErrorCount > 0 {
+			metadata["error_count"] = metrics.ErrorCount
+		}
+		if metrics.WarningCount > 0 {
+			metadata["warning_count"] = metrics.WarningCount
+		}
+		metadataJSON, _ := json.Marshal(metadata)
+		auditLog.Metadata = string(metadataJSON)
+	}
+
+	return database.DB.Create(auditLog).Error
+}
+
+func (s *LogService) GetLogsByTraceID(traceID string) ([]StructuredAuditLog, error) {
+	var logs []models.AuditLog
+	err := database.DB.Where("session_id = ?", traceID).
+		Order("created_at ASC").
+		Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	structuredLogs := make([]StructuredAuditLog, len(logs))
+	for i, log := range logs {
+		structuredLogs[i] = s.convertToStructuredLog(log)
+	}
+	return structuredLogs, nil
+}
+
+func (s *LogService) GetRecentLogs(limit int) ([]StructuredAuditLog, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	var logs []models.AuditLog
+	err := database.DB.Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	structuredLogs := make([]StructuredAuditLog, len(logs))
+	for i, log := range logs {
+		structuredLogs[i] = s.convertToStructuredLog(log)
+	}
+	return structuredLogs, nil
+}
+
+func generateRandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+	}
+	return string(b)
 }

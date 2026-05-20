@@ -44,6 +44,18 @@
 {% endblock %}
 
 {% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info alert-dismissible fade show" id="dashboardTip" style="display: none;">
+            <h5><i class="icon fas fa-info"></i> 使用提示</h5>
+            <span id="dashboardTipContent"></span>
+            <button type="button" class="close" data-dismiss="alert" aria-label="关闭">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-lg-3 col-6">
         <div class="small-box bg-info" data-counter="totalRequests" data-target="0">
@@ -61,7 +73,7 @@
             <div class="icon">
                 <i class="fas fa-shield-alt"></i>
             </div>
-            <a href="/admin/logs" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/logs" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
             <div class="overlay">
                 <i class="fas fa-sync fa-spin"></i>
             </div>
@@ -83,7 +95,7 @@
             <div class="icon">
                 <i class="fas fa-check-circle"></i>
             </div>
-            <a href="/admin/stats" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/stats" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
             <div class="overlay">
                 <i class="fas fa-sync fa-spin"></i>
             </div>
@@ -105,7 +117,7 @@
             <div class="icon">
                 <i class="fas fa-ban"></i>
             </div>
-            <a href="/admin/risk-rules" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/risk-rules" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
             <div class="overlay">
                 <i class="fas fa-sync fa-spin"></i>
             </div>
@@ -127,7 +139,7 @@
             <div class="icon">
                 <i class="fas fa-clock"></i>
             </div>
-            <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/monitoring" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
             <div class="overlay">
                 <i class="fas fa-sync fa-spin"></i>
             </div>
@@ -135,7 +147,7 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-lg-3 col-6">
         <div class="small-box bg-gradient-secondary">
             <div class="inner">
@@ -146,7 +158,7 @@
             <div class="icon">
                 <i class="fas fa-users"></i>
             </div>
-            <a href="/admin/applications" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/applications" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     <div class="col-lg-3 col-6">
@@ -159,7 +171,7 @@
             <div class="icon">
                 <i class="fas fa-mobile-alt"></i>
             </div>
-            <a href="/admin/applications" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/applications" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     <div class="col-lg-3 col-6">
@@ -172,7 +184,7 @@
             <div class="icon">
                 <i class="fas fa-tachometer-alt"></i>
             </div>
-            <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/monitoring" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     <div class="col-lg-3 col-6">
@@ -185,7 +197,7 @@
             <div class="icon">
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
-            <a href="/admin/logs" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="/admin/logs" class="small-box-footer" tabindex="0">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
 </div>
@@ -283,18 +295,18 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-8">
-        <div class="card card-primary">
+        <div class="card card-primary collapsed-card" id="trendChartCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>24小时趋势</h3>
                 <div class="card-tools">
-                    <div class="btn-group" role="group">
+                    <div class="btn-group" role="group" aria-label="时间范围选择">
                         <button type="button" class="btn btn-tool btn-sm active" data-period="hour">小时</button>
                         <button type="button" class="btn btn-tool btn-sm" data-period="day">天</button>
                     </div>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -304,12 +316,12 @@
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card card-success">
+        <div class="card card-success collapsed-card" id="pieChartCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-pie-chart mr-2"></i>风险分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -321,14 +333,14 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-4">
-        <div class="card card-info">
+        <div class="card card-info collapsed-card" id="captchaTypeCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>验证码类型分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -338,12 +350,12 @@
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card card-secondary">
+        <div class="card card-secondary collapsed-card" id="radarChartCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-broadcast-tower mr-2"></i>性能雷达图</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -353,12 +365,12 @@
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card card-dark">
+        <div class="card card-dark collapsed-card" id="geoChartCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-area mr-2"></i>地域分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -369,14 +381,14 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-6">
-        <div class="card card-danger">
+        <div class="card card-danger collapsed-card" id="heatmapCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-fire mr-2"></i>热力图 - 访问时段分析</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -386,12 +398,12 @@
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card card-warning">
+        <div class="card card-warning collapsed-card" id="stackChartCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-layer-group mr-2"></i>堆叠面积图 - 请求趋势</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -402,45 +414,47 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-6">
-        <div class="card card-info">
+        <div class="card card-info collapsed-card" id="recentVerificationsCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-history mr-2"></i>最近验证记录</h3>
                 <div class="card-tools">
                     <span class="badge badge-primary" id="liveIndicator"><i class="fas fa-circle text-success"></i> 实时</span>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
             <div class="card-body p-0">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>时间</th>
-                            <th>应用</th>
-                            <th>类型</th>
-                            <th>状态</th>
-                            <th>响应</th>
-                        </tr>
-                    </thead>
-                    <tbody id="recentVerifications">
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">加载中...</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" role="grid">
+                        <thead>
+                            <tr role="row">
+                                <th tabindex="0">时间</th>
+                                <th tabindex="0">应用</th>
+                                <th tabindex="0">类型</th>
+                                <th tabindex="0">状态</th>
+                                <th tabindex="0">响应</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentVerifications" aria-live="polite">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card card-success">
+        <div class="card card-success collapsed-card" id="appUsageCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>应用使用分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -451,21 +465,21 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-12">
-        <div class="card card-danger">
+        <div class="card card-danger collapsed-card" id="systemStatusCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-server mr-2"></i>系统状态</h3>
                 <div class="card-tools">
                     <span class="badge badge-success" id="wsStatus"><i class="fas fa-wifi mr-1"></i>已连接</span>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-3 col-sm-6 col-12">
+                    <div class="col-md-3 col-sm-6 col-12 mb-3">
                         <div class="info-box">
                             <span class="info-box-icon bg-success" id="dbStatus"><i class="fas fa-database"></i></span>
                             <div class="info-box-content">
@@ -474,7 +488,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3 col-sm-6 col-12">
+                    <div class="col-md-3 col-sm-6 col-12 mb-3">
                         <div class="info-box">
                             <span class="info-box-icon bg-success" id="redisStatus"><i class="fas fa-server"></i></span>
                             <div class="info-box-content">
@@ -483,7 +497,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3 col-sm-6 col-12">
+                    <div class="col-md-3 col-sm-6 col-12 mb-3">
                         <div class="info-box">
                             <span class="info-box-icon bg-success" id="apiStatus"><i class="fas fa-plug"></i></span>
                             <div class="info-box-content">
@@ -492,7 +506,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3 col-sm-6 col-12">
+                    <div class="col-md-3 col-sm-6 col-12 mb-3">
                         <div class="info-box">
                             <span class="info-box-icon bg-success" id="storageStatus"><i class="fas fa-hdd"></i></span>
                             <div class="info-box-content">
@@ -503,7 +517,7 @@
                     </div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-4">
+                    <div class="col-md-4 mb-3">
                         <p class="text-center">
                             <strong>CPU 使用率</strong>
                         </p>
@@ -512,7 +526,7 @@
                         </div>
                         <small id="cpuUsage">0%</small>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 mb-3">
                         <p class="text-center">
                             <strong>内存使用</strong>
                         </p>
@@ -521,7 +535,7 @@
                         </div>
                         <small id="memUsage">0%</small>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 mb-3">
                         <p class="text-center">
                             <strong>磁盘使用</strong>
                         </p>
@@ -536,22 +550,22 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-3">
     <div class="col-md-12">
-        <div class="card card-dark">
+        <div class="card card-dark collapsed-card" id="realtimeQPSCard">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-tachometer-alt mr-2"></i>实时QPS监控</h3>
                 <div class="card-tools">
                     <span class="text-muted" id="currentQPS">0 QPS</span>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="折叠/展开">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
             <div class="card-body">
                 <div id="realtimeChart" style="min-height: 200px; height: 200px;"></div>
                 <div class="chart-container" style="position: relative; height: 40vh; width: 80%; margin-top: 20px;">
-                    <canvas id="realtimeChartCanvas"></canvas>
+                    <canvas id="realtimeChartCanvas" role="img" aria-label="实时QPS趋势图"></canvas>
                 </div>
             </div>
         </div>
@@ -676,7 +690,19 @@
 <script src="/admin/static/js/dashboard-enhanced.js"></script>
 <script src="/admin/static/js/realtime-analytics.js"></script>
 <script>
+const dashboardTips = [
+    '提示：点击右上角的"刷新"按钮可手动更新所有数据',
+    '提示：支持导出CSV、Excel和JSON格式的数据报表',
+    '提示：点击图表卡片标题栏可折叠/展开详细视图',
+    '提示：使用时间范围切换按钮查看不同周期的数据趋势',
+    '提示：实时QPS监控每5秒自动更新一次',
+    '提示：点击风险分布饼图可查看详细风险分类',
+    '提示：系统状态卡片显示数据库、Redis、API服务的健康状态',
+    '提示：热力图展示了一周内各时段的访问量分布情况'
+];
+
 document.addEventListener('DOMContentLoaded', function() {
+    initDashboardTips();
     startRealTimeUpdates();
     
     function startRealTimeUpdates() {
@@ -685,6 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const response = await fetch('/api/v1/admin/stats/realtime');
                 const data = await response.json();
                 updateDashboard(data);
+                updateDashboardTip();
             } catch (error) {
                 console.error('实时数据更新失败:', error);
             }
@@ -715,6 +742,29 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             window.chartInstance.update('none');
+        }
+    }
+    
+    function initDashboardTips() {
+        const tipEl = document.getElementById('dashboardTip');
+        const tipContent = document.getElementById('dashboardTipContent');
+        if (tipEl && tipContent) {
+            const randomTip = dashboardTips[Math.floor(Math.random() * dashboardTips.length)];
+            tipContent.textContent = randomTip;
+            tipEl.style.display = 'block';
+            setTimeout(() => {
+                tipEl.classList.add('show');
+            }, 500);
+        }
+    }
+    
+    function updateDashboardTip() {
+        if (Math.random() < 0.1) {
+            const tipContent = document.getElementById('dashboardTipContent');
+            if (tipContent) {
+                const randomTip = dashboardTips[Math.floor(Math.random() * dashboardTips.length)];
+                tipContent.textContent = randomTip;
+            }
         }
     }
 });

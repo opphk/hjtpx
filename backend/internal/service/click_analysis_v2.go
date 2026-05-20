@@ -600,3 +600,515 @@ func (c *ClickAnalysisV2) AnalyzeSessionPatterns(sessions [][]ClickDataV2) map[s
 
 	return sessionAnalysis
 }
+
+type EnhancedTimingAnalysis struct {
+	IntervalStatistics      IntervalStatistics
+	TrendAnalysis          TrendAnalysis
+	PatternDetection       PatternDetection
+	AnomalyScore           float64
+	HumanLikelihood        float64
+	Recommendations        []string
+}
+
+type IntervalStatistics struct {
+	Mean              float64
+	Median            float64
+	Mode              float64
+	StdDev            float64
+	CV                float64
+	Min               float64
+	Max               float64
+	Range             float64
+	Percentile25      float64
+	Percentile75      float64
+	Skewness          float64
+	Kurtosis          float64
+}
+
+type TrendAnalysis struct {
+	Slope            float64
+	Direction        string
+	Acceleration     float64
+	Deceleration     float64
+	IsAccelerating   bool
+	IsDecelerating   bool
+	TrendStrength    float64
+}
+
+type PatternDetection struct {
+	HasPeriodicPattern  bool
+	PeriodLength       float64
+	PeriodStrength     float64
+	PatternType        string
+	RepeatabilityScore float64
+}
+
+func (c *ClickAnalysisV2) AnalyzeTimingEnhanced(clicks []ClickDataV2) *EnhancedTimingAnalysis {
+	analysis := &EnhancedTimingAnalysis{
+		Recommendations: make([]string, 0),
+	}
+
+	if len(clicks) < 2 {
+		return analysis
+	}
+
+	intervals := c.extractIntervalsEnhanced(clicks)
+	if len(intervals) == 0 {
+		return analysis
+	}
+
+	analysis.IntervalStatistics = c.calculateIntervalStatistics(intervals)
+	analysis.TrendAnalysis = c.analyzeTrend(intervals)
+	analysis.PatternDetection = c.detectPatterns(intervals)
+	analysis.AnomalyScore = c.calculateAnomalyScoreEnhanced(analysis)
+	analysis.HumanLikelihood = c.calculateHumanLikelihood(analysis)
+
+	c.generateRecommendations(analysis)
+
+	return analysis
+}
+
+func (c *ClickAnalysisV2) extractIntervalsEnhanced(clicks []ClickDataV2) []float64 {
+	intervals := make([]float64, 0, len(clicks)-1)
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp.Sub(clicks[i-1].Timestamp).Milliseconds())
+		intervals = append(intervals, interval)
+	}
+	return intervals
+}
+
+func (c *ClickAnalysisV2) calculateIntervalStatistics(intervals []float64) IntervalStatistics {
+	if len(intervals) == 0 {
+		return IntervalStatistics{}
+	}
+
+	stats := IntervalStatistics{}
+
+	sorted := make([]float64, len(intervals))
+	copy(sorted, intervals)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j] < sorted[i] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	stats.Mean = calculateAverageV2(intervals)
+	stats.Median = sorted[len(sorted)/2]
+	if len(sorted)%2 == 0 && len(sorted) > 1 {
+		stats.Median = (sorted[len(sorted)/2-1] + sorted[len(sorted)/2]) / 2
+	}
+
+	frequency := make(map[float64]int)
+	maxFreq := 0
+	for _, v := range intervals {
+		rounded := math.Round(v/10) * 10
+		frequency[rounded]++
+		if frequency[rounded] > maxFreq {
+			maxFreq = frequency[rounded]
+			stats.Mode = rounded
+		}
+	}
+
+	stats.StdDev = standardDeviationV2(intervals)
+	if stats.Mean > 0 {
+		stats.CV = stats.StdDev / stats.Mean
+	}
+
+	stats.Min = sorted[0]
+	stats.Max = sorted[len(sorted)-1]
+	stats.Range = stats.Max - stats.Min
+
+	stats.Percentile25 = sorted[int(float64(len(sorted))*0.25)]
+	stats.Percentile75 = sorted[int(float64(len(sorted))*0.75)]
+
+	stats.Skewness = c.calculateSkewness(intervals, stats.Mean, stats.StdDev)
+	stats.Kurtosis = c.calculateKurtosis(intervals, stats.Mean, stats.StdDev)
+
+	return stats
+}
+
+func (c *ClickAnalysisV2) calculateSkewness(values []float64, mean, stdDev float64) float64 {
+	if len(values) < 3 || stdDev == 0 {
+		return 0
+	}
+
+	n := float64(len(values))
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 3)
+	}
+	return n / ((n - 1) * (n - 2)) * sum
+}
+
+func (c *ClickAnalysisV2) calculateKurtosis(values []float64, mean, stdDev float64) float64 {
+	if len(values) < 4 || stdDev == 0 {
+		return 0
+	}
+
+	n := float64(len(values))
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 4)
+	}
+	return (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3)) * sum
+}
+
+func (c *ClickAnalysisV2) analyzeTrend(intervals []float64) TrendAnalysis {
+	trend := TrendAnalysis{}
+
+	if len(intervals) < 3 {
+		trend.Direction = "insufficient_data"
+		return trend
+	}
+
+	n := float64(len(intervals))
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	for i, v := range intervals {
+		x := float64(i)
+		sumX += x
+		sumY += v
+		sumXY += x * v
+		sumX2 += x * x
+	}
+
+	denominator := n*sumX2 - sumX*sumX
+	if denominator != 0 {
+		trend.Slope = (n*sumXY - sumX*sumY) / denominator
+	}
+
+	if math.Abs(trend.Slope) < 0.1 {
+		trend.Direction = "stable"
+	} else if trend.Slope > 0 {
+		trend.Direction = "increasing"
+	} else {
+		trend.Direction = "decreasing"
+	}
+
+	trend.IsAccelerating = trend.Slope > 10
+	trend.IsDecelerating = trend.Slope < -10
+
+	trend.Acceleration = c.calculateAcceleration(intervals)
+	trend.Deceleration = c.calculateDeceleration(intervals)
+
+	if len(intervals) >= 2 {
+		firstHalf := intervals[:len(intervals)/2]
+		secondHalf := intervals[len(intervals)/2:]
+		firstMean := calculateAverageV2(firstHalf)
+		secondMean := calculateAverageV2(secondHalf)
+		if firstMean > 0 {
+			trend.TrendStrength = math.Abs(secondMean-firstMean) / firstMean
+		}
+	}
+
+	return trend
+}
+
+func (c *ClickAnalysisV2) calculateAcceleration(intervals []float64) float64 {
+	if len(intervals) < 3 {
+		return 0
+	}
+
+	var totalAccel float64
+	for i := 2; i < len(intervals); i++ {
+		accel := (intervals[i] - intervals[i-1]) - (intervals[i-1] - intervals[i-2])
+		totalAccel += accel
+	}
+	return totalAccel / float64(len(intervals)-2)
+}
+
+func (c *ClickAnalysisV2) calculateDeceleration(intervals []float64) float64 {
+	return -c.calculateAcceleration(intervals)
+}
+
+func (c *ClickAnalysisV2) detectPatterns(intervals []float64) PatternDetection {
+	pattern := PatternDetection{}
+
+	if len(intervals) < 4 {
+		pattern.PatternType = "insufficient_data"
+		return pattern
+	}
+
+	periodicity := c.detectPeriodicity(intervals)
+	pattern.PeriodLength = periodicity.PeriodLength
+	pattern.PeriodStrength = periodicity.Strength
+	pattern.HasPeriodicPattern = periodicity.Strength > 0.6
+
+	if pattern.HasPeriodicPattern {
+		pattern.PatternType = "periodic"
+		pattern.RepeatabilityScore = pattern.PeriodStrength
+	} else {
+		pattern.PatternType = c.classifyIntervalPattern(intervals)
+		pattern.RepeatabilityScore = c.calculateRepeatability(intervals)
+	}
+
+	return pattern
+}
+
+type PeriodicityResult struct {
+	PeriodLength float64
+	Strength     float64
+}
+
+func (c *ClickAnalysisV2) detectPeriodicity(intervals []float64) PeriodicityResult {
+	result := PeriodicityResult{}
+
+	if len(intervals) < 4 {
+		return result
+	}
+
+	n := len(intervals)
+	maxLag := n / 2
+	if maxLag < 2 {
+		return result
+	}
+
+	maxCorrelation := 0.0
+	bestLag := 1
+
+	for lag := 1; lag <= maxLag; lag++ {
+		sumXY, sumX, sumY, sumX2, sumY2 := 0.0, 0.0, 0.0, 0.0, 0.0
+		count := 0
+		for i := 0; i < n-lag; i++ {
+			x := intervals[i]
+			y := intervals[i+lag]
+			sumXY += x * y
+			sumX += x
+			sumY += y
+			sumX2 += x * x
+			sumY2 += y * y
+			count++
+		}
+
+		if count == 0 {
+			continue
+		}
+
+		fCount := float64(count)
+		denominator := math.Sqrt((fCount*sumX2-sumX*sumX)*(fCount*sumY2-sumY*sumY)) + 0.0001
+		correlation := (fCount*sumXY - sumX*sumY) / denominator
+
+		if correlation > maxCorrelation {
+			maxCorrelation = correlation
+			bestLag = lag
+		}
+	}
+
+	result.PeriodLength = float64(bestLag)
+	result.Strength = math.Max(0, math.Min(1, maxCorrelation))
+
+	return result
+}
+
+func (c *ClickAnalysisV2) classifyIntervalPattern(intervals []float64) string {
+	if len(intervals) < 2 {
+		return "unknown"
+	}
+
+	stats := c.calculateIntervalStatistics(intervals)
+
+	if stats.CV < 0.1 {
+		return "mechanical"
+	} else if stats.CV < 0.3 {
+		return "regular"
+	} else if stats.CV < 0.6 {
+		return "variable"
+	} else {
+		return "chaotic"
+	}
+}
+
+func (c *ClickAnalysisV2) calculateRepeatability(intervals []float64) float64 {
+	if len(intervals) < 2 {
+		return 0
+	}
+
+	uniqueIntervals := make(map[float64]int)
+	for _, v := range intervals {
+		rounded := math.Round(v / 10)
+		uniqueIntervals[rounded]++
+	}
+
+	maxCount := 0
+	for _, count := range uniqueIntervals {
+		if count > maxCount {
+			maxCount = count
+		}
+	}
+
+	return float64(maxCount) / float64(len(intervals))
+}
+
+func (c *ClickAnalysisV2) calculateAnomalyScoreEnhanced(analysis *EnhancedTimingAnalysis) float64 {
+	score := 0.0
+
+	if analysis.IntervalStatistics.CV < 0.05 {
+		score += 0.3
+	}
+
+	if analysis.TrendAnalysis.IsAccelerating && analysis.TrendAnalysis.TrendStrength > 0.5 {
+		score += 0.2
+	}
+
+	if analysis.PatternDetection.HasPeriodicPattern && analysis.PatternDetection.PeriodStrength > 0.8 {
+		score += 0.25
+	}
+
+	if analysis.IntervalStatistics.Skewness > 2 || analysis.IntervalStatistics.Skewness < -2 {
+		score += 0.15
+	}
+
+	if analysis.IntervalStatistics.Kurtosis > 5 {
+		score += 0.15
+	}
+
+	return math.Min(score, 1.0)
+}
+
+func (c *ClickAnalysisV2) calculateHumanLikelihood(analysis *EnhancedTimingAnalysis) float64 {
+	likelihood := 1.0
+
+	likelihood -= math.Min(analysis.IntervalStatistics.CV*0.5, 0.3)
+
+	if analysis.TrendAnalysis.Direction == "stable" {
+		likelihood += 0.1
+	}
+
+	likelihood -= math.Min(analysis.PatternDetection.PeriodStrength*0.3, 0.3)
+
+	likelihood += math.Min(analysis.IntervalStatistics.Skewness*0.1, 0.1)
+	if math.Abs(analysis.IntervalStatistics.Skewness) > 1 {
+		likelihood -= 0.1
+	}
+
+	return math.Max(0, math.Min(likelihood, 1.0))
+}
+
+func (c *ClickAnalysisV2) generateRecommendations(analysis *EnhancedTimingAnalysis) {
+	if analysis.AnomalyScore > 0.5 {
+		analysis.Recommendations = append(analysis.Recommendations, "检测到异常时序模式，建议进行额外验证")
+	}
+
+	if analysis.IntervalStatistics.CV < 0.1 {
+		analysis.Recommendations = append(analysis.Recommendations, "点击间隔过于规律，可能为机器行为")
+	}
+
+	if analysis.PatternDetection.HasPeriodicPattern && analysis.PatternDetection.PeriodStrength > 0.7 {
+		analysis.Recommendations = append(analysis.Recommendations, "检测到周期性模式，建议增加验证难度")
+	}
+
+	if analysis.HumanLikelihood > 0.7 {
+		analysis.Recommendations = append(analysis.Recommendations, "时序特征符合人类行为模式")
+	}
+}
+
+func (c *ClickAnalysisV2) DetectAbnormalClickPatterns(clicks []ClickDataV2) []AbnormalPattern {
+	patterns := make([]AbnormalPattern, 0)
+
+	if len(clicks) < 2 {
+		return patterns
+	}
+
+	intervals := c.extractIntervalsEnhanced(clicks)
+	if len(intervals) == 0 {
+		return patterns
+	}
+
+	if c.isMechanicalPattern(intervals) {
+		patterns = append(patterns, AbnormalPattern{
+			Type:        "mechanical",
+			Severity:    "high",
+			Description: "检测到机械般规律的点击间隔",
+			Score:       0.9,
+		})
+	}
+
+	if c.isTooFastPattern(intervals) {
+		patterns = append(patterns, AbnormalPattern{
+			Type:        "too_fast",
+			Severity:    "high",
+			Description: "点击速度异常快",
+			Score:       0.85,
+		})
+	}
+
+	if c.isSynchronizedPattern(clicks) {
+		patterns = append(patterns, AbnormalPattern{
+			Type:        "synchronized",
+			Severity:    "medium",
+			Description: "检测到同步点击模式",
+			Score:       0.7,
+		})
+	}
+
+	if c.isFixedPositionPattern(clicks) {
+		patterns = append(patterns, AbnormalPattern{
+			Type:        "fixed_position",
+			Severity:    "medium",
+			Description: "点击位置固定",
+			Score:       0.65,
+		})
+	}
+
+	return patterns
+}
+
+type AbnormalPattern struct {
+	Type        string
+	Severity    string
+	Description string
+	Score       float64
+}
+
+func (c *ClickAnalysisV2) isMechanicalPattern(intervals []float64) bool {
+	if len(intervals) < 3 {
+		return false
+	}
+
+	stats := c.calculateIntervalStatistics(intervals)
+	return stats.CV < 0.05 && stats.StdDev < 20
+}
+
+func (c *ClickAnalysisV2) isTooFastPattern(intervals []float64) bool {
+	if len(intervals) == 0 {
+		return false
+	}
+
+	avgInterval := calculateAverageV2(intervals)
+	return avgInterval < 100
+}
+
+func (c *ClickAnalysisV2) isSynchronizedPattern(clicks []ClickDataV2) bool {
+	if len(clicks) < 2 {
+		return false
+	}
+
+	syncCount := 0
+	for i := 1; i < len(clicks); i++ {
+		diff := math.Abs(float64(clicks[i].Timestamp.Sub(clicks[i-1].Timestamp).Milliseconds()))
+		if diff < 50 {
+			syncCount++
+		}
+	}
+
+	return float64(syncCount)/float64(len(clicks)-1) > 0.5
+}
+
+func (c *ClickAnalysisV2) isFixedPositionPattern(clicks []ClickDataV2) bool {
+	if len(clicks) < 3 {
+		return false
+	}
+
+	xValues := make([]float64, len(clicks))
+	yValues := make([]float64, len(clicks))
+	for i, click := range clicks {
+		xValues[i] = click.X
+		yValues[i] = click.Y
+	}
+
+	xVariance := calculateVarianceV2(xValues, calculateAverageV2(xValues))
+	yVariance := calculateVarianceV2(yValues, calculateAverageV2(yValues))
+
+	return xVariance < 25 && yVariance < 25
+}

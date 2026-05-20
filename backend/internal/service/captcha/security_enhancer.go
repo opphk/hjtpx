@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -622,6 +623,518 @@ func (e *ClickCaptchaSecurityEnhancer) detectAnomalyIndicators(clicks []ClickPoi
 	}
 	
 	return indicators
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+type AntiScrapingProtector struct {
+	enableRateLimiting     bool
+	enableIPValidation     bool
+	enableFingerprintCheck bool
+	enableRequestValidation bool
+	maxRequestsPerMinute   int
+	blockDuration         time.Duration
+}
+
+type ScrapingProtectionResult struct {
+	IsBlocked          bool
+	BlockReason       string
+	RemainingRequests int
+	ResetTime         time.Time
+	RiskLevel         string
+	Recommendations   []string
+}
+
+func NewAntiScrapingProtector() *AntiScrapingProtector {
+	return &AntiScrapingProtector{
+		enableRateLimiting:     true,
+		enableIPValidation:     true,
+		enableFingerprintCheck: true,
+		enableRequestValidation: true,
+		maxRequestsPerMinute:   30,
+		blockDuration:         5 * time.Minute,
+	}
+}
+
+func (protector *AntiScrapingProtector) CheckRequest(ip string, fingerprint string, userAgent string) *ScrapingProtectionResult {
+	result := &ScrapingProtectionResult{
+		Recommendations: make([]string, 0),
+		RiskLevel:       "low",
+	}
+
+	if protector.enableIPValidation {
+		if protector.isSuspiciousIP(ip) {
+			result.IsBlocked = true
+			result.BlockReason = "suspicious_ip"
+			result.RiskLevel = "high"
+			result.Recommendations = append(result.Recommendations, "IP地址被标记为可疑")
+			return result
+		}
+	}
+
+	if protector.enableFingerprintCheck {
+		fingerprintRisk := protector.checkFingerprint(fingerprint)
+		if fingerprintRisk > 0.7 {
+			result.IsBlocked = true
+			result.BlockReason = "suspicious_fingerprint"
+			result.RiskLevel = "high"
+			result.Recommendations = append(result.Recommendations, "设备指纹异常")
+			return result
+		} else if fingerprintRisk > 0.4 {
+			result.RiskLevel = "medium"
+			result.Recommendations = append(result.Recommendations, "设备指纹存在轻微异常")
+		}
+	}
+
+	if protector.enableRequestValidation {
+		validationResult := protector.validateRequestPattern(ip, userAgent)
+		if !validationResult.IsValid {
+			result.IsBlocked = true
+			result.BlockReason = validationResult.Reason
+			result.RiskLevel = "high"
+			result.Recommendations = append(result.Recommendations, validationResult.Details)
+			return result
+		}
+
+		result.RemainingRequests = validationResult.RemainingRequests
+		result.ResetTime = validationResult.ResetTime
+	}
+
+	if result.RiskLevel == "low" {
+		result.Recommendations = append(result.Recommendations, "请求验证通过")
+	}
+
+	return result
+}
+
+func (protector *AntiScrapingProtector) isSuspiciousIP(ip string) bool {
+	suspiciousPatterns := []string{
+		"10.0.0.",
+		"192.168.",
+		"172.16.",
+		"127.0.0.",
+	}
+
+	for _, pattern := range suspiciousPatterns {
+		if len(ip) >= len(pattern) && ip[:len(pattern)] == pattern {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (protector *AntiScrapingProtector) checkFingerprint(fingerprint string) float64 {
+	if len(fingerprint) == 0 {
+		return 0.8
+	}
+
+	suspiciousIndicators := 0
+
+	if len(fingerprint) < 10 {
+		suspiciousIndicators++
+	}
+
+	hasDuplicateChars := false
+	charMap := make(map[rune]int)
+	for _, c := range fingerprint {
+		if charMap[c] > 0 {
+			hasDuplicateChars = true
+		}
+		charMap[c]++
+	}
+	if hasDuplicateChars && len(fingerprint) < 20 {
+		suspiciousIndicators++
+	}
+
+	knownPatterns := []string{
+		"undefined",
+		"null",
+		"unknown",
+		"fake",
+	}
+	for _, pattern := range knownPatterns {
+		if len(fingerprint) >= len(pattern) && fingerprint[:len(pattern)] == pattern {
+			suspiciousIndicators++
+			break
+		}
+	}
+
+	baseScore := float64(suspiciousIndicators) / 3.0
+
+	return math.Min(baseScore, 1.0)
+}
+
+type ValidationResult struct {
+	IsValid         bool
+	Reason         string
+	Details        string
+	RemainingRequests int
+	ResetTime      time.Time
+}
+
+func (protector *AntiScrapingProtector) validateRequestPattern(ip string, userAgent string) *ValidationResult {
+	result := &ValidationResult{
+		IsValid: true,
+	}
+
+	if len(userAgent) == 0 {
+		result.IsValid = false
+		result.Reason = "missing_user_agent"
+		result.Details = "缺少User-Agent头"
+		return result
+	}
+
+	knownBotPatterns := []string{
+		"curl",
+		"wget",
+		"python-requests",
+		"scrapy",
+		"bot",
+		"spider",
+		"crawler",
+	}
+
+	userAgentLower := strings.ToLower(userAgent)
+	for _, pattern := range knownBotPatterns {
+		if strings.Contains(userAgentLower, pattern) {
+			result.IsValid = false
+			result.Reason = "bot_user_agent"
+			result.Details = fmt.Sprintf("User-Agent包含已知的爬虫标识: %s", pattern)
+			return result
+		}
+	}
+
+	result.RemainingRequests = protector.maxRequestsPerMinute
+	result.ResetTime = time.Now().Add(time.Minute)
+
+	return result
+}
+
+type ImageWatermarkGenerator struct {
+	opacityRange       []float64
+	fontSizeRange     []int
+	positionStrategies []string
+}
+
+func NewImageWatermarkGenerator() *ImageWatermarkGenerator {
+	return &ImageWatermarkGenerator{
+		opacityRange:       []float64{0.05, 0.15},
+		fontSizeRange:     []int{10, 16},
+		positionStrategies: []string{"corners", "diagonal", "random"},
+	}
+}
+
+func (gen *ImageWatermarkGenerator) ApplyWatermark(img *image.RGBA, watermarkText string, strategy string) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	width := img.Bounds().Dx()
+	height := img.Bounds().Dy()
+
+	positions := gen.generateWatermarkPositions(width, height, strategy, watermarkText)
+
+	opacity := gen.opacityRange[0] + rand.Float64()*(gen.opacityRange[1]-gen.opacityRange[0])
+	fontSize := gen.fontSizeRange[0] + rand.Intn(gen.fontSizeRange[1]-gen.fontSizeRange[0])
+
+	for _, pos := range positions {
+		gen.drawWatermarkText(result, watermarkText, pos.x, pos.y, fontSize, opacity)
+	}
+
+	return result
+}
+
+type watermarkPosition struct {
+	x, y int
+}
+
+func (gen *ImageWatermarkGenerator) generateWatermarkPositions(width, height int, strategy string, text string) []watermarkPosition {
+	positions := make([]watermarkPosition, 0)
+
+	charWidth := 8
+	textWidth := len(text) * charWidth
+
+	switch strategy {
+	case "corners":
+		positions = append(positions, watermarkPosition{10, height - 25})
+		positions = append(positions, watermarkPosition{width - textWidth - 10, 10})
+	case "diagonal":
+		positions = append(positions, watermarkPosition{10, 10})
+		positions = append(positions, watermarkPosition{width - textWidth - 10, height - 25})
+	case "random":
+		positions = append(positions, watermarkPosition{
+			rand.Intn(width - textWidth - 20),
+			rand.Intn(height - 30),
+		})
+	default:
+		positions = append(positions, watermarkPosition{10, height - 25})
+	}
+
+	return positions
+}
+
+func (gen *ImageWatermarkGenerator) drawWatermarkText(img *image.RGBA, text string, x, y, size int, opacity float64) {
+	for i, char := range text {
+		charX := x + i*(size/2)
+		charY := y
+
+		if charX+size >= img.Bounds().Dx() || charY+size >= img.Bounds().Dy() {
+			continue
+		}
+
+		brightness := uint8(180 + rand.Intn(40))
+		watermarkColor := color.RGBA{
+			R: brightness,
+			G: brightness,
+			B: brightness,
+			A: uint8(opacity * 255),
+		}
+
+		gen.drawCharacter(img, char, charX, charY, size, watermarkColor)
+	}
+}
+
+func (gen *ImageWatermarkGenerator) drawCharacter(img *image.RGBA, char rune, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+				if gen.isCharPixel(int(char), dx, dy, size) {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (gen *ImageWatermarkGenerator) isCharPixel(charCode, px, py, size int) bool {
+	normalizedX := float64(px) / float64(size)
+	normalizedY := float64(py) / float64(size)
+
+	switch charCode {
+	case 'C':
+		return normalizedX < 0.3 || normalizedY < 0.2 || normalizedY > 0.8
+	case 'A':
+		return normalizedX < 0.2 || normalizedX > 0.8 || (normalizedY > 0.4 && normalizedY < 0.6)
+	case 'P':
+		return normalizedX < 0.2 || (normalizedY < 0.5 && normalizedX < 0.7)
+	case 'T':
+		return normalizedY < 0.2 || (normalizedX > 0.3 && normalizedX < 0.7)
+	case 'H':
+		return normalizedX < 0.2 || normalizedX > 0.8 || (normalizedY > 0.4 && normalizedY < 0.6)
+	default:
+		return px+py < size
+	}
+}
+
+type VerificationSecurityEnhancer struct {
+	enableAdvancedChecks     bool
+	enableEntropyAnalysis    bool
+	enablePatternMatching    bool
+	minEntropyThreshold      float64
+	maxPatternSimilarity     float64
+}
+
+func NewVerificationSecurityEnhancer() *VerificationSecurityEnhancer {
+	return &VerificationSecurityEnhancer{
+		enableAdvancedChecks:     true,
+		enableEntropyAnalysis:    true,
+		enablePatternMatching:    true,
+		minEntropyThreshold:      3.5,
+		maxPatternSimilarity:     0.85,
+	}
+}
+
+type SecurityEnhancementResult struct {
+	OverallRiskScore    float64
+	EntropyScore        float64
+	PatternRiskScore   float64
+	AnomalyIndicators  []string
+	IsSecure           bool
+	Recommendations     []string
+}
+
+func (enhancer *VerificationSecurityEnhancer) AnalyzeSecurity(verificationData map[string]interface{}) *SecurityEnhancementResult {
+	result := &SecurityEnhancementResult{
+		AnomalyIndicators: make([]string, 0),
+		Recommendations:    make([]string, 0),
+	}
+
+	if enhancer.enableEntropyAnalysis {
+		result.EntropyScore = enhancer.calculateEntropyScore(verificationData)
+		if result.EntropyScore < enhancer.minEntropyThreshold {
+			result.AnomalyIndicators = append(result.AnomalyIndicators, "熵值过低，可能存在模式重复")
+			result.OverallRiskScore += 0.3
+		}
+	}
+
+	if enhancer.enablePatternMatching {
+		result.PatternRiskScore = enhancer.detectPatternSimilarity(verificationData)
+		if result.PatternRiskScore > enhancer.maxPatternSimilarity {
+			result.AnomalyIndicators = append(result.AnomalyIndicators, "检测到高度相似的模式")
+			result.OverallRiskScore += 0.4
+		}
+	}
+
+	result.OverallRiskScore = math.Min(result.OverallRiskScore, 1.0)
+	result.IsSecure = result.OverallRiskScore < 0.5
+
+	if !result.IsSecure {
+		result.Recommendations = append(result.Recommendations, "验证存在安全风险，建议拒绝")
+	} else {
+		result.Recommendations = append(result.Recommendations, "验证通过安全检查")
+	}
+
+	return result
+}
+
+func (enhancer *VerificationSecurityEnhancer) calculateEntropyScore(data map[string]interface{}) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+
+	entropy := 0.0
+	totalSymbols := 0
+
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			totalSymbols += len(v)
+		case []byte:
+			totalSymbols += len(v)
+		case []int:
+			totalSymbols += len(v)
+		case []float64:
+			totalSymbols += len(v)
+		}
+
+		entropy += enhancer.calculateStringEntropy(key)
+	}
+
+	if totalSymbols > 0 {
+		entropy /= float64(totalSymbols)
+	}
+
+	return entropy
+}
+
+func (enhancer *VerificationSecurityEnhancer) calculateStringEntropy(s string) float64 {
+	if len(s) == 0 {
+		return 0
+	}
+
+	frequency := make(map[rune]int)
+	for _, c := range s {
+		frequency[c]++
+	}
+
+	entropy := 0.0
+	n := float64(len(s))
+
+	for _, count := range frequency {
+		p := float64(count) / n
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (enhancer *VerificationSecurityEnhancer) detectPatternSimilarity(data map[string]interface{}) float64 {
+	patterns := make([]string, 0)
+
+	for key, value := range data {
+		pattern := fmt.Sprintf("%s:%v", key, enhancer.normalizeValue(value))
+		patterns = append(patterns, pattern)
+	}
+
+	if len(patterns) < 2 {
+		return 0
+	}
+
+	similarityCount := 0
+	for i := 0; i < len(patterns); i++ {
+		for j := i + 1; j < len(patterns); j++ {
+			if enhancer.calculateStringSimilarity(patterns[i], patterns[j]) > 0.8 {
+				similarityCount++
+			}
+		}
+	}
+
+	maxComparisons := (len(patterns) * (len(patterns) - 1)) / 2
+	if maxComparisons == 0 {
+		return 0
+	}
+
+	return float64(similarityCount) / float64(maxComparisons)
+}
+
+func (enhancer *VerificationSecurityEnhancer) calculateStringSimilarity(s1, s2 string) float64 {
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0
+	}
+
+	longer := s1
+	shorter := s2
+	if len(s1) < len(s2) {
+		longer = s2
+		shorter = s1
+	}
+
+	longerLength := float64(len(longer))
+	return (longerLength - float64(enhancer.levenshteinDistance(longer, shorter))) / longerLength
+}
+
+func (enhancer *VerificationSecurityEnhancer) levenshteinDistance(s1, s2 string) int {
+	runes1 := []rune(s1)
+	runes2 := []rune(s2)
+
+	matrix := make([][]int, len(runes1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(runes2)+1)
+	}
+
+	for i := range runes1 {
+		matrix[i][0] = i
+	}
+	for j := range runes2 {
+		matrix[0][j] = j
+	}
+
+	for i := 1; i <= len(runes1); i++ {
+		for j := 1; j <= len(runes2); j++ {
+			cost := 0
+			if runes1[i-1] != runes2[j-1] {
+				cost = 1
+			}
+			matrix[i][j] = min(
+				matrix[i-1][j]+1,
+				min(matrix[i][j-1]+1, matrix[i-1][j-1]+cost),
+			)
+		}
+	}
+
+	return matrix[len(runes1)][len(runes2)]
+}
+
+func (enhancer *VerificationSecurityEnhancer) normalizeValue(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case int:
+		return fmt.Sprintf("%d", v)
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case float64:
+		return fmt.Sprintf("%.2f", v)
+	case bool:
+		return fmt.Sprintf("%t", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func init() {

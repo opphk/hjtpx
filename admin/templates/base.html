@@ -419,99 +419,117 @@
         </nav>
 
         <aside class="main-sidebar sidebar-dark-primary elevation-4" role="navigation" aria-label="侧边栏导航">
-            <a href="/admin/" class="brand-link" id="brand-link">
+            <a href="/admin/" class="brand-link" id="brand-link" aria-label="返回仪表盘首页">
                 <span class="brand-text font-weight-light" id="brand-text">HJTPX 管理后台</span>
             </a>
 
             <div class="sidebar">
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                        <li class="nav-item">
-                            <a href="/admin/" class="nav-link {% if request.path == '/admin/' %}active{% endif %}" aria-current="{% if request.path == '/admin/' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/" class="nav-link {% if request.path == '/admin/' %}active{% endif %}" aria-current="{% if request.path == '/admin/' %}page{% endif %}" aria-label="仪表盘 - 系统总览">
                                 <i class="nav-icon fas fa-tachometer-alt" aria-hidden="true"></i>
                                 <p>仪表盘</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/stats" class="nav-link {% if request.path == '/admin/stats' %}active{% endif %}" aria-current="{% if request.path == '/admin/stats' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/stats" class="nav-link {% if request.path == '/admin/stats' %}active{% endif %}" aria-current="{% if request.path == '/admin/stats' %}page{% endif %}" aria-label="统计分析 - 查看详细统计数据">
                                 <i class="nav-icon fas fa-chart-line" aria-hidden="true"></i>
                                 <p>统计分析</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/advanced-analytics" class="nav-link {% if request.path == '/admin/advanced-analytics' %}active{% endif %}" aria-current="{% if request.path == '/admin/advanced-analytics' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/advanced-analytics" class="nav-link {% if request.path == '/admin/advanced-analytics' %}active{% endif %}" aria-current="{% if request.path == '/admin/advanced-analytics' %}page{% endif %}" aria-label="高级分析 - 深度数据分析">
                                 <i class="nav-icon fas fa-chart-pie" aria-hidden="true"></i>
                                 <p>高级分析</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/applications" class="nav-link {% if request.path == '/admin/applications' %}active{% endif %}" aria-current="{% if request.path == '/admin/applications' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/applications" class="nav-link {% if request.path == '/admin/applications' %}active{% endif %}" aria-current="{% if request.path == '/admin/applications' %}page{% endif %}" aria-label="应用管理 - 管理已注册应用">
                                 <i class="nav-icon fas fa-mobile-alt" aria-hidden="true"></i>
                                 <p>应用管理</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/logs" class="nav-link {% if request.path == '/admin/logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/logs' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/logs" class="nav-link {% if request.path == '/admin/logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/logs' %}page{% endif %}" aria-label="日志查询 - 查看验证日志">
                                 <i class="nav-icon fas fa-clipboard-list" aria-hidden="true"></i>
                                 <p>日志查询</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/risk-rules" class="nav-link {% if request.path == '/admin/risk-rules' %}active{% endif %}" aria-current="{% if request.path == '/admin/risk-rules' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/risk-rules" class="nav-link {% if request.path == '/admin/risk-rules' %}active{% endif %}" aria-current="{% if request.path == '/admin/risk-rules' %}page{% endif %}" aria-label="风控规则 - 配置风险控制规则">
                                 <i class="nav-icon fas fa-shield-alt" aria-hidden="true"></i>
                                 <p>风控规则</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/blacklist" class="nav-link {% if request.path == '/admin/blacklist' %}active{% endif %}" aria-current="{% if request.path == '/admin/blacklist' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/blacklist" class="nav-link {% if request.path == '/admin/blacklist' %}active{% endif %}" aria-current="{% if request.path == '/admin/blacklist' %}page{% endif %}" aria-label="黑名单 - 管理黑名单用户">
                                 <i class="nav-icon fas fa-ban" aria-hidden="true"></i>
                                 <p>黑名单</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/monitoring" class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}" aria-current="{% if request.path == '/admin/monitoring' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/monitoring" class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}" aria-current="{% if request.path == '/admin/monitoring' %}page{% endif %}" aria-label="实时监控 - 监控系统运行状态">
                                 <i class="nav-icon fas fa-tachometer-alt" aria-hidden="true"></i>
                                 <p>实时监控</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/ab-testing" class="nav-link {% if request.path == '/admin/ab-testing' %}active{% endif %}" aria-current="{% if request.path == '/admin/ab-testing' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/ab-testing" class="nav-link {% if request.path == '/admin/ab-testing' %}active{% endif %}" aria-current="{% if request.path == '/admin/ab-testing' %}page{% endif %}" aria-label="A/B测试 - 验证策略测试">
                                 <i class="nav-icon fas fa-flask" aria-hidden="true"></i>
                                 <p>A/B测试</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/real-time-screen" class="nav-link {% if request.path == '/admin/real-time-screen' %}active{% endif %}" aria-current="{% if request.path == '/admin/real-time-screen' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/real-time-screen" class="nav-link {% if request.path == '/admin/real-time-screen' %}active{% endif %}" aria-current="{% if request.path == '/admin/real-time-screen' %}page{% endif %}" aria-label="实时大屏 - 数据可视化大屏">
                                 <i class="nav-icon fas fa-desktop" aria-hidden="true"></i>
                                 <p>实时大屏</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/notifications" class="nav-link {% if request.path == '/admin/notifications' %}active{% endif %}" aria-current="{% if request.path == '/admin/notifications' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/notifications" class="nav-link {% if request.path == '/admin/notifications' %}active{% endif %}" aria-current="{% if request.path == '/admin/notifications' %}page{% endif %}" aria-label="告警通知 - 管理告警通知">
                                 <i class="nav-icon fas fa-bell" aria-hidden="true"></i>
                                 <p>告警通知</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/audit-logs" class="nav-link {% if request.path == '/admin/audit-logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/audit-logs' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/audit-logs" class="nav-link {% if request.path == '/admin/audit-logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/audit-logs' %}page{% endif %}" aria-label="审计日志 - 查看操作审计">
                                 <i class="nav-icon fas fa-history" aria-hidden="true"></i>
                                 <p>审计日志</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}" aria-current="{% if request.path == '/admin/config' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}" aria-current="{% if request.path == '/admin/config' %}page{% endif %}" aria-label="系统配置 - 系统设置">
                                 <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
                                 <p>系统配置</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="/admin/whitelabel" class="nav-link {% if request.path == '/admin/whitelabel' %}active{% endif %}" aria-current="{% if request.path == '/admin/whitelabel' %}page{% endif %}">
+                        <li class="nav-item" role="menuitem">
+                            <a href="/admin/whitelabel" class="nav-link {% if request.path == '/admin/whitelabel' %}active{% endif %}" aria-current="{% if request.path == '/admin/whitelabel' %}page{% endif %}" aria-label="主题设置 - 自定义界面主题">
                                 <i class="nav-icon fas fa-palette" aria-hidden="true"></i>
                                 <p>主题设置</p>
                             </a>
                         </li>
                     </ul>
                 </nav>
+                
+                <div class="mt-4 p-3">
+                    <div class="card bg-dark">
+                        <div class="card-body p-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <span id="navHelpText">使用说明</span>
+                            </small>
+                            <div class="mt-2">
+                                <small class="text-muted" id="navHelpContent">
+                                    按 Tab 键在菜单间切换<br>
+                                    按 Enter 键进入菜单项<br>
+                                    点击右上角主题按钮切换模式
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
 

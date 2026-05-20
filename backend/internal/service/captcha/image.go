@@ -3,6 +3,7 @@ package captcha
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -105,7 +106,7 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 		}
 	}
 
-	bgType := rand.Intn(17)
+	bgType := rand.Intn(18)
 	switch bgType {
 	case 0:
 		g.drawGradientBackground(img)
@@ -140,7 +141,10 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 	case 15:
 		g.drawRadialTexture(img)
 	case 16:
-		g.drawEnhancedNoiseTexture(img)
+		g.drawEnhancedNoiseTexture(img, uint8(75+rand.Intn(65)), uint8(95+rand.Intn(55)), uint8(115+rand.Intn(45)))
+		g.applySubtleVignette(img)
+	case 17:
+		g.drawWaveTexture(img, uint8(85+rand.Intn(60)), uint8(105+rand.Intn(50)), uint8(125+rand.Intn(40)))
 	default:
 		g.drawGradientBackground(img)
 	}
@@ -1841,11 +1845,7 @@ func (g *ImageGenerator) drawRadialTexture(img *image.RGBA) {
 	g.applySubtleVignette(img)
 }
 
-func (g *ImageGenerator) drawEnhancedNoiseTexture(img *image.RGBA) {
-	baseR := uint8(75 + rand.Intn(65))
-	baseG := uint8(95 + rand.Intn(55))
-	baseB := uint8(115 + rand.Intn(45))
-
+func (g *ImageGenerator) drawEnhancedNoiseTexture(img *image.RGBA, baseR, baseG, baseB uint8) *image.RGBA {
 	octaves := 4
 	persistence := 0.5
 
@@ -1872,7 +1872,6 @@ func (g *ImageGenerator) drawEnhancedNoiseTexture(img *image.RGBA) {
 
 			combinedNoise := noise*0.7 + highFreqNoise*0.3
 
-			// Increase adjustment range for more variance
 			adjustment := combinedNoise*150 - 75
 
 			r := g.clampUint8(int(baseR) + int(adjustment))
@@ -1883,7 +1882,590 @@ func (g *ImageGenerator) drawEnhancedNoiseTexture(img *image.RGBA) {
 		}
 	}
 
-	g.applySubtleVignette(img)
+	return img
+}
+
+func (g *ImageGenerator) GeneratePointSelectCaptcha(targetCount int) (*PointSelectResult, error) {
+	if targetCount <= 0 {
+		targetCount = 4
+	}
+	if targetCount > 8 {
+		targetCount = 8
+	}
+
+	g.width = 400
+	g.height = 300
+
+	background := g.generatePointSelectBackground()
+
+	targets := g.generateTargets(background, targetCount)
+
+	for _, target := range targets {
+		g.drawTargetOnBackground(background, target)
+	}
+
+	background = g.applyAdvancedDistortion(background)
+
+	background = g.addEnhancedInterferenceLines(background)
+
+	background = g.addAdaptiveNoise(background)
+
+	background = g.addWatermark(background)
+
+	result := &PointSelectResult{
+		Background:     g.encodePNG(background),
+		Targets:        targets,
+		BackgroundHash: g.generateImageHash(background),
+	}
+
+	return result, nil
+}
+
+type PointSelectResult struct {
+	Background     []byte
+	Targets        []TargetArea
+	BackgroundHash string
+}
+
+type TargetArea struct {
+	X      int
+	Y      int
+	Width  int
+	Height int
+	Type   string
+	ID     int
+}
+
+func (g *ImageGenerator) generatePointSelectBackground() *image.RGBA {
+	img := rgbaPool.Get().(*image.RGBA)
+	bounds := img.Bounds()
+	if bounds.Dx() != g.width || bounds.Dy() != g.height {
+		*img = *image.NewRGBA(image.Rect(0, 0, g.width, g.height))
+	} else {
+		for y := 0; y < g.height; y++ {
+			for x := 0; x < g.width; x++ {
+				img.Set(x, y, color.RGBA{R: 0, G: 0, B: 0, A: 0})
+			}
+		}
+	}
+
+	bgType := rand.Intn(8)
+	switch bgType {
+	case 0:
+		g.drawGradientBackground(img)
+	case 1:
+		g.drawPatternBackground(img)
+	case 2:
+		g.drawSolidColorBackground(img)
+	case 3:
+		g.drawPerlinLikeNoise(img, uint8(80+rand.Intn(60)), uint8(100+rand.Intn(50)), uint8(120+rand.Intn(40)))
+	case 4:
+		g.drawWaveTexture(img, uint8(90+rand.Intn(50)), uint8(110+rand.Intn(40)), uint8(130+rand.Intn(30)))
+	case 5:
+		g.drawCellularTexture(img, uint8(75+rand.Intn(55)), uint8(95+rand.Intn(45)), uint8(115+rand.Intn(35)))
+	case 6:
+		g.drawEnhancedNoiseTexture(img, uint8(85+rand.Intn(55)), uint8(105+rand.Intn(45)), uint8(125+rand.Intn(35)))
+	case 7:
+		g.drawSpiralTexture(img)
+	default:
+		g.drawGradientBackground(img)
+	}
+
+	return img
+}
+
+func (g *ImageGenerator) generateTargets(bg *image.RGBA, count int) []TargetArea {
+	targets := make([]TargetArea, count)
+	targetTypes := []string{"circle", "square", "triangle", "star"}
+
+	margin := 40
+	availableWidth := g.width - 2*margin
+	availableHeight := g.height - 2*margin
+
+	gridCols := 4
+	gridRows := 3
+	cellWidth := availableWidth / gridCols
+	cellHeight := availableHeight / gridRows
+
+	usedCells := make(map[int]bool)
+
+	for i := 0; i < count; i++ {
+		targetType := targetTypes[rand.Intn(len(targetTypes))]
+
+		size := 30 + rand.Intn(20)
+		if size > cellWidth/2 {
+			size = cellWidth / 2
+		}
+		if size > cellHeight/2 {
+			size = cellHeight / 2
+		}
+
+		cellIdx := 0
+		attempts := 0
+		for {
+			cellIdx = rand.Intn(gridCols * gridRows)
+			if !usedCells[cellIdx] {
+				usedCells[cellIdx] = true
+				break
+			}
+			attempts++
+			if attempts > 100 {
+				cellIdx = rand.Intn(gridCols * gridRows)
+				break
+			}
+		}
+
+		col := cellIdx % gridCols
+		row := cellIdx / gridCols
+
+		baseX := margin + col*cellWidth + cellWidth/2
+		baseY := margin + row*cellHeight + cellHeight/2
+
+		offsetX := rand.Intn(cellWidth/2) - cellWidth/4
+		offsetY := rand.Intn(cellHeight/2) - cellHeight/4
+
+		targets[i] = TargetArea{
+			X:      baseX + offsetX,
+			Y:      baseY + offsetY,
+			Width:  size,
+			Height: size,
+			Type:   targetType,
+			ID:     i,
+		}
+	}
+
+	return targets
+}
+
+func (g *ImageGenerator) drawTargetOnBackground(img *image.RGBA, target TargetArea) {
+	brightness := 0.3 + rand.Float64()*0.2
+
+	halfW := target.Width / 2
+	halfH := target.Height / 2
+
+	switch target.Type {
+	case "circle":
+		for dy := -halfH; dy <= halfH; dy++ {
+			for dx := -halfW; dx <= halfW; dx++ {
+				if dx*dx+dy*dy <= halfW*halfH {
+					x, y := target.X+dx, target.Y+dy
+					if x >= 0 && x < g.width && y >= 0 && y < g.height {
+						p := img.RGBAAt(x, y)
+						factor := brightness
+						img.Set(x, y, color.RGBA{
+							R: g.clampUint8(int(float64(p.R)*factor)),
+							G: g.clampUint8(int(float64(p.G)*factor)),
+							B: g.clampUint8(int(float64(p.B)*factor)),
+							A: 255,
+						})
+					}
+				}
+			}
+		}
+	case "square":
+		for dy := -halfH; dy <= halfH; dy++ {
+			for dx := -halfW; dx <= halfW; dx++ {
+				x, y := target.X+dx, target.Y+dy
+				if x >= 0 && x < g.width && y >= 0 && y < g.height {
+					p := img.RGBAAt(x, y)
+					factor := brightness
+					img.Set(x, y, color.RGBA{
+						R: g.clampUint8(int(float64(p.R)*factor)),
+						G: g.clampUint8(int(float64(p.G)*factor)),
+						B: g.clampUint8(int(float64(p.B)*factor)),
+						A: 255,
+					})
+				}
+			}
+		}
+	case "triangle":
+		for dy := -halfH; dy <= halfH; dy++ {
+			width := halfW * (1 + float64(dy)/float64(halfH))
+			for dx := -int(width); dx <= int(width); dx++ {
+				x, y := target.X+dx, target.Y+dy
+				if x >= 0 && x < g.width && y >= 0 && y < g.height {
+					p := img.RGBAAt(x, y)
+					factor := brightness
+					img.Set(x, y, color.RGBA{
+						R: g.clampUint8(int(float64(p.R)*factor)),
+						G: g.clampUint8(int(float64(p.G)*factor)),
+						B: g.clampUint8(int(float64(p.B)*factor)),
+						A: 255,
+					})
+				}
+			}
+		}
+	case "star":
+		g.drawStar(img, target.X, target.Y, halfW, halfH, brightness)
+	}
+}
+
+func (g *ImageGenerator) drawStar(img *image.RGBA, cx, cy, outerR, innerR int, brightness float64) {
+	points := 5
+	for dy := -outerR; dy <= outerR; dy++ {
+		for dx := -outerR; dx <= outerR; dx++ {
+			dist := math.Sqrt(float64(dx*dx + dy*dy))
+			if dist <= float64(outerR) {
+				angle := math.Atan2(float64(dy), float64(dx))
+				starRadius := float64(innerR) + (float64(outerR)-float64(innerR))*(math.Cos(float64(points)*angle)+1)/2
+				if dist <= starRadius {
+					x, y := cx+dx, cy+dy
+					if x >= 0 && x < g.width && y >= 0 && y < g.height {
+						p := img.RGBAAt(x, y)
+						img.Set(x, y, color.RGBA{
+							R: g.clampUint8(int(float64(p.R) * brightness)),
+							G: g.clampUint8(int(float64(p.G) * brightness)),
+							B: g.clampUint8(int(float64(p.B) * brightness)),
+							A: 255,
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) applyAdvancedDistortion(img *image.RGBA) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	distortionStrength := 2.0 + rand.Float64()*2.0
+	distortionScale := 0.02 + rand.Float64()*0.03
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			offsetX := g.simplexNoise2D(float64(x)*distortionScale, float64(y)*distortionScale) * distortionStrength
+			offsetY := g.simplexNoise2D(float64(x)*distortionScale+100, float64(y)*distortionScale+100) * distortionStrength
+
+			srcX := int(float64(x) + offsetX)
+			srcY := int(float64(y) + offsetY)
+
+			if srcX < 0 {
+				srcX = 0
+			}
+			if srcX >= g.width {
+				srcX = g.width - 1
+			}
+			if srcY < 0 {
+				srcY = 0
+			}
+			if srcY >= g.height {
+				srcY = g.height - 1
+			}
+
+			p := img.RGBAAt(srcX, srcY)
+			result.Set(x, y, p)
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) addEnhancedInterferenceLines(img *image.RGBA) *image.RGBA {
+	lineCount := 8 + rand.Intn(8)
+
+	for i := 0; i < lineCount; i++ {
+		lineType := rand.Intn(4)
+		switch lineType {
+		case 0:
+			g.addStraightLine(img)
+		case 1:
+			g.addCurvedLine(img)
+		case 2:
+			g.addWavyLine(img)
+		case 3:
+			g.addBrokenLine(img)
+		}
+	}
+
+	return img
+}
+
+func (g *ImageGenerator) addStraightLine(img *image.RGBA) {
+	x1 := rand.Intn(g.width)
+	y1 := rand.Intn(g.height)
+	x2 := rand.Intn(g.width)
+	y2 := rand.Intn(g.height)
+
+	opacity := uint8(30 + rand.Intn(40))
+	lineColor := color.RGBA{
+		R: uint8(rand.Intn(256)),
+		G: uint8(rand.Intn(256)),
+		B: uint8(rand.Intn(256)),
+		A: opacity,
+	}
+
+	g.drawLine(img, x1, y1, x2, y2, lineColor)
+}
+
+func (g *ImageGenerator) addCurvedLine(img *image.RGBA) {
+	points := 5 + rand.Intn(5)
+	x := make([]int, points)
+	y := make([]int, points)
+
+	for i := 0; i < points; i++ {
+		x[i] = rand.Intn(g.width)
+		y[i] = rand.Intn(g.height)
+	}
+
+	opacity := uint8(25 + rand.Intn(35))
+	lineColor := color.RGBA{
+		R: uint8(rand.Intn(256)),
+		G: uint8(rand.Intn(256)),
+		B: uint8(rand.Intn(256)),
+		A: opacity,
+	}
+
+	for i := 0; i < points-1; i++ {
+		midX := (x[i] + x[i+1]) / 2
+		midY := (y[i] + y[i+1]) / 2
+		ctrlX := midX + rand.Intn(30) - 15
+		ctrlY := midY + rand.Intn(30) - 15
+		g.drawQuadraticCurve(img, x[i], y[i], ctrlX, ctrlY, x[i+1], y[i+1], lineColor)
+	}
+}
+
+func (g *ImageGenerator) drawQuadraticCurve(img *image.RGBA, x0, y0, cx, cy, x1, y1 int, c color.RGBA) {
+	steps := 20
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		mt := 1 - t
+
+		x := int(mt*mt*float64(x0) + 2*mt*t*float64(cx) + t*t*float64(x1))
+		y := int(mt*mt*float64(y0) + 2*mt*t*float64(cy) + t*t*float64(y1))
+
+		for dx := -1; dx <= 1; dx++ {
+			for dy := -1; dy <= 1; dy++ {
+				px, py := x+dx, y+dy
+				if px >= 0 && px < g.width && py >= 0 && py < g.height {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) addWavyLine(img *image.RGBA) {
+	startX := rand.Intn(g.width)
+	startY := rand.Intn(g.height)
+	length := 50 + rand.Intn(100)
+	amplitude := 5 + rand.Intn(15)
+	frequency := 0.1 + rand.Float64()*0.1
+
+	opacity := uint8(20 + rand.Intn(30))
+	lineColor := color.RGBA{
+		R: uint8(rand.Intn(256)),
+		G: uint8(rand.Intn(256)),
+		B: uint8(rand.Intn(256)),
+		A: opacity,
+	}
+
+	prevX, prevY := startX, startY
+	for i := 0; i < length; i++ {
+		newX := startX + i
+		offsetY := amplitude * math.Sin(float64(i)*frequency)
+		newY := int(float64(startY) + offsetY)
+
+		g.drawLine(img, prevX, prevY, newX, newY, lineColor)
+		prevX, prevY = newX, newY
+	}
+}
+
+func (g *ImageGenerator) addBrokenLine(img *image.RGBA) {
+	segments := 3 + rand.Intn(4)
+	x := make([]int, segments+1)
+	y := make([]int, segments+1)
+
+	x[0] = rand.Intn(g.width)
+	y[0] = rand.Intn(g.height)
+
+	for i := 1; i <= segments; i++ {
+		dx := rand.Intn(40) - 20
+		dy := rand.Intn(40) - 20
+		x[i] = x[i-1] + dx
+		y[i] = y[i-1] + dy
+
+		if x[i] < 0 {
+			x[i] = 0
+		}
+		if x[i] >= g.width {
+			x[i] = g.width - 1
+		}
+		if y[i] < 0 {
+			y[i] = 0
+		}
+		if y[i] >= g.height {
+			y[i] = g.height - 1
+		}
+	}
+
+	opacity := uint8(25 + rand.Intn(35))
+	lineColor := color.RGBA{
+		R: uint8(rand.Intn(256)),
+		G: uint8(rand.Intn(256)),
+		B: uint8(rand.Intn(256)),
+		A: opacity,
+	}
+
+	for i := 0; i < segments; i++ {
+		if rand.Float64() > 0.3 {
+			g.drawLine(img, x[i], y[i], x[i+1], y[i+1], lineColor)
+		}
+	}
+}
+
+func (g *ImageGenerator) addAdaptiveNoise(img *image.RGBA) *image.RGBA {
+	noiseIntensity := 15 + rand.Intn(15)
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			if rand.Float64() < 0.15 {
+				p := img.RGBAAt(x, y)
+				noise := int16(rand.Intn(noiseIntensity*2) - noiseIntensity)
+
+				img.Set(x, y, color.RGBA{
+					R: g.clampUint8(int(p.R) + int(noise)),
+					G: g.clampUint8(int(p.G) + int(noise)),
+					B: g.clampUint8(int(p.B) + int(noise)),
+					A: 255,
+				})
+			}
+		}
+	}
+
+	return img
+}
+
+func (g *ImageGenerator) addWatermark(img *image.RGBA) *image.RGBA {
+	watermarkText := "CAPTCHA"
+	fontSize := 12
+
+	positions := []struct{ x, y int }{
+		{10, g.height - 20},
+		{g.width - 60, 10},
+	}
+
+	for _, pos := range positions {
+		g.drawTextWatermark(img, watermarkText, pos.x, pos.y, fontSize)
+	}
+
+	return img
+}
+
+func (g *ImageGenerator) drawTextWatermark(img *image.RGBA, text string, x, y, size int) {
+	opacity := uint8(15 + rand.Intn(10))
+
+	for i, char := range text {
+		charX := x + i*size/2
+		charY := y
+
+		if charX+size >= g.width || charY+size >= g.height {
+			continue
+		}
+
+		brightness := uint8(150 + rand.Intn(50))
+		watermarkColor := color.RGBA{
+			R: brightness,
+			G: brightness,
+			B: brightness,
+			A: opacity,
+		}
+
+		switch char {
+		case 'C':
+			g.drawCChar(img, charX, charY, size, watermarkColor)
+		case 'A':
+			g.drawAChar(img, charX, charY, size, watermarkColor)
+		case 'P':
+			g.drawPChar(img, charX, charY, size, watermarkColor)
+		case 'T':
+			g.drawTChar(img, charX, charY, size, watermarkColor)
+		case 'H':
+			g.drawHChar(img, charX, charY, size, watermarkColor)
+		}
+	}
+}
+
+func (g *ImageGenerator) drawCChar(img *image.RGBA, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < g.width && py >= 0 && py < g.height {
+				if dx < size/3 || dy < size/4 || dy > size*3/4 {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) drawAChar(img *image.RGBA, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < g.width && py >= 0 && py < g.height {
+				if dy < size/2 {
+					if dx < size/4 || dx > size*3/4 {
+						img.Set(px, py, c)
+					}
+				} else {
+					if dx >= size/4 && dx <= size*3/4 {
+						img.Set(px, py, c)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) drawPChar(img *image.RGBA, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < g.width && py >= 0 && py < g.height {
+				if dx < size/4 || (dy < size/2 && (dx < size*3/4)) {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) drawTChar(img *image.RGBA, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < g.width && py >= 0 && py < g.height {
+				if dy < size/4 || dx >= size/4 && dx <= size*3/4 {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) drawHChar(img *image.RGBA, x, y, size int, c color.RGBA) {
+	for dy := 0; dy < size; dy++ {
+		for dx := 0; dx < size; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < g.width && py >= 0 && py < g.height {
+				if dx < size/4 || dx > size*3/4 || (dy >= size/2 && dx >= size/4 && dx <= size*3/4) {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func (g *ImageGenerator) generateImageHash(img *image.RGBA) string {
+	hash := 0
+	for y := 0; y < g.height; y += 10 {
+		for x := 0; x < g.width; x += 10 {
+			p := img.RGBAAt(x, y)
+			hash = hash*31 + int(p.R) + int(p.G)*7 + int(p.B)*13
+		}
+	}
+	return fmt.Sprintf("%x", hash)
 }
 
 func (g *ImageGenerator) applyMultiLayerShadowDetection(img *image.RGBA, gap image.Rectangle) *image.RGBA {

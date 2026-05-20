@@ -793,6 +793,134 @@ func (s *CanvasFingerprintService) CompareFingerprints(hash1, hash2 string) *mod
 	return comparison
 }
 
+func (s *CanvasFingerprintService) EnhancedCompareFingerprints(hash1, hash2 string, features1, features2 map[string]interface{}) *EnhancedCanvasComparison {
+	comparison := &EnhancedCanvasComparison{
+		Hash1:            hash1,
+		Hash2:            hash2,
+		BasicSimilarity:  s.calculateSimilarity(hash1, hash2),
+		CommonFeatures:   make([]string, 0),
+		DifferentFeatures: make([]string, 0),
+		SimilarityBreakdown: make(map[string]float64),
+		IsSameDevice:     false,
+		Confidence:       0.0,
+		WeightedSimilarity: 0.0,
+	}
+
+	comparison.analyzeFeatureDifferences(features1, features2)
+	comparison.calculateWeightedSimilarity()
+	comparison.determineDeviceMatch()
+
+	return comparison
+}
+
+func (s *CanvasFingerprintService) AnalyzeCanvasDifference(hash1, hash2 string) *CanvasDifferenceAnalysis {
+	analysis := &CanvasDifferenceAnalysis{
+		Hash1:      hash1,
+		Hash2:      hash2,
+		DiffMetrics: make([]CanvasDiffMetric, 0),
+	}
+
+	if len(hash1) != len(hash2) {
+		analysis.HasLengthDiff = true
+		analysis.LengthDiff = len(hash2) - len(hash1)
+		analysis.DiffMetrics = append(analysis.DiffMetrics, CanvasDiffMetric{
+			MetricType: "length",
+			Severity:   "medium",
+			Description: fmt.Sprintf("哈希长度不同: %d vs %d", len(hash1), len(hash2)),
+		})
+	}
+
+	hexDiffCount := 0
+	positionDiffs := make([]int, 0)
+	for i := 0; i < len(hash1) && i < len(hash2); i++ {
+		if hash1[i] != hash2[i] {
+			hexDiffCount++
+			positionDiffs = append(positionDiffs, i)
+		}
+	}
+
+	if hexDiffCount > 0 {
+		analysis.HasCharDiff = true
+		analysis.CharDiffCount = hexDiffCount
+		analysis.PositionDiffs = positionDiffs
+		analysis.DiffPercentage = float64(hexDiffCount) / float64(len(hash1)) * 100
+
+		severity := "low"
+		if analysis.DiffPercentage > 30 {
+			severity = "high"
+		} else if analysis.DiffPercentage > 15 {
+			severity = "medium"
+		}
+
+		analysis.DiffMetrics = append(analysis.DiffMetrics, CanvasDiffMetric{
+			MetricType: "character",
+			Severity:   severity,
+			Description: fmt.Sprintf("字符差异数: %d (%.2f%%)", hexDiffCount, analysis.DiffPercentage),
+		})
+	}
+
+	entropy1 := s.calculateStringEntropy(hash1)
+	entropy2 := s.calculateStringEntropy(hash2)
+	analysis.Entropy1 = entropy1
+	analysis.Entropy2 = entropy2
+	analysis.EntropyDiff = math.Abs(entropy1 - entropy2)
+
+	if analysis.EntropyDiff > 1.5 {
+		analysis.DiffMetrics = append(analysis.DiffMetrics, CanvasDiffMetric{
+			MetricType: "entropy",
+			Severity:   "high",
+			Description: fmt.Sprintf("熵值差异显著: %.2f vs %.2f", entropy1, entropy2),
+		})
+	}
+
+	pattern1 := s.detectHashPatterns(hash1)
+	pattern2 := s.detectHashPatterns(hash2)
+	analysis.Pattern1 = pattern1
+	analysis.Pattern2 = pattern2
+
+	for pattern, match := range pattern1 {
+		if pattern2[pattern] != match {
+			analysis.DiffMetrics = append(analysis.DiffMetrics, CanvasDiffMetric{
+				MetricType: "pattern",
+				Severity:   "medium",
+				Description: fmt.Sprintf("哈希模式差异: %s", pattern),
+			})
+		}
+	}
+
+	analysis.CalculateOverallSimilarity()
+
+	return analysis
+}
+
+func (s *CanvasFingerprintService) detectHashPatterns(hash string) map[string]bool {
+	patterns := make(map[string]bool)
+
+	hexOnly := true
+	for _, c := range hash {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			hexOnly = false
+			break
+		}
+	}
+	patterns["hex_only"] = hexOnly
+
+	uniqueRatio := float64(len(map[rune]bool(hash))) / float64(len(hash))
+	patterns["high_entropy"] = uniqueRatio > 0.8
+	patterns["low_entropy"] = uniqueRatio < 0.2
+
+	repeating := false
+	for i := 0; i < len(hash)-3; i++ {
+		if hash[i] == hash[i+1] && hash[i] == hash[i+2] && hash[i] == hash[i+3] {
+			repeating = true
+			break
+		}
+	}
+	patterns["has_repeating"] = repeating
+
+	return patterns
+}
+
 func (s *CanvasFingerprintService) calculateSimilarity(hash1, hash2 string) float64 {
 	if hash1 == hash2 {
 		return 100.0
@@ -814,6 +942,321 @@ func (s *CanvasFingerprintService) calculateSimilarity(hash1, hash2 string) floa
 	}
 
 	return float64(matches) / float64(len(hash1)) * 100.0
+}
+
+type EnhancedCanvasComparison struct {
+	Hash1              string            `json:"hash1"`
+	Hash2              string            `json:"hash2"`
+	BasicSimilarity    float64           `json:"basic_similarity"`
+	WeightedSimilarity float64           `json:"weighted_similarity"`
+	CommonFeatures     []string          `json:"common_features"`
+	DifferentFeatures  []string          `json:"different_features"`
+	SimilarityBreakdown map[string]float64 `json:"similarity_breakdown"`
+	IsSameDevice       bool              `json:"is_same_device"`
+	Confidence         float64           `json:"confidence"`
+	Recommendation     string            `json:"recommendation"`
+	RiskIndicators     []string          `json:"risk_indicators"`
+}
+
+func (c *EnhancedCanvasComparison) analyzeFeatureDifferences(features1, features2 map[string]interface{}) {
+	featureWeights := map[string]float64{
+		"text_fingerprint": 0.25,
+		"gradient_features": 0.15,
+		"bezier_features": 0.15,
+		"arc_features": 0.10,
+		"shadow_features": 0.10,
+		"composite_features": 0.15,
+	}
+
+	for featureName, weight := range featureWeights {
+		f1, ok1 := features1[featureName]
+		f2, ok2 := features2[featureName]
+
+		if !ok1 && !ok2 {
+			continue
+		}
+
+		if ok1 && ok2 {
+			if s, ok := f1.(*model.CanvasTextFingerprint); ok {
+				if s2, ok := f2.(*model.CanvasTextFingerprint); ok {
+					if s.TextHash == s2.TextHash {
+						c.CommonFeatures = append(c.CommonFeatures, featureName)
+						c.SimilarityBreakdown[featureName] = 100.0 * weight
+					} else {
+						c.DifferentFeatures = append(c.DifferentFeatures, featureName)
+						c.SimilarityBreakdown[featureName] = 0.0
+					}
+				}
+			} else if m1, ok := f1.(map[string]string); ok {
+				if m2, ok := f2.(map[string]string); ok {
+					matchCount := 0
+					totalCount := len(m1)
+					for k, v := range m1 {
+						if v2, ok := m2[k]; ok && v == v2 {
+							matchCount++
+						}
+					}
+					if totalCount > 0 {
+						similarity := float64(matchCount) / float64(totalCount) * 100.0
+						c.SimilarityBreakdown[featureName] = similarity * weight
+						if similarity > 80 {
+							c.CommonFeatures = append(c.CommonFeatures, featureName)
+						} else {
+							c.DifferentFeatures = append(c.DifferentFeatures, featureName)
+						}
+					}
+				}
+			}
+		} else {
+			c.DifferentFeatures = append(c.DifferentFeatures, featureName)
+			c.SimilarityBreakdown[featureName] = 0.0
+		}
+	}
+}
+
+func (c *EnhancedCanvasComparison) calculateWeightedSimilarity() {
+	c.WeightedSimilarity = c.BasicSimilarity
+
+	totalWeight := 0.0
+	for _, sim := range c.SimilarityBreakdown {
+		c.WeightedSimilarity += sim
+		totalWeight += 1.0
+	}
+
+	if totalWeight > 0 {
+		c.WeightedSimilarity = c.WeightedSimilarity / (1.0 + totalWeight)
+	}
+
+	c.WeightedSimilarity = math.Max(0, math.Min(100, c.WeightedSimilarity))
+}
+
+func (c *EnhancedCanvasComparison) determineDeviceMatch() {
+	threshold := 85.0
+
+	if c.WeightedSimilarity >= threshold {
+		c.IsSameDevice = true
+		c.Confidence = c.WeightedSimilarity / 100.0
+		c.Recommendation = "allow"
+	} else if c.WeightedSimilarity >= 70 {
+		c.Confidence = c.WeightedSimilarity / 100.0
+		c.Recommendation = "review"
+
+		if len(c.DifferentFeatures) > 2 {
+			c.RiskIndicators = append(c.RiskIndicators, "multiple_feature_mismatch")
+		}
+	} else {
+		c.Confidence = c.WeightedSimilarity / 100.0
+		c.Recommendation = "block"
+		c.RiskIndicators = append(c.RiskIndicators, "low_similarity")
+
+		if c.BasicSimilarity < 50 {
+			c.RiskIndicators = append(c.RiskIndicators, "hash_mismatch")
+		}
+	}
+
+	if len(c.CommonFeatures) < len(c.DifferentFeatures) && len(c.DifferentFeatures) > 2 {
+		c.RiskIndicators = append(c.RiskIndicators, "feature_imbalance")
+	}
+}
+
+type CanvasDifferenceAnalysis struct {
+	Hash1          string              `json:"hash1"`
+	Hash2          string              `json:"hash2"`
+	Similarity     float64             `json:"similarity"`
+	HasLengthDiff  bool                `json:"has_length_diff"`
+	LengthDiff     int                 `json:"length_diff"`
+	HasCharDiff    bool                `json:"has_char_diff"`
+	CharDiffCount  int                 `json:"char_diff_count"`
+	DiffPercentage float64             `json:"diff_percentage"`
+	PositionDiffs  []int               `json:"position_diffs"`
+	Entropy1       float64             `json:"entropy1"`
+	Entropy2       float64             `json:"entropy2"`
+	EntropyDiff    float64             `json:"entropy_diff"`
+	Pattern1       map[string]bool     `json:"pattern1"`
+	Pattern2       map[string]bool     `json:"pattern2"`
+	DiffMetrics    []CanvasDiffMetric  `json:"diff_metrics"`
+}
+
+type CanvasDiffMetric struct {
+	MetricType  string `json:"metric_type"`
+	Severity    string `json:"severity"`
+	Description string `json:"description"`
+}
+
+func (a *CanvasDifferenceAnalysis) CalculateOverallSimilarity() {
+	if len(a.Hash1) == 0 || len(a.Hash2) == 0 {
+		a.Similarity = 0.0
+		return
+	}
+
+	if len(a.Hash1) != len(a.Hash2) {
+		a.Similarity = 0.0
+		return
+	}
+
+	if !a.HasCharDiff {
+		a.Similarity = 100.0
+		return
+	}
+
+	a.Similarity = 100.0 - a.DiffPercentage
+}
+
+func (s *CanvasFingerprintService) GenerateCanvasFeatureVector(hash string, features map[string]interface{}) *CanvasFeatureVector {
+	vector := &CanvasFeatureVector{
+		HashComponents:  make([]string, 0),
+		NumericFeatures: make([]float64, 0),
+		TextFeatures:    make([]string, 0),
+		RenderFeatures:  make([]string, 0),
+	}
+
+	vector.HashComponents = append(vector.HashComponents, hash[:min(16, len(hash))])
+
+	entropy := s.calculateStringEntropy(hash)
+	vector.NumericFeatures = append(vector.NumericFeatures, entropy)
+
+	uniqueChars := len(map[rune]bool(hash))
+	vector.NumericFeatures = append(vector.NumericFeatures, float64(uniqueChars))
+
+	repeatScore := s.calculateRepeatScore(hash)
+	vector.NumericFeatures = append(vector.NumericFeatures, repeatScore)
+
+	if textFP, ok := features["text_fingerprint"].(*model.CanvasTextFingerprint); ok {
+		vector.TextFeatures = append(vector.TextFeatures, textFP.FontFamily)
+		vector.TextFeatures = append(vector.TextFeatures, fmt.Sprintf("size_%d", textFP.FontSize))
+	}
+
+	if gradientFeatures, ok := features["gradient_features"].(map[string]string); ok {
+		if hasGradient, ok := gradientFeatures["has_gradient"]; ok && hasGradient == "true" {
+			vector.RenderFeatures = append(vector.RenderFeatures, "gradient")
+		}
+	}
+
+	if bezierFeatures, ok := features["bezier_features"].(map[string]string); ok {
+		if hasBezier, ok := bezierFeatures["has_bezier"]; ok && hasBezier == "true" {
+			vector.RenderFeatures = append(vector.RenderFeatures, "bezier")
+		}
+	}
+
+	h := sha256.New()
+	h.Write([]byte(strings.Join(vector.HashComponents, "") + strings.Join(vector.TextFeatures, "")))
+	vector.FinalHash = hex.EncodeToString(h.Sum(nil))
+
+	return vector
+}
+
+func (s *CanvasFingerprintService) calculateRepeatScore(hash string) float64 {
+	if len(hash) < 2 {
+		return 0.0
+	}
+
+	repeats := 0
+	maxRepeatLen := 0
+	currentRepeatLen := 1
+
+	for i := 1; i < len(hash); i++ {
+		if hash[i] == hash[i-1] {
+			currentRepeatLen++
+			if currentRepeatLen > maxRepeatLen {
+				maxRepeatLen = currentRepeatLen
+			}
+		} else {
+			if currentRepeatLen > 1 {
+				repeats += currentRepeatLen - 1
+			}
+			currentRepeatLen = 1
+		}
+	}
+
+	if currentRepeatLen > 1 {
+		repeats += currentRepeatLen - 1
+	}
+
+	return float64(repeats) / float64(len(hash)) * 100.0
+}
+
+func (s *CanvasFingerprintService) DetectCanvasFingerprintSpoofing(originalFP, receivedFP string, features map[string]interface{}) *CanvasSpoofingDetection {
+	detection := &CanvasSpoofingDetection{
+		OriginalFingerprint: originalFP,
+		ReceivedFingerprint: receivedFP,
+		IsSpoofed:          false,
+		RiskScore:           0.0,
+		Indicators:          make([]string, 0),
+	}
+
+	if originalFP == "" || receivedFP == "" {
+		detection.RiskScore = 100.0
+		detection.Indicators = append(detection.Indicators, "missing_fingerprint_data")
+		detection.IsSpoofed = true
+		return detection
+	}
+
+	similarity := s.calculateSimilarity(originalFP, receivedFP)
+
+	if similarity < 30 {
+		detection.RiskScore += 50
+		detection.Indicators = append(detection.Indicators, "very_low_similarity")
+	}
+
+	if similarity < 60 {
+		detection.RiskScore += 25
+		detection.Indicators = append(detection.Indicators, "low_similarity")
+	}
+
+	entropy1 := s.calculateStringEntropy(originalFP)
+	entropy2 := s.calculateStringEntropy(receivedFP)
+
+	if math.Abs(entropy1-entropy2) > 2.0 {
+		detection.RiskScore += 15
+		detection.Indicators = append(detection.Indicators, "entropy_mismatch")
+	}
+
+	if len(features) == 0 {
+		detection.RiskScore += 10
+		detection.Indicators = append(detection.Indicators, "missing_features")
+	}
+
+	pattern1 := s.detectHashPatterns(originalFP)
+	pattern2 := s.detectHashPatterns(receivedFP)
+
+	for pattern, val1 := range pattern1 {
+		if val2, ok := pattern2[pattern]; ok && val1 != val2 {
+			detection.RiskScore += 5
+			detection.Indicators = append(detection.Indicators, fmt.Sprintf("pattern_mismatch_%s", pattern))
+		}
+	}
+
+	detection.RiskScore = math.Min(detection.RiskScore, 100)
+
+	if detection.RiskScore >= 70 {
+		detection.IsSpoofed = true
+	}
+
+	return detection
+}
+
+type CanvasSpoofingDetection struct {
+	OriginalFingerprint string   `json:"original_fingerprint"`
+	ReceivedFingerprint string   `json:"received_fingerprint"`
+	IsSpoofed          bool     `json:"is_spoofed"`
+	RiskScore          float64  `json:"risk_score"`
+	Indicators         []string `json:"indicators"`
+	Recommendation     string   `json:"recommendation"`
+}
+
+type CanvasFeatureVector struct {
+	HashComponents  []string  `json:"hash_components"`
+	NumericFeatures []float64 `json:"numeric_features"`
+	TextFeatures    []string  `json:"text_features"`
+	RenderFeatures  []string  `json:"render_features"`
+	FinalHash       string    `json:"final_hash"`
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (s *CanvasFingerprintService) DetectSpoofing(originalHash, receivedHash string, features map[string]interface{}) *model.CanvasAntiFingerprintResult {

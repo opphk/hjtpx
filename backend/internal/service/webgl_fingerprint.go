@@ -411,6 +411,276 @@ func (s *WebGLFingerprintService) analyzeExtensions(info *model.EnvInfo) []model
 	return extensions
 }
 
+func (s *WebGLFingerprintService) EnhancedWebGLAnalysis(info *model.EnvInfo) *EnhancedWebGLAnalysisResult {
+	result := &EnhancedWebGLAnalysisResult{
+		Success: true,
+		GPUAnalysis: &GPUAnalysisResult{
+			Vendor: info.WebGLVendor,
+			Renderer: info.WebGLRenderer,
+		},
+		FeatureAnalysis: make([]WebGLFeatureAnalysis, 0),
+		Anomalies: make([]WebGLAnomalyDetail, 0),
+		RiskScore: 0.0,
+		Recommendations: make([]string, 0),
+	}
+
+	result.analyzeGPUCapabilities(info)
+	result.analyzeRenderingFeatures(info)
+	result.detectWebGLAnomaliesEnhanced(info)
+	result.calculateOverallRiskScore()
+	result.generateRecommendations()
+
+	return result
+}
+
+func (s *WebGLFingerprintService) analyzeGPUCapabilities(info *model.EnvInfo) {
+	rendererLower := strings.ToLower(info.WebGLRenderer)
+	vendorLower := strings.ToLower(info.WebGLVendor)
+
+	result := &GPUAnalysisResult{
+		Vendor: info.WebGLVendor,
+		Renderer: info.WebGLRenderer,
+	}
+
+	result.IsHardware = !s.containsAny(rendererLower, s.config.SoftwareRenderers) &&
+		!s.containsAny(rendererLower, s.config.VirtualGPUs)
+
+	result.IsVirtual = s.containsAny(rendererLower, s.config.VirtualGPUs)
+
+	result.GPUFamily = s.extractGPUFamily(rendererLower)
+	result.GPUModel = s.extractGPUModel(rendererLower)
+
+	result.DriverVersion = s.extractDriverVersion(rendererLower)
+	result.MaxTextureSize = s.extractMaxTextureSize(info.Fingerprint)
+	result.MaxRenderbufferSize = s.extractMaxRenderbufferSize(info.Fingerprint)
+
+	result.SupportedExtensionsCount = s.countSupportedExtensions(info.Fingerprint)
+
+	result.HasPrecisionLoss = s.detectPrecisionLoss(info.Fingerprint)
+
+	result.Temperature = s.estimateGPUTemperature(result.GPUFamily)
+}
+
+func (s *WebGLFingerprintService) analyzeRenderingFeatures(info *model.EnvInfo) []WebGLFeatureAnalysis {
+	features := make([]WebGLFeatureAnalysis, 0)
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "WebGL2",
+		IsSupported: true,
+		Confidence: 0.95,
+		Details: "WebGL 2.0 context available",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "FloatTextures",
+		IsSupported: true,
+		Confidence: 0.90,
+		Details: "32-bit floating point textures supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "HalfFloatTextures",
+		IsSupported: true,
+		Confidence: 0.95,
+		Details: "16-bit floating point textures supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "DepthTextures",
+		IsSupported: true,
+		Confidence: 0.90,
+		Details: "Depth textures supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "InstancedDrawing",
+		IsSupported: true,
+		Confidence: 0.95,
+		Details: "Instanced drawing supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "MultipleBuffers",
+		IsSupported: true,
+		Confidence: 0.90,
+		Details: "Multiple render targets supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "3DTextures",
+		IsSupported: true,
+		Confidence: 0.85,
+		Details: "3D textures supported",
+	})
+
+	features = append(features, WebGLFeatureAnalysis{
+		FeatureName: "CompressedTextures",
+		IsSupported: true,
+		Confidence: 0.80,
+		Details: "Compressed textures supported",
+	})
+
+	return features
+}
+
+func (s *WebGLFingerprintService) detectWebGLAnomaliesEnhanced(info *model.EnvInfo) []WebGLAnomalyDetail {
+	anomalies := make([]WebGLAnomalyDetail, 0)
+
+	if info.WebGLRenderer == "" && info.WebGLVendor == "" {
+		anomalies = append(anomalies, WebGLAnomalyDetail{
+			Type: "missing_data",
+			Severity: "high",
+			Description: "WebGL完全缺失",
+			DetectionMethod: "empty_check",
+		})
+	}
+
+	if info.WebGLRenderer != "" {
+		rendererLower := strings.ToLower(info.WebGLRenderer)
+
+		if s.containsAny(rendererLower, []string{"fake", "mock", "test", "spoof"}) {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "suspicious_pattern",
+				Severity: "high",
+				Description: "渲染器名称包含可疑关键词",
+				DetectionMethod: "keyword_match",
+			})
+		}
+
+		if strings.Contains(rendererLower, "swiftshader") {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "software_renderer",
+				Severity: "medium",
+				Description: "检测到SwiftShader软件渲染器",
+				DetectionMethod: "renderer_pattern",
+			})
+		}
+
+		if strings.Contains(rendererLower, "llvmpipe") || strings.Contains(rendererLower, "mesa") {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "software_renderer",
+				Severity: "medium",
+				Description: "检测到开源软件渲染器",
+				DetectionMethod: "renderer_pattern",
+			})
+		}
+	}
+
+	if info.WebGLVendor != "" {
+		vendorLower := strings.ToLower(info.WebGLVendor)
+
+		if s.containsAny(vendorLower, []string{"fake", "mock", "test", "unknown", "none", "undefined", "null"}) {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "suspicious_vendor",
+				Severity: "high",
+				Description: "厂商名称包含可疑关键词",
+				DetectionMethod: "keyword_match",
+			})
+		}
+	}
+
+	if info.Fingerprint != "" {
+		extCount := s.countSupportedExtensions(info.Fingerprint)
+
+		if extCount == 0 {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "no_extensions",
+				Severity: "high",
+				Description: "WebGL扩展数量为零",
+				DetectionMethod: "extension_count",
+			})
+		} else if extCount < 5 {
+			anomalies = append(anomalies, WebGLAnomalyDetail{
+				Type: "few_extensions",
+				Severity: "medium",
+				Description: fmt.Sprintf("WebGL扩展数量异常少: %d", extCount),
+				DetectionMethod: "extension_count",
+			})
+		}
+	}
+
+	return anomalies
+}
+
+func (s *WebGLFingerprintService) containsAny(str string, list []string) bool {
+	strLower := strings.ToLower(str)
+	for _, item := range list {
+		if strings.Contains(strLower, strings.ToLower(item)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *WebGLFingerprintService) extractDriverVersion(renderer string) string {
+	re := regexp.MustCompile(`(\d+\.\d+(\.\d+)?)`)
+	matches := re.FindAllStringSubmatch(renderer, -1)
+	if len(matches) > 0 {
+		return matches[0][1]
+	}
+	return ""
+}
+
+func (s *WebGLFingerprintService) extractMaxTextureSize(metadata string) int {
+	if strings.Contains(metadata, "texture_size:") {
+		re := regexp.MustCompile(`texture_size:(\d+)`)
+		if match := re.FindStringSubmatch(metadata); len(match) > 1 {
+			size := 0
+			fmt.Sscanf(match[1], "%d", &size)
+			return size
+		}
+	}
+	return 4096
+}
+
+func (s *WebGLFingerprintService) extractMaxRenderbufferSize(metadata string) int {
+	if strings.Contains(metadata, "renderbuffer:") {
+		re := regexp.MustCompile(`renderbuffer:(\d+)`)
+		if match := re.FindStringSubmatch(metadata); len(match) > 1 {
+			size := 0
+			fmt.Sscanf(match[1], "%d", &size)
+			return size
+		}
+	}
+	return 4096
+}
+
+func (s *WebGLFingerprintService) countSupportedExtensions(metadata string) int {
+	if metadata == "" {
+		return 0
+	}
+	count := 0
+	extensionNames := []string{
+		"blend", "color_buffer", "depth", "texture", "float",
+		"half_float", "vertex_array", "instanced", "compressed",
+		"debug", "draw_buffers", "derivatives",
+	}
+	for _, ext := range extensionNames {
+		if strings.Contains(strings.ToLower(metadata), ext) {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *WebGLFingerprintService) detectPrecisionLoss(metadata string) bool {
+	if metadata == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(metadata), "precision_loss") ||
+		strings.Contains(strings.ToLower(metadata), "low_precision")
+}
+
+func (s *WebGLFingerprintService) estimateGPUTemperature(family string) string {
+	if strings.Contains(strings.ToLower(family), "nvidia") {
+		return "estimated_normal"
+	}
+	if strings.Contains(strings.ToLower(family), "intel") {
+		return "estimated_normal"
+	}
+	return "unknown"
+}
+
 func (s *WebGLFingerprintService) analyzeRenderingFeatures(info *model.EnvInfo) []model.WebGLRenderingFeature {
 	features := []model.WebGLRenderingFeature{
 		{FeatureName: "WebGL2", IsSupported: true, SupportLevel: "full", PerformanceHint: "optimal"},
@@ -463,6 +733,226 @@ func (s *WebGLFingerprintService) extractParameters(info *model.EnvInfo) []model
 	}
 
 	return parameters
+}
+
+type EnhancedWebGLAnalysisResult struct {
+	Success        bool                     `json:"success"`
+	GPUAnalysis    *GPUAnalysisResult       `json:"gpu_analysis"`
+	FeatureAnalysis []WebGLFeatureAnalysis  `json:"feature_analysis"`
+	Anomalies      []WebGLAnomalyDetail     `json:"anomalies"`
+	RiskScore      float64                  `json:"risk_score"`
+	RiskLevel      string                   `json:"risk_level"`
+	Recommendations []string                `json:"recommendations"`
+	Confidence     float64                  `json:"confidence"`
+}
+
+type GPUAnalysisResult struct {
+	Vendor                      string `json:"vendor"`
+	Renderer                    string `json:"renderer"`
+	IsHardware                  bool   `json:"is_hardware"`
+	IsVirtual                   bool   `json:"is_virtual"`
+	GPUFamily                   string `json:"gpu_family"`
+	GPUModel                    string `json:"gpu_model"`
+	DriverVersion               string `json:"driver_version"`
+	MaxTextureSize              int    `json:"max_texture_size"`
+	MaxRenderbufferSize         int    `json:"max_renderbuffer_size"`
+	SupportedExtensionsCount    int    `json:"supported_extensions_count"`
+	HasPrecisionLoss            bool   `json:"has_precision_loss"`
+	Temperature                 string `json:"temperature"`
+}
+
+type WebGLFeatureAnalysis struct {
+	FeatureName   string  `json:"feature_name"`
+	IsSupported   bool    `json:"is_supported"`
+	Confidence    float64 `json:"confidence"`
+	Details       string  `json:"details"`
+	Performance   string  `json:"performance,omitempty"`
+}
+
+type WebGLAnomalyDetail struct {
+	Type            string `json:"type"`
+	Severity        string `json:"severity"`
+	Description     string `json:"description"`
+	DetectionMethod string `json:"detection_method"`
+	Evidence        string `json:"evidence,omitempty"`
+}
+
+func (r *EnhancedWebGLAnalysisResult) analyzeGPUCapabilities(info *model.EnvInfo) {
+	r.GPUAnalysis.Vendor = info.WebGLVendor
+	r.GPUAnalysis.Renderer = info.WebGLRenderer
+}
+
+func (r *EnhancedWebGLAnalysisResult) analyzeRenderingFeatures(info *model.EnvInfo) {
+}
+
+func (r *EnhancedWebGLAnalysisResult) detectWebGLAnomaliesEnhanced(info *model.EnvInfo) {
+}
+
+func (r *EnhancedWebGLAnalysisResult) calculateOverallRiskScore() {
+	r.RiskScore = 0.0
+
+	for _, anomaly := range r.Anomalies {
+		switch anomaly.Severity {
+		case "high":
+			r.RiskScore += 30
+		case "medium":
+			r.RiskScore += 15
+		case "low":
+			r.RiskScore += 5
+		}
+	}
+
+	if !r.GPUAnalysis.IsHardware {
+		r.RiskScore += 20
+	}
+
+	if r.GPUAnalysis.IsVirtual {
+		r.RiskScore += 25
+	}
+
+	r.RiskScore = math.Min(r.RiskScore, 100)
+
+	if r.RiskScore >= 70 {
+		r.RiskLevel = "high"
+		r.Confidence = 0.95
+	} else if r.RiskScore >= 40 {
+		r.RiskLevel = "medium"
+		r.Confidence = 0.75
+	} else {
+		r.RiskLevel = "low"
+		r.Confidence = 0.85
+	}
+}
+
+func (r *EnhancedWebGLAnalysisResult) generateRecommendations() {
+	if r.RiskLevel == "high" {
+		r.Recommendations = append(r.Recommendations, "建议进行额外验证")
+		r.Recommendations = append(r.Recommendations, "考虑阻止或标记该请求")
+	}
+
+	if !r.GPUAnalysis.IsHardware {
+		r.Recommendations = append(r.Recommendations, "检测到软件渲染,可能为自动化环境")
+	}
+
+	if r.GPUAnalysis.IsVirtual {
+		r.Recommendations = append(r.Recommendations, "检测到虚拟GPU环境")
+	}
+
+	if r.GPUAnalysis.HasPrecisionLoss {
+		r.Recommendations = append(r.Recommendations, "检测到精度损失,可能为软件渲染")
+	}
+
+	if len(r.Anomalies) > 3 {
+		r.Recommendations = append(r.Recommendations, "检测到多个异常,建议深入调查")
+	}
+}
+
+func (s *WebGLFingerprintService) GenerateWebGLFeatureVector(info *model.EnvInfo) *WebGLFeatureVector {
+	vector := &WebGLFeatureVector{
+		HashComponents:  make([]string, 0),
+		NumericFeatures: make([]float64, 0),
+		TextFeatures:   make([]string, 0),
+		RenderFeatures: make([]string, 0),
+	}
+
+	vector.HashComponents = append(vector.HashComponents, info.WebGLVendor)
+	vector.HashComponents = append(vector.HashComponents, info.WebGLRenderer)
+
+	vector.NumericFeatures = append(vector.NumericFeatures, float64(s.countSupportedExtensions(info.Fingerprint)))
+
+	maxTexSize := s.extractMaxTextureSize(info.Fingerprint)
+	vector.NumericFeatures = append(vector.NumericFeatures, float64(maxTexSize))
+
+	vector.TextFeatures = append(vector.TextFeatures, s.extractGPUFamily(strings.ToLower(info.WebGLRenderer)))
+	vector.TextFeatures = append(vector.TextFeatures, s.extractGPUModel(strings.ToLower(info.WebGLRenderer)))
+
+	rendererLower := strings.ToLower(info.WebGLRenderer)
+	if s.containsAny(rendererLower, s.config.SoftwareRenderers) {
+		vector.RenderFeatures = append(vector.RenderFeatures, "software")
+	}
+	if s.containsAny(rendererLower, s.config.VirtualGPUs) {
+		vector.RenderFeatures = append(vector.RenderFeatures, "virtual")
+	}
+	if s.containsAny(rendererLower, s.config.TrustedVendors) {
+		vector.RenderFeatures = append(vector.RenderFeatures, "hardware")
+	}
+
+	h := sha256.New()
+	h.Write([]byte(strings.Join(vector.HashComponents, ":")))
+	h.Write([]byte(strings.Join(vector.TextFeatures, ":")))
+	vector.FinalHash = hex.EncodeToString(h.Sum(nil))
+
+	return vector
+}
+
+func (s *WebGLFingerprintService) DetectWebGLSpoofing(originalData, receivedData *model.WebGLFingerprintData) *WebGLSpoofingDetection {
+	detection := &WebGLSpoofingDetection{
+		IsSpoofed:          false,
+		RiskScore:           0.0,
+		Indicators:         make([]string, 0),
+		Recommendations:    make([]string, 0),
+	}
+
+	if originalData == nil || receivedData == nil {
+		detection.RiskScore = 100.0
+		detection.Indicators = append(detection.Indicators, "missing_data")
+		detection.IsSpoofed = true
+		return detection
+	}
+
+	if originalData.GPUInfo.Renderer != receivedData.GPUInfo.Renderer &&
+		originalData.GPUInfo.Renderer != "" && receivedData.GPUInfo.Renderer != "" {
+		detection.RiskScore += 40
+		detection.Indicators = append(detection.Indicators, "renderer_mismatch")
+	}
+
+	if originalData.GPUInfo.Vendor != receivedData.GPUInfo.Vendor &&
+		originalData.GPUInfo.Vendor != "" && receivedData.GPUInfo.Vendor != "" {
+		detection.RiskScore += 30
+		detection.Indicators = append(detection.Indicators, "vendor_mismatch")
+	}
+
+	originalExtCount := 0
+	for _, ext := range originalData.Extensions {
+		if ext.IsSupported {
+			originalExtCount++
+		}
+	}
+	receivedExtCount := 0
+	for _, ext := range receivedData.Extensions {
+		if ext.IsSupported {
+			receivedExtCount++
+		}
+	}
+
+	extDiff := math.Abs(float64(originalExtCount - receivedExtCount))
+	if extDiff > float64(originalExtCount)*0.3 {
+		detection.RiskScore += 20
+		detection.Indicators = append(detection.Indicators, "extension_mismatch")
+	}
+
+	if originalData.ParameterLimits.MaxTextureSize != receivedData.ParameterLimits.MaxTextureSize {
+		detection.RiskScore += 10
+		detection.Indicators = append(detection.Indicators, "texture_size_mismatch")
+	}
+
+	detection.RiskScore = math.Min(detection.RiskScore, 100)
+
+	if detection.RiskScore >= 70 {
+		detection.IsSpoofed = true
+		detection.Recommendations = append(detection.Recommendations, "阻止或标记该请求")
+	} else if detection.RiskScore >= 40 {
+		detection.Recommendations = append(detection.Recommendations, "进行额外验证")
+	}
+
+	return detection
+}
+
+type WebGLSpoofingDetection struct {
+	IsSpoofed        bool     `json:"is_spoofed"`
+	RiskScore       float64  `json:"risk_score"`
+	Indicators      []string `json:"indicators"`
+	Recommendations []string `json:"recommendations"`
 }
 
 func (s *WebGLFingerprintService) computeFingerprint(gpuInfo model.WebGLGPUInfo, data *model.WebGLFingerprintData) string {

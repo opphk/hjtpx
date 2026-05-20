@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       target: standard
       args:
-        - BUILD_VERSION=${BUILD_VERSION:-v20.0}
+        - BUILD_VERSION=${BUILD_VERSION:-v21.0}
         - BUILD_TIME=${BUILD_TIME:-}
         - BUILD_FLAGS=${BUILD_FLAGS:--s -w}
     container_name: hjtpx_app
@@ -45,9 +45,13 @@ services:
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
       - METRICS_PATH=${METRICS_PATH:-/metrics}
       - HEALTH_CHECK_PATH=${HEALTH_CHECK_PATH:-/health}
+      - HEALTH_CHECK_RETRIES=${HEALTH_CHECK_RETRIES:-3}
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-10}
+      - HEALTH_CHECK_TIMEOUT=${HEALTH_CHECK_TIMEOUT:-5}
       - AGI_ENABLED=${AGI_ENABLED:-true}
       - MULTIMODAL_ENABLED=${MULTIMODAL_ENABLED:-true}
       - TRAJECTORY_ENCRYPTION=${TRAJECTORY_ENCRYPTION:-true}
+      - APP_HOST=localhost
     volumes:
       - ./logs:/var/log/hjtpx
       - ./config.yaml:/app/config.yaml:ro
@@ -78,7 +82,7 @@ services:
         labels: "service,instance"
     labels:
       - "hjtpx.service=app"
-      - "hjtpx.version=${BUILD_VERSION:-v20.0}"
+      - "hjtpx.version=${BUILD_VERSION:-v21.0}"
       - "hjtpx.environment=${ENVIRONMENT:-development}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -251,6 +255,30 @@ services:
     OOM_score_adj: -500
     pids_limit: 512
 
+  healthcheck-helper:
+    image: alpine:latest
+    container_name: hjtpx_healthcheck_helper
+    profiles:
+      - debug
+    command: >
+      /bin/sh -c "
+        echo 'Starting health check monitor...' &&
+        while true; do
+          APP_STATUS=$$(wget -q -O- http://app:8080/health || echo 'FAILED');
+          POSTGRES_STATUS=$$(wget -q -O- http://postgres:5432 || echo 'FAILED');
+          REDIS_STATUS=$$(redis-cli -h redis -p 6379 ping 2>/dev/null || echo 'FAILED');
+          echo [$$(date -u +'%Y-%m-%d %H:%M:%S')] 'App:' $$APP_STATUS 'Postgres:' $$POSTGRES_STATUS 'Redis:' $$REDIS_STATUS;
+          sleep 60;
+        done
+      "
+    networks:
+      - hjtpx_network
+    depends_on:
+      - app
+      - postgres
+      - redis
+    restart: unless-stopped
+
 networks:
   hjtpx_network:
     driver: bridge
@@ -268,6 +296,8 @@ networks:
     labels:
       - "hjtpx.network=main"
       - "hjtpx.network.type=bridge"
+    attachable: false
+    external: false
 
 volumes:
   postgres_data:

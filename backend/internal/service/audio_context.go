@@ -80,6 +80,93 @@ type AudioProcessingMetrics struct {
 	ProcessingTime        float64   `json:"processing_time"`
 }
 
+type EnhancedAudioAnalysisResult struct {
+	Success              bool                     `json:"success"`
+	AudioAnalysis        *AudioAnalysisMetrics   `json:"audio_analysis"`
+	ProcessingAnalysis   []AudioProcessingFeature `json:"processing_analysis"`
+	Anomalies           []AudioAnomalyDetail     `json:"anomalies"`
+	RiskScore           float64                  `json:"risk_score"`
+	RiskLevel           string                   `json:"risk_level"`
+	Recommendations     []string                `json:"recommendations"`
+	Confidence          float64                 `json:"confidence"`
+}
+
+type AudioAnalysisMetrics struct {
+	SampleRate    int    `json:"sample_rate"`
+	ChannelCount int    `json:"channel_count"`
+	State        string `json:"state"`
+	Latency      float64 `json:"latency"`
+	IsHardware   bool   `json:"is_hardware"`
+}
+
+type AudioProcessingFeature struct {
+	FeatureName  string  `json:"feature_name"`
+	IsSupported  bool    `json:"is_supported"`
+	Confidence   float64 `json:"confidence"`
+	Details      string  `json:"details"`
+}
+
+type AudioAnomalyDetail struct {
+	Type            string `json:"type"`
+	Severity        string `json:"severity"`
+	Description     string `json:"description"`
+	DetectionMethod string `json:"detection_method"`
+	Evidence        string `json:"evidence,omitempty"`
+}
+
+func (r *EnhancedAudioAnalysisResult) calculateOverallRisk() {
+	r.RiskScore = 0.0
+
+	for _, anomaly := range r.Anomalies {
+		switch anomaly.Severity {
+		case "high":
+			r.RiskScore += 30
+		case "medium":
+			r.RiskScore += 15
+		case "low":
+			r.RiskScore += 5
+		}
+	}
+
+	r.RiskScore = math.Min(r.RiskScore, 100)
+
+	if r.RiskScore >= 70 {
+		r.RiskLevel = "high"
+		r.Confidence = 0.95
+	} else if r.RiskScore >= 40 {
+		r.RiskLevel = "medium"
+		r.Confidence = 0.75
+	} else {
+		r.RiskLevel = "low"
+		r.Confidence = 0.85
+	}
+}
+
+func (r *EnhancedAudioAnalysisResult) generateRecommendations() {
+	if r.RiskLevel == "high" {
+		r.Recommendations = append(r.Recommendations, "建议进行额外验证")
+		r.Recommendations = append(r.Recommendations, "考虑阻止或标记该请求")
+	}
+
+	if !r.AudioAnalysis.IsHardware {
+		r.Recommendations = append(r.Recommendations, "检测到软件音频渲染")
+	}
+
+	if len(r.Anomalies) > 3 {
+		r.Recommendations = append(r.Recommendations, "检测到多个异常,建议深入调查")
+	}
+}
+
+type EnhancedAudioAnomalyResult struct {
+	Success        bool                  `json:"success"`
+	Error         string                `json:"error,omitempty"`
+	FingerprintID  string                `json:"fingerprint_id"`
+	Anomalies     []AudioAnomalyDetail  `json:"anomalies"`
+	RiskScore     float64               `json:"risk_score"`
+	RiskLevel     string                `json:"risk_level"`
+	Recommendations []string              `json:"recommendations"`
+}
+
 func NewAudioContextService() *AudioContextService {
 	return &AudioContextService{
 		database: NewAudioFingerprintDB(),
@@ -371,6 +458,283 @@ func (s *AudioContextService) analyzeRenderingMode(fp *model.AudioFingerprint) {
 	} else {
 		fp.RenderingMode = "default"
 		fp.RenderingLatency = fp.ContextProperties.BaseLatency
+	}
+}
+
+func (s *AudioContextService) EnhancedAudioAnalysis(data map[string]interface{}) *EnhancedAudioAnalysisResult {
+	result := &EnhancedAudioAnalysisResult{
+		Success: true,
+		AudioAnalysis: &AudioAnalysisMetrics{
+			SampleRate: s.getIntValue(data, "sample_rate"),
+			ChannelCount: s.getIntValue(data, "channel_count"),
+			State: s.getStringValue(data, "state"),
+		},
+		ProcessingAnalysis: make([]AudioProcessingFeature, 0),
+		Anomalies: make([]AudioAnomalyDetail, 0),
+		RiskScore: 0.0,
+		Recommendations: make([]string, 0),
+	}
+
+	result.analyzeAudioCapabilities(data)
+	result.analyzeProcessingFeatures(data)
+	result.detectAudioAnomaliesEnhanced(data)
+	result.calculateOverallRisk()
+	result.generateRecommendations()
+
+	return result
+}
+
+func (s *AudioContextService) analyzeAudioCapabilities(data map[string]interface{}) {
+}
+
+func (s *AudioContextService) analyzeProcessingFeatures(data map[string]interface{}) {
+}
+
+func (s *AudioContextService) detectAudioAnomaliesEnhanced(data map[string]interface{}) {
+}
+
+func (s *AudioContextService) getIntValue(data map[string]interface{}, key string) int {
+	if val, ok := data[key].(float64); ok {
+		return int(val)
+	}
+	return 0
+}
+
+func (s *AudioContextService) getStringValue(data map[string]interface{}, key string) string {
+	if val, ok := data[key].(string); ok {
+		return val
+	}
+	return ""
+}
+
+func (s *AudioContextService) ExtractAudioFeatures(data map[string]interface{}) *AudioProcessingMetrics {
+	metrics := &AudioProcessingMetrics{}
+
+	if frequencyData, ok := data["frequency_data"].([]interface{}); ok {
+		for _, val := range frequencyData {
+			if fv, ok := val.(float64); ok {
+				metrics.FrequencyData = append(metrics.FrequencyData, fv)
+			}
+		}
+	}
+
+	if timeDomainData, ok := data["time_domain_data"].([]interface{}); ok {
+		for _, val := range timeDomainData {
+			if fv, ok := val.(float64); ok {
+				metrics.TimeDomainData = append(metrics.TimeDomainData, fv)
+			}
+		}
+	}
+
+	metrics.PeakFrequency = calculatePeakFrequency(metrics.FrequencyData)
+	metrics.PeakAmplitude = calculatePeakAmplitude(metrics.TimeDomainData)
+	metrics.RMSAmplitude = calculateRMSAmplitude(metrics.TimeDomainData)
+	metrics.SpectralCentroid = calculateSpectralCentroid(metrics.FrequencyData)
+	metrics.SpectralFlatness = calculateSpectralFlatness(metrics.FrequencyData)
+	metrics.ZeroCrossingRate = calculateZeroCrossingRate(metrics.TimeDomainData)
+
+	if processingTime, ok := data["processing_time"].(float64); ok {
+		metrics.ProcessingTime = processingTime
+	}
+
+	metrics.TotalHarmonicDistortion = s.calculateTHD(metrics.FrequencyData)
+
+	return metrics
+}
+
+func (s *AudioContextService) calculateTHD(frequencyData []float64) float64 {
+	if len(frequencyData) < 4 {
+		return 0
+	}
+
+	harmonics := make([]float64, 0)
+	peakIdx := 0
+	peakVal := 0.0
+
+	for i, val := range frequencyData {
+		if val > peakVal {
+			peakVal = val
+			peakIdx = i
+		}
+	}
+
+	for i := peakIdx * 2; i < len(frequencyData) && len(harmonics) < 5; i++ {
+		harmonics = append(harmonics, frequencyData[i])
+	}
+
+	if len(harmonics) == 0 {
+		return 0
+	}
+
+	var harmonicSum float64
+	for _, h := range harmonics {
+		harmonicSum += h * h
+	}
+
+	if peakVal == 0 {
+		return 0
+	}
+
+	thd := math.Sqrt(harmonicSum / float64(len(harmonics))) / peakVal
+	return thd * 100
+}
+
+func (s *AudioContextService) DetectAudioAnomaliesEnhanced(fpID string) *EnhancedAudioAnomalyResult {
+	fp, exists := s.database.Get(fpID)
+	if !exists {
+		return &EnhancedAudioAnomalyResult{
+			Success: false,
+			Error: "fingerprint_not_found",
+		}
+	}
+
+	result := &EnhancedAudioAnomalyResult{
+		Success: true,
+		FingerprintID: fpID,
+		Anomalies: make([]AudioAnomalyDetail, 0),
+		RiskScore: 0.0,
+		RiskLevel: "low",
+	}
+
+	result.detectRenderingAnomalies(fp)
+	result.detectProcessingAnomalies(fp)
+	result.detectHardwareAnomalies(fp)
+	result.detectSpoofingIndicators(fp)
+
+	result.calculateRiskScore()
+
+	return result
+}
+
+func (r *EnhancedAudioAnomalyResult) detectRenderingAnomalies(fp *model.AudioFingerprint) {
+	if fp.RenderingConsistency > 0.999 && len(fp.ProcessingData.FrequencyData) > 100 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "suspicious_consistency",
+			Severity: "medium",
+			Description: "渲染一致性异常高",
+			DetectionMethod: "consistency_check",
+		})
+		r.RiskScore += 20
+	}
+
+	if fp.RenderingLatency == 0 && fp.ContextProperties.BaseLatency == 0 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "zero_latency",
+			Severity: "low",
+			Description: "延迟为零",
+			DetectionMethod: "latency_check",
+		})
+		r.RiskScore += 10
+	}
+
+	if fp.IsSoftwareRenderer && fp.ContextProperties.SampleRate > 48000 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "software_high_sample_rate",
+			Severity: "medium",
+			Description: "软件渲染器使用高采样率",
+			DetectionMethod: "rendering_check",
+		})
+		r.RiskScore += 15
+	}
+}
+
+func (r *EnhancedAudioAnomalyResult) detectProcessingAnomalies(fp *model.AudioFingerprint) {
+	if len(fp.ProcessingData.FrequencyData) == 0 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "missing_frequency_data",
+			Severity: "high",
+			Description: "缺少频率数据",
+			DetectionMethod: "data_check",
+		})
+		r.RiskScore += 30
+	}
+
+	if fp.ProcessingData.SpectralFlatness < 0.001 && len(fp.ProcessingData.FrequencyData) > 0 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "flat_spectrum",
+			Severity: "high",
+			Description: "频谱过于平坦",
+			DetectionMethod: "spectral_analysis",
+		})
+		r.RiskScore += 25
+	}
+
+	if fp.ProcessingData.RMSAmplitude == 0 && len(fp.ProcessingData.TimeDomainData) > 0 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "zero_amplitude",
+			Severity: "medium",
+			Description: "振幅为零",
+			DetectionMethod: "amplitude_check",
+		})
+		r.RiskScore += 20
+	}
+}
+
+func (r *EnhancedAudioAnomalyResult) detectHardwareAnomalies(fp *model.AudioFingerprint) {
+	if !fp.IsAudioContextSupported && !fp.IsOscillatorSupported {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "no_audio_support",
+			Severity: "high",
+			Description: "不支持音频API",
+			DetectionMethod: "capability_check",
+		})
+		r.RiskScore += 40
+	}
+
+	if fp.MaxChannelCount > 32 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "unusual_channel_count",
+			Severity: "low",
+			Description: "声道数异常高",
+			DetectionMethod: "channel_check",
+		})
+		r.RiskScore += 10
+	}
+
+	if fp.ContextProperties.SampleRate == 0 {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "missing_sample_rate",
+			Severity: "high",
+			Description: "缺少采样率",
+			DetectionMethod: "sample_rate_check",
+		})
+		r.RiskScore += 30
+	}
+}
+
+func (r *EnhancedAudioAnomalyResult) detectSpoofingIndicators(fp *model.AudioFingerprint) {
+	patterns := detectSuspiciousPatterns(fp)
+	for _, pattern := range patterns {
+		r.Anomalies = append(r.Anomalies, AudioAnomalyDetail{
+			Type: "spoofing_indicator",
+			Severity: "medium",
+			Description: fmt.Sprintf("检测到可疑模式: %s", pattern),
+			DetectionMethod: "pattern_analysis",
+		})
+		r.RiskScore += 15
+	}
+}
+
+func (r *EnhancedAudioAnomalyResult) calculateRiskScore() {
+	r.RiskScore = math.Min(r.RiskScore, 100)
+
+	if r.RiskScore >= 70 {
+		r.RiskLevel = "high"
+	} else if r.RiskScore >= 40 {
+		r.RiskLevel = "medium"
+	} else {
+		r.RiskLevel = "low"
+	}
+}
+
+func (r *EnhancedAudioAnomalyResult) generateRecommendations() {
+	if r.RiskLevel == "high" {
+		r.Recommendations = append(r.Recommendations, "建议进行额外验证")
+		r.Recommendations = append(r.Recommendations, "考虑阻止或标记该请求")
+	}
+
+	if len(r.Anomalies) > 3 {
+		r.Recommendations = append(r.Recommendations, "检测到多个异常,建议深入调查")
 	}
 }
 

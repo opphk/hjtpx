@@ -135,8 +135,8 @@ func TestObfuscatorV3Stats(t *testing.T) {
 		t.Fatal("GetObfuscationStats returned nil")
 	}
 
-	if stats["version"] != "3.0.0" {
-		t.Errorf("Expected version 3.0.0, got %v", stats["version"])
+	if stats["version"] != "3.1.0" {
+		t.Errorf("Expected version 3.1.0, got %v", stats["version"])
 	}
 
 	features, ok := stats["features_enabled"].(map[string]bool)

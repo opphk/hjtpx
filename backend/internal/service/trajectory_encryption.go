@@ -19,6 +19,7 @@ type TrajectoryEncryptionService struct {
 	key       []byte
 	salt      int64
 	algorithm string
+	version   string
 }
 
 type EncryptedTrajectoryData struct {
@@ -74,6 +75,7 @@ func NewTrajectoryEncryptionService() *TrajectoryEncryptionService {
 		key:       generateDefaultKey(),
 		salt:      time.Now().Unix(),
 		algorithm: "AES-256-GCM",
+		version:   "3.0",
 	}
 }
 
@@ -96,9 +98,25 @@ func (s *TrajectoryEncryptionService) SetKey(key string) error {
 	return nil
 }
 
+func (s *TrajectoryEncryptionService) SetVersion(version string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.version = version
+}
+
+func (s *TrajectoryEncryptionService) GetVersion() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.version
+}
+
 func (s *TrajectoryEncryptionService) Encrypt(data []byte) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	if len(s.key) != 32 {
+		return "", fmt.Errorf("invalid key size: expected 32 bytes")
+	}
 
 	block, err := aes.NewCipher(s.key)
 	if err != nil {
@@ -116,6 +134,34 @@ func (s *TrajectoryEncryptionService) Encrypt(data []byte) (string, error) {
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (s *TrajectoryEncryptionService) EncryptWithAAD(data []byte, additionalData []byte) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.key) != 32 {
+		return "", fmt.Errorf("invalid key size: expected 32 bytes")
+	}
+
+	block, err := aes.NewCipher(s.key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, data, additionalData)
 
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
@@ -146,6 +192,39 @@ func (s *TrajectoryEncryptionService) Decrypt(encrypted string) ([]byte, error) 
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return plaintext, nil
+}
+
+func (s *TrajectoryEncryptionService) DecryptWithAAD(encrypted string, additionalData []byte) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	block, err := aes.NewCipher(s.key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, additionalData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt: %w", err)
 	}

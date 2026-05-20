@@ -2,13 +2,14 @@
     'use strict';
 
     var CryptoModule = (function() {
-        var version = '2.0.0';
+        var version = '3.0.0';
         var defaultKey = 'hjtpx-obfuscate-key-2024';
         var storagePrefix = '_cry_';
         var debugDetectionEnabled = true;
         var integrityCheckInterval = null;
         var originalHash = null;
         var protectionActive = false;
+        var keyDerivationIterations = 100000;
 
         function CryptoError(message, code) {
             this.name = 'CryptoError';
@@ -54,13 +55,17 @@
                     {
                         name: 'PBKDF2',
                         salt: saltBuffer,
-                        iterations: iterations || 100000,
+                        iterations: iterations || keyDerivationIterations,
                         hash: 'SHA-256'
                     },
                     key,
                     (keyLength || 256)
                 );
             });
+        }
+
+        function deriveKeyAsync(password, salt) {
+            return deriveKey(password, salt, keyDerivationIterations, 256);
         }
 
         function generateRandomBytes(length) {
@@ -92,7 +97,7 @@
             var useGCM = options.mode !== 'CBC';
 
             var keyData = typeof key === 'string' ?
-                await deriveKey(key, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 100000, 256) :
+                await deriveKey(key, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), keyDerivationIterations, 256) :
                 key;
 
             var importedKey = await crypto.subtle.importKey(
@@ -140,7 +145,7 @@
             var useGCM = (encryptedData.mode === 'GCM') || (options.mode === 'GCM');
 
             var keyData = typeof key === 'string' ?
-                await deriveKey(key, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 100000, 256) :
+                await deriveKey(key, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), keyDerivationIterations, 256) :
                 key;
 
             var importedKey = await crypto.subtle.importKey(
@@ -210,6 +215,87 @@
             } catch (error) {
                 throw new CryptoError('Decryption failed: ' + error.message, 'DECRYPTION_ERROR');
             }
+        }
+
+        async function encryptTrajectoryData(trajectoryData, sessionKey) {
+            if (!trajectoryData) {
+                throw new CryptoError('Trajectory data cannot be empty', 'EMPTY_INPUT');
+            }
+
+            var encoder = new TextEncoder();
+            var jsonData = encoder.encode(JSON.stringify(trajectoryData));
+            
+            var salt = generateRandomBytes(16);
+            var keyData = await deriveKeyAsync(sessionKey || defaultKey, salt);
+            
+            var importedKey = await crypto.subtle.importKey(
+                'raw',
+                keyData,
+                { name: 'AES-GCM' },
+                false,
+                ['encrypt']
+            );
+            
+            var iv = generateRandomBytes(12);
+            
+            var ciphertext = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv, tagLength: 128 },
+                importedKey,
+                jsonData
+            );
+
+            return {
+                version: '3.0',
+                salt: arrayBufferToBase64(salt),
+                iv: arrayBufferToBase64(iv),
+                ciphertext: arrayBufferToBase64(ciphertext),
+                timestamp: Date.now()
+            };
+        }
+
+        async function decryptTrajectoryData(encryptedData, sessionKey) {
+            if (!encryptedData) {
+                throw new CryptoError('Encrypted data cannot be empty', 'EMPTY_INPUT');
+            }
+
+            try {
+                var salt = new Uint8Array(base64ToArrayBuffer(encryptedData.salt));
+                var iv = new Uint8Array(base64ToArrayBuffer(encryptedData.iv));
+                var ciphertext = base64ToArrayBuffer(encryptedData.ciphertext);
+                
+                var keyData = await deriveKeyAsync(sessionKey || defaultKey, salt);
+                
+                var importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['decrypt']
+                );
+                
+                var plaintext = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv, tagLength: 128 },
+                    importedKey,
+                    ciphertext
+                );
+
+                var decoder = new TextDecoder();
+                return JSON.parse(decoder.decode(plaintext));
+            } catch (error) {
+                throw new CryptoError('Trajectory decryption failed: ' + error.message, 'DECRYPTION_ERROR');
+            }
+        }
+
+        function generateSessionKey() {
+            return arrayBufferToBase64(generateRandomBytes(32));
+        }
+
+        function calculateChecksum(data) {
+            var encoder = new TextEncoder();
+            var dataBuffer = typeof data === 'string' ? encoder.encode(data) : data;
+            return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
+                return arrayBufferToBase64(hash).substring(0, 16);
+            });
         }
 
         function detectDebugging() {
@@ -366,15 +452,24 @@
             decrypt: decryptAES,
             encryptString: encryptString,
             decryptString: decryptString,
+            encryptTrajectoryData: encryptTrajectoryData,
+            decryptTrajectoryData: decryptTrajectoryData,
             hash: hashSHA256,
             generateRandomBytes: generateRandomBytes,
             generateRandomString: generateRandomString,
+            generateSessionKey: generateSessionKey,
             generateHMAC: generateHMAC,
             verifyHMAC: verifyHMAC,
+            calculateChecksum: calculateChecksum,
             detectDebugging: detectDebugging,
             secureStorage: secureStorage,
             CryptoError: CryptoError,
-            _setDebugDetection: function(enabled) { debugDetectionEnabled = enabled; }
+            _setDebugDetection: function(enabled) { debugDetectionEnabled = enabled; },
+            _setKeyDerivationIterations: function(iterations) { 
+                if (iterations >= 10000 && iterations <= 1000000) {
+                    keyDerivationIterations = iterations;
+                }
+            }
         };
     })();
 

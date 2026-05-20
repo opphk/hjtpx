@@ -29,15 +29,7 @@ type CacheConfig struct {
 	SerializationType string
 }
 
-type SmartCacheManager struct {
-	client      *redis.Client
-	config      *CacheConfig
-	serializers map[string]Serializer
-	strategies  map[CacheStrategy]EvictionStrategy
-	mu          sync.RWMutex
-}
-
-type Serializer interface {
+type LegacySerializer interface {
 	Serialize(interface{}) ([]byte, error)
 	Deserialize([]byte, interface{}) error
 }
@@ -50,6 +42,14 @@ func (s *JSONSerializer) Serialize(v interface{}) ([]byte, error) {
 
 func (s *JSONSerializer) Deserialize(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+type SmartCacheManager struct {
+	client      *redis.Client
+	config      *CacheConfig
+	serializers map[string]LegacySerializer
+	strategies  map[CacheStrategy]EvictionStrategy
+	mu          sync.RWMutex
 }
 
 type EvictionStrategy interface {
@@ -70,7 +70,7 @@ func NewSmartCacheManager(client *redis.Client, config *CacheConfig) *SmartCache
 	manager := &SmartCacheManager{
 		client:      client,
 		config:      config,
-		serializers: make(map[string]Serializer),
+		serializers: make(map[string]LegacySerializer),
 		strategies:  make(map[CacheStrategy]EvictionStrategy),
 	}
 
