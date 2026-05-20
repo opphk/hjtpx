@@ -1,7 +1,12 @@
 # =============================================================================
-# HJTPX v20.0 - 多阶段构建优化版
+# HJTPX v21.0 - 多阶段构建优化版
 # 优化目标：最小化镜像体积、提升构建速度、增强安全性
 # =============================================================================
+
+# =============================================================================
+# 阶段0: busybox工具准备 (供minimal阶段使用)
+# =============================================================================
+FROM busybox:musl AS busybox-tools
 
 # =============================================================================
 # 阶段1: 构建阶段 (builder)
@@ -9,7 +14,7 @@
 FROM golang:1.25-alpine AS builder
 
 # 设置构建参数
-ARG BUILD_VERSION=v20.0
+ARG BUILD_VERSION=v21.0
 ARG BUILD_TIME=${BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
 ARG BUILD_FLAGS="-s -w"
 
@@ -84,8 +89,8 @@ USER appuser
 # 暴露端口
 EXPOSE 8080
 
-# 健康检查 - 使用wget (需从busybox镜像复制)
-COPY --from=busybox:musl /bin/wget /usr/bin/wget
+# 健康检查 - 使用busybox工具
+COPY --from=busybox-tools /bin/wget /usr/bin/wget
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD /usr/bin/wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
@@ -101,7 +106,7 @@ FROM alpine:3.19 AS standard
 
 # 设置标签
 LABEL maintainer="HJTPX Team <3395587255@qq.com>"
-LABEL version="v20.0"
+LABEL version="v21.0"
 LABEL description="HJTPX Behavior Verification System"
 
 # 安装运行时依赖
@@ -147,6 +152,17 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # =============================================================================
-# 默认构建目标: standard
+# 阶段4: Debug阶段 (用于生产调试，包含完整工具)
 # =============================================================================
-FROM standard AS default
+FROM standard AS debug
+
+# 安装调试工具
+RUN apk add --no-cache \
+    curl \
+    strace \
+    lsof \
+    net-tools \
+    && rm -rf /var/cache/apk/*
+
+# 覆盖入口点以便于调试
+ENTRYPOINT ["/bin/sh"]
