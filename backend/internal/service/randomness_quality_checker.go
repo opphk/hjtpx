@@ -493,7 +493,7 @@ func chiSquarePValue(x float64, df float64) float64 {
 	return 1 - pValue
 }
 
-func chiSquareCriticalValue(df float64, confidence float64) float64) float64 {
+func chiSquareCriticalValue(df float64, confidence float64) float64 {
 	alpha := 1 - confidence
 
 	switch {

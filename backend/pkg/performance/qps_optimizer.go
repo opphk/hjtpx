@@ -203,7 +203,7 @@ func (o *QPSOptimizer) ProcessRequest(ctx context.Context, req *Request) (*Respo
 		o.recordLatency(latency)
 		return &Response{
 			RequestID: req.ID,
-			Data:      resp.Data,
+			Data:      req.Data,
 			LatencyNs: time.Since(start).Nanoseconds(),
 		}, resp.Err
 	}

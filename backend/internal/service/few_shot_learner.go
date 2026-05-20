@@ -563,12 +563,12 @@ func (fsl *FewShotLearnerService) augmentSample(sample *FSSample, augmentationTy
 		noiseLevel := 0.1
 		for i := range augmented.Features {
 			if i < len(sample.Features) {
-				noise := (math.randomFloat64() - 0.5) * noiseLevel
+				noise := (fslRandGenerator.randomFloat64() - 0.5) * noiseLevel
 				augmented.Features[i] = sample.Features[i] + noise
 			}
 		}
 	case "scaling":
-		scale := 0.9 + math.randomFloat64()*0.2
+		scale := 0.9 + fslRandGenerator.randomFloat64()*0.2
 		for i := range augmented.Features {
 			if i < len(sample.Features) {
 				augmented.Features[i] = sample.Features[i] * scale
@@ -723,10 +723,4 @@ type FSRandGenerator struct {
 func (r *FSRandGenerator) randomFloat64() float64 {
 	r.seed = (r.seed*1103515245 + 12345) & 0x7fffffff
 	return float64(r.seed%10000) / 10000.0
-}
-
-type fsmath struct{}
-
-func (m fsmath) randomFloat64() float64 {
-	return float64(time.Now().UnixNano()%10000) / 10000.0
 }

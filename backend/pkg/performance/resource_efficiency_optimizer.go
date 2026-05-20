@@ -34,7 +34,7 @@ type ResourceConfig struct {
 type ResourceMetrics struct {
 	MemoryUsedMB     atomic.Int64
 	MemoryLimitMB    atomic.Int64
-	CPUPercent       atomic.Float64
+	CPUPercent       float64
 	CPUCores        atomic.Int64
 	Goroutines      atomic.Int64
 	GCCollections    atomic.Int64

@@ -192,7 +192,7 @@ type LearningUpdate struct {
 	Effectiveness  float64                `json:"effectiveness"`
 }
 
-type VerificationFeedback struct {
+type AdaptiveFeedback struct {
 	IsCorrect      bool                   `json:"is_correct"`
 	TimeTaken      int64                  `json:"time_taken"`
 	DifficultyHit  DifficultyLevel        `json:"difficulty_hit"`
