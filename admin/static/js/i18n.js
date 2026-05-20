@@ -23,7 +23,17 @@ const I18n = {
         { code: 'vi-VN', name: 'Tiếng Việt', flag: '🇻🇳', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'VND' },
         { code: 'th-TH', name: 'ไทย', flag: '🇹🇭', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'THB' },
         { code: 'id-ID', name: 'Bahasa Indonesia', flag: '🇮🇩', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'IDR' },
-        { code: 'tr-TR', name: 'Türkçe', flag: '🇹🇷', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'TRY' }
+        { code: 'tr-TR', name: 'Türkçe', flag: '🇹🇷', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'TRY' },
+        { code: 'pl-PL', name: 'Polski', flag: '🇵🇱', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'PLN' },
+        { code: 'nl-NL', name: 'Nederlands', flag: '🇳🇱', rtl: false, dateFormat: 'DD-MM-YYYY', currency: 'EUR' },
+        { code: 'sv-SE', name: 'Svenska', flag: '🇸🇪', rtl: false, dateFormat: 'YYYY-MM-DD', currency: 'SEK' },
+        { code: 'da-DK', name: 'Dansk', flag: '🇩🇰', rtl: false, dateFormat: 'DD-MM-YYYY', currency: 'DKK' },
+        { code: 'nb-NO', name: 'Norsk', flag: '🇳🇴', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'NOK' },
+        { code: 'fi-FI', name: 'Suomi', flag: '🇫🇮', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'EUR' },
+        { code: 'cs-CZ', name: 'Čeština', flag: '🇨🇿', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'CZK' },
+        { code: 'hu-HU', name: 'Magyar', flag: '🇭🇺', rtl: false, dateFormat: 'YYYY. MM. DD.', currency: 'HUF' },
+        { code: 'ro-RO', name: 'Română', flag: '🇷🇴', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'RON' },
+        { code: 'bg-BG', name: 'Български', flag: '🇧🇬', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'BGN' }
     ],
     
     supportedTimezones: [
@@ -56,7 +66,17 @@ const I18n = {
         'vi-VN': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
         'th-TH': { decimalSep: '.', thousandSep: ',', decimalDigits: 2 },
         'id-ID': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
-        'tr-TR': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 }
+        'tr-TR': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'pl-PL': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'nl-NL': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'sv-SE': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'da-DK': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'nb-NO': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'fi-FI': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'cs-CZ': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'hu-HU': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'ro-RO': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'bg-BG': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 }
     },
     
     currencyFormats: {
@@ -78,7 +98,17 @@ const I18n = {
         'vi-VN': { symbol: '₫', position: 'after' },
         'th-TH': { symbol: '฿', position: 'before' },
         'id-ID': { symbol: 'Rp', position: 'before' },
-        'tr-TR': { symbol: '₺', position: 'before' }
+        'tr-TR': { symbol: '₺', position: 'before' },
+        'pl-PL': { symbol: 'zł', position: 'after' },
+        'nl-NL': { symbol: '€', position: 'before' },
+        'sv-SE': { symbol: 'kr', position: 'after' },
+        'da-DK': { symbol: 'kr', position: 'after' },
+        'nb-NO': { symbol: 'kr', position: 'after' },
+        'fi-FI': { symbol: '€', position: 'after' },
+        'cs-CZ': { symbol: 'Kč', position: 'after' },
+        'hu-HU': { symbol: 'Ft', position: 'after' },
+        'ro-RO': { symbol: 'lei', position: 'after' },
+        'bg-BG': { symbol: 'лв', position: 'after' }
     },
     
     // 从浏览器获取语言

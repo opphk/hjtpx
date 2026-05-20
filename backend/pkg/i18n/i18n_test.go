@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -29,9 +30,11 @@ func TestInit(t *testing.T) {
 }
 
 func setupTranslations() {
+	wd, _ := os.Getwd()
+	translationsPath := filepath.Join(wd, "..", "..", "translations")
 	Init(LocaleConfig{
 		DefaultLang:     "zh-CN",
-		TranslationsDir: github.com/hjtpx/hjtpx/../translations",
+		TranslationsDir: translationsPath,
 	})
 }
 
@@ -104,6 +107,21 @@ func TestTranslateWithArgs(t *testing.T) {
 	result = Translate("en-US", "minutes_ago", 10)
 	if result != "10 minutes ago" {
 		t.Errorf("Translate with args = %s, want '10 minutes ago'", result)
+	}
+}
+
+func TestTranslateWithMultipleArgs(t *testing.T) {
+	setupTranslations()
+
+	result := Translate("zh-CN", "items_count", 3)
+	expected := "3个项目"
+	if result != expected {
+		t.Errorf("Translate with multiple args = %s, want %s", result, expected)
+	}
+
+	result = Translate("en-US", "items_count", 7)
+	if result != "7 items" {
+		t.Errorf("Translate with multiple args = %s, want '7 items'", result)
 	}
 }
 
@@ -433,7 +451,7 @@ func TestRTLLanguageSupport(t *testing.T) {
 func TestNewlyAddedLanguages(t *testing.T) {
 	setupTranslations()
 
-	newLangs := []string{"ko-KR", "pt-BR", "ru-RU"}
+	newLangs := []string{"ko-KR", "pt-BR", "ru-RU", "pl-PL", "nl-NL", "sv-SE", "da-DK", "nb-NO", "fi-FI", "cs-CZ", "hu-HU", "ro-RO", "bg-BG"}
 
 	for _, lang := range newLangs {
 		if !IsSupported(lang) {
@@ -449,5 +467,202 @@ func TestNewlyAddedLanguages(t *testing.T) {
 		if len(trans) == 0 {
 			t.Errorf("Language %s has no translations", lang)
 		}
+	}
+}
+
+func TestAllSupportedLanguages(t *testing.T) {
+	setupTranslations()
+
+	langs := GetSupportedLangs()
+
+	expectedCount := 29
+	if len(langs) != expectedCount {
+		t.Errorf("Expected %d supported languages, got %d", expectedCount, len(langs))
+	}
+
+	essentialKeys := []string{"title", "home", "login", "dashboard", "verification_success"}
+
+	for _, lang := range langs {
+		t.Run(lang, func(t *testing.T) {
+			trans := GetAllTranslations(lang)
+			if len(trans) == 0 {
+				t.Errorf("Language %s has no translations", lang)
+			}
+
+			for _, key := range essentialKeys {
+				if _, ok := trans[key]; !ok {
+					t.Errorf("Language %s missing essential key: %s", lang, key)
+				}
+			}
+		})
+	}
+}
+
+func TestTranslationCompleteness(t *testing.T) {
+	setupTranslations()
+
+	zhCNKeys := GetAllTranslations("zh-CN")
+	enUSKeys := GetAllTranslations("en-US")
+
+	requiredKeys := []string{
+		"title", "admin_title", "home", "features", "demo", "pricing", "contact",
+		"admin", "dashboard", "stats", "advanced_analytics", "applications", "logs",
+		"risk_rules", "blacklist", "monitoring", "ab_testing", "real_time_screen",
+		"logout", "login", "username", "password", "submit", "cancel", "save",
+		"delete", "edit", "add", "search", "filter", "success", "error", "warning",
+		"info", "loading", "confirm", "welcome", "slider_captcha", "click_captcha",
+		"image_captcha", "drag_slider_to_complete", "click_in_order", "enter_characters",
+		"verification_success", "verification_failed", "try_again", "open_source_free",
+	}
+
+	for _, key := range requiredKeys {
+		if _, ok := zhCNKeys[key]; !ok {
+			t.Errorf("zh-CN missing key: %s", key)
+		}
+		if _, ok := enUSKeys[key]; !ok {
+			t.Errorf("en-US missing key: %s", key)
+		}
+	}
+}
+
+func TestClickCaptchaTranslations(t *testing.T) {
+	setupTranslations()
+
+	langs := []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES"}
+
+	for _, lang := range langs {
+		t.Run(lang, func(t *testing.T) {
+			trans := GetAllTranslations(lang)
+
+			hints := []string{
+				"click_captcha_hints.number",
+				"click_captcha_hints.letter",
+				"click_captcha_hints.chinese",
+				"click_captcha_hints.icon",
+				"click_captcha_hints.mixed",
+				"click_captcha_hints.order_hint",
+			}
+
+			messages := []string{
+				"click_captcha_messages.success",
+				"click_captcha_messages.failed",
+				"click_captcha_messages.wrong_order",
+				"click_captcha_messages.wrong_position",
+				"click_captcha_messages.timeout",
+				"click_captcha_messages.invalid_session",
+				"click_captcha_messages.try_again",
+				"click_captcha_messages.too_fast",
+				"click_captcha_messages.too_slow",
+				"click_captcha_messages.abnormal_behavior",
+			}
+
+			for _, key := range hints {
+				if _, ok := trans[key]; !ok {
+					t.Errorf("Language %s missing hint key: %s", lang, key)
+				}
+			}
+
+			for _, key := range messages {
+				if _, ok := trans[key]; !ok {
+					t.Errorf("Language %s missing message key: %s", lang, key)
+				}
+			}
+		})
+	}
+}
+
+func TestCurrencyFormatting(t *testing.T) {
+	setupTranslations()
+
+	currencyTests := []struct {
+		lang     string
+		currency string
+	}{
+		{"zh-CN", "CNY"},
+		{"en-US", "USD"},
+		{"ja-JP", "JPY"},
+		{"ko-KR", "KRW"},
+		{"fr-FR", "EUR"},
+		{"de-DE", "EUR"},
+		{"es-ES", "EUR"},
+		{"pt-BR", "BRL"},
+		{"it-IT", "EUR"},
+		{"ru-RU", "RUB"},
+		{"ar-SA", "SAR"},
+		{"fa-IR", "IRR"},
+		{"he-IL", "ILS"},
+		{"ur-PK", "PKR"},
+		{"hi-IN", "INR"},
+		{"vi-VN", "VND"},
+		{"th-TH", "THB"},
+		{"id-ID", "IDR"},
+		{"tr-TR", "TRY"},
+		{"pl-PL", "PLN"},
+		{"nl-NL", "EUR"},
+		{"sv-SE", "SEK"},
+		{"da-DK", "DKK"},
+		{"nb-NO", "NOK"},
+		{"fi-FI", "EUR"},
+		{"cs-CZ", "CZK"},
+		{"hu-HU", "HUF"},
+		{"ro-RO", "RON"},
+		{"bg-BG", "BGN"},
+	}
+
+	for _, tt := range currencyTests {
+		t.Run(tt.lang, func(t *testing.T) {
+			info := GetLangInfo(tt.lang)
+			if info.Currency != tt.currency {
+				t.Errorf("Language %s expected currency %s, got %s", tt.lang, tt.currency, info.Currency)
+			}
+		})
+	}
+}
+
+func TestTimezoneSupport(t *testing.T) {
+	setupTranslations()
+
+	timezoneTests := []struct {
+		lang     string
+		timezone string
+	}{
+		{"zh-CN", "Asia/Shanghai"},
+		{"en-US", "America/New_York"},
+		{"ja-JP", "Asia/Tokyo"},
+		{"ko-KR", "Asia/Seoul"},
+		{"fr-FR", "Europe/Paris"},
+		{"de-DE", "Europe/Berlin"},
+		{"es-ES", "Europe/Madrid"},
+		{"pt-BR", "America/Sao_Paulo"},
+		{"it-IT", "Europe/Rome"},
+		{"ru-RU", "Europe/Moscow"},
+		{"ar-SA", "Asia/Riyadh"},
+		{"fa-IR", "Asia/Tehran"},
+		{"he-IL", "Asia/Jerusalem"},
+		{"ur-PK", "Asia/Karachi"},
+		{"hi-IN", "Asia/Kolkata"},
+		{"vi-VN", "Asia/Ho_Chi_Minh"},
+		{"th-TH", "Asia/Bangkok"},
+		{"id-ID", "Asia/Jakarta"},
+		{"tr-TR", "Europe/Istanbul"},
+		{"pl-PL", "Europe/Warsaw"},
+		{"nl-NL", "Europe/Amsterdam"},
+		{"sv-SE", "Europe/Stockholm"},
+		{"da-DK", "Europe/Copenhagen"},
+		{"nb-NO", "Europe/Oslo"},
+		{"fi-FI", "Europe/Helsinki"},
+		{"cs-CZ", "Europe/Prague"},
+		{"hu-HU", "Europe/Budapest"},
+		{"ro-RO", "Europe/Bucharest"},
+		{"bg-BG", "Europe/Sofia"},
+	}
+
+	for _, tt := range timezoneTests {
+		t.Run(tt.lang, func(t *testing.T) {
+			info := GetLangInfo(tt.lang)
+			if info.Timezone != tt.timezone {
+				t.Errorf("Language %s expected timezone %s, got %s", tt.lang, tt.timezone, info.Timezone)
+			}
+		})
 	}
 }

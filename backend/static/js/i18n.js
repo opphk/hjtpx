@@ -18,7 +18,22 @@ const I18n = {
         { code: 'ar-SA', name: 'العربية', flag: '🇸🇦' },
         { code: 'fa-IR', name: 'فارسی', flag: '🇮🇷' },
         { code: 'he-IL', name: 'עברית', flag: '🇮🇱' },
-        { code: 'ur-PK', name: 'اردو', flag: '🇵🇰' }
+        { code: 'ur-PK', name: 'اردو', flag: '🇵🇰' },
+        { code: 'hi-IN', name: 'हिन्दी', flag: '🇮🇳' },
+        { code: 'vi-VN', name: 'Tiếng Việt', flag: '🇻🇳' },
+        { code: 'th-TH', name: 'ไทย', flag: '🇹🇭' },
+        { code: 'id-ID', name: 'Bahasa Indonesia', flag: '🇮🇩' },
+        { code: 'tr-TR', name: 'Türkçe', flag: '🇹🇷' },
+        { code: 'pl-PL', name: 'Polski', flag: '🇵🇱' },
+        { code: 'nl-NL', name: 'Nederlands', flag: '🇳🇱' },
+        { code: 'sv-SE', name: 'Svenska', flag: '🇸🇪' },
+        { code: 'da-DK', name: 'Dansk', flag: '🇩🇰' },
+        { code: 'nb-NO', name: 'Norsk', flag: '🇳🇴' },
+        { code: 'fi-FI', name: 'Suomi', flag: '🇫🇮' },
+        { code: 'cs-CZ', name: 'Čeština', flag: '🇨🇿' },
+        { code: 'hu-HU', name: 'Magyar', flag: '🇭🇺' },
+        { code: 'ro-RO', name: 'Română', flag: '🇷🇴' },
+        { code: 'bg-BG', name: 'Български', flag: '🇧🇬' }
     ],
     
     // 从浏览器获取语言
