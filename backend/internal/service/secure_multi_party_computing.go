@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 )
@@ -54,6 +55,7 @@ const (
 	MPCGateOutput MPCGateType = "output"
 	MPCGateAdd    MPCGateType = "add"
 	MPCGateMul    MPCGateType = "mul"
+	MPCGateSub    MPCGateType = "sub"
 	MPCGateNot    MPCGateType = "not"
 	MPCGateXor    MPCGateType = "xor"
 	MPCGateAnd    MPCGateType = "and"

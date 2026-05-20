@@ -422,6 +422,7 @@ func (s *AdversarialDefenseService) applyRandomization(input []float64, params m
 	if ps, ok := params["pad_size"].(int); ok {
 		padSize = ps
 	}
+	_ = padSize
 
 	resizeFactor := resizeRange[0] + rand.Float64()*(resizeRange[1]-resizeRange[0])
 
