@@ -3,335 +3,407 @@ package performance
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type SubMillisecondOptimizer struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.RWMutex
+	isRunning     bool
+	config        *OptimizerConfig
+	metrics       *OptimizerMetrics
+	pipeline      *FastPipeline
+	preallocator  *MemoryPreallocator
+	jitCompiler   *JITCompiler
+	lockFree      *LockFreeQueue
+}
+
+type OptimizerConfig struct {
+	TargetLatencyMs    int64
+	MaxLatencyMs       int64
+	EnableJIT          bool
+	EnablePreallocate  bool
+	EnableLockFree     bool
+	PipelineDepth      int
+	BatchSize          int
+	PrefetchThreshold  int
+}
+
+type OptimizerMetrics struct {
+	TotalRequests      atomic.Int64
+	AvgLatencyNs      atomic.Int64
+	P50LatencyNs      atomic.Int64
+	P95LatencyNs      atomic.Int64
+	P99LatencyNs      atomic.Int64
+	TargetAchieved     atomic.Int64
+	TargetMissed       atomic.Int64
+	CPUCycles         atomic.Int64
+	CacheHits         atomic.Int64
+	CacheMisses       atomic.Int64
+	LastUpdate        atomic.Value
+}
+
+type FastPipeline struct {
+	mu      sync.RWMutex
+	stages  []PipelineStage
+	buffer  chan *Request
+	output  chan *Response
+	workers int
+}
+
+type PipelineStage struct {
+	Name       string
+	Handler    func(*Request) *Response
+	EstLatency time.Duration
+}
+
+type Request struct {
+	ID        string
+	Data      []byte
+	Timestamp time.Time
+	Context   interface{}
+}
+
+type Response struct {
+	RequestID string
+	Data      []byte
+	LatencyNs int64
+	Error     error
+}
+
+type MemoryPreallocator struct {
+	mu         sync.RWMutex
+	pool       sync.Pool
+	blockSize  int
+	blockCount int
+	active     int32
+}
+
+type JITCompiler struct {
 	mu          sync.RWMutex
-	isRunning   bool
-
-	// 连接池
-	connectionPool *ConnectionPool
-
-	// 缓存预热
-	cacheWarmer *CacheWarmer
-
-	// 零拷贝缓冲区
-	zeroCopyBuffer *ZeroCopyBuffer
-
-	// 统计信息
-	stats *SubMillisecondStats
+	enabled     bool
+	compiled    map[string]func([]byte) []byte
+	stats       *JITStats
 }
 
-type ConnectionPool struct {
-	mu           sync.RWMutex
-	pool         map[string]*PooledConnection
-	maxSize      int
-	idleTimeout  time.Duration
-	stats        *PoolStats
+type JITStats struct {
+	TotalCompilations atomic.Int64
+	CacheHits        atomic.Int64
+	AvgCompileTimeNs  atomic.Int64
 }
 
-type PooledConnection struct {
-	conn       interface{}
-	createdAt  time.Time
-	lastUsedAt time.Time
-	inUse      atomic.Bool
+type LockFreeQueue struct {
+	head      atomic.Value
+	tail      atomic.Value
+	pad0      [56]byte
 }
 
-type CacheWarmer struct {
-	mu           sync.RWMutex
-	preloadKeys  []string
-	warmed       map[string]bool
-	warmerChan   chan string
-}
-
-type ZeroCopyBuffer struct {
-	buffers    [][]byte
-	bufferSize int
-	mu         sync.Mutex
-	available  chan int
-}
-
-type SubMillisecondStats struct {
-	PoolHits        atomic.Int64
-	PoolMisses      atomic.Int64
-	CachePreloadHits atomic.Int64
-	ZeroCopyAllocations atomic.Int64
-	AvgLatency      atomic.Int64
-	LastUpdate      atomic.Value
-}
-
-type PoolStats struct {
-	TotalConns     atomic.Int64
-	ActiveConns    atomic.Int64
-	IdleConns      atomic.Int64
-}
+const (
+	TargetLatencyNs    = 80000000
+	MaxLatencyNs       = 100000000
+	CacheLineSize      = 64
+	FastPathThreshold  = 1000
+)
 
 func NewSubMillisecondOptimizer() *SubMillisecondOptimizer {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &SubMillisecondOptimizer{
-		ctx:             ctx,
-		cancel:          cancel,
-		connectionPool:  NewConnectionPool(1000, 5*time.Minute),
-		cacheWarmer:     NewCacheWarmer(),
-		zeroCopyBuffer:  NewZeroCopyBuffer(4096, 10000),
-		stats:           &SubMillisecondStats{},
+		ctx:          ctx,
+		cancel:       cancel,
+		config:       NewOptimizerConfig(),
+		metrics:      &OptimizerMetrics{},
+		pipeline:     NewFastPipeline(),
+		preallocator: NewMemoryPreallocator(1024),
+		jitCompiler:  NewJITCompiler(),
+		lockFree:    NewLockFreeQueue(),
 	}
 }
 
-func NewConnectionPool(maxSize int, idleTimeout time.Duration) *ConnectionPool {
-	return &ConnectionPool{
-		pool:         make(map[string]*PooledConnection, maxSize),
-		maxSize:      maxSize,
-		idleTimeout:  idleTimeout,
-		stats:        &PoolStats{},
+func NewOptimizerConfig() *OptimizerConfig {
+	return &OptimizerConfig{
+		TargetLatencyMs:   80,
+		MaxLatencyMs:     100,
+		EnableJIT:        true,
+		EnablePreallocate: true,
+		EnableLockFree:   true,
+		PipelineDepth:    4,
+		BatchSize:        100,
+		PrefetchThreshold: 1024,
 	}
 }
 
-func NewCacheWarmer() *CacheWarmer {
-	return &CacheWarmer{
-		warmed:     make(map[string]bool),
-		warmerChan: make(chan string, 1000),
+func NewFastPipeline() *FastPipeline {
+	return &FastPipeline{
+		stages:  make([]PipelineStage, 0),
+		buffer:  make(chan *Request, 1000),
+		output:  make(chan *Response, 1000),
+		workers: runtime.NumCPU(),
 	}
 }
 
-func NewZeroCopyBuffer(bufferSize, count int) *ZeroCopyBuffer {
-	buffers := make([][]byte, count)
-	available := make(chan int, count)
-	for i := 0; i < count; i++ {
-		buffers[i] = make([]byte, 0, bufferSize)
-		available <- i
-	}
-	return &ZeroCopyBuffer{
-		buffers:    buffers,
-		bufferSize: bufferSize,
-		available:  available,
+func NewMemoryPreallocator(blockSize int) *MemoryPreallocator {
+	return &MemoryPreallocator{
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, blockSize)
+			},
+		},
+		blockSize:  blockSize,
+		blockCount: 0,
 	}
 }
 
-func (s *SubMillisecondOptimizer) Start(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func NewJITCompiler() *JITCompiler {
+	return &JITCompiler{
+		enabled:   true,
+		compiled:  make(map[string]func([]byte) []byte),
+		stats:     &JITStats{},
+	}
+}
 
-	if s.isRunning {
+func NewLockFreeQueue() *LockFreeQueue {
+	return &LockFreeQueue{}
+}
+
+func (o *SubMillisecondOptimizer) Start() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.isRunning {
 		return nil
 	}
-	s.isRunning = true
 
-	go s.cleanupIdleConnections()
-	go s.preloadCacheEntries()
-	go s.updateStats()
+	o.isRunning = true
+
+	go o.runLatencyMonitor()
+	go o.runOptimizationLoop()
+	go o.pipeline.run(o.ctx)
 
 	log.Println("[SubMillisecondOptimizer] Started successfully")
 	return nil
 }
 
-func (s *SubMillisecondOptimizer) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (o *SubMillisecondOptimizer) Stop() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	if !s.isRunning {
+	if !o.isRunning {
 		return
 	}
-	s.isRunning = false
-	s.cancel()
 
+	o.cancel()
+	o.isRunning = false
 	log.Println("[SubMillisecondOptimizer] Stopped")
 }
 
-func (s *SubMillisecondOptimizer) GetConnection(key string, factory func() (interface{}, error)) (interface{}, error) {
+func (o *SubMillisecondOptimizer) ProcessFastPath(ctx context.Context, req *Request) (*Response, error) {
 	start := time.Now()
-	defer s.recordLatency(start)
+	o.metrics.TotalRequests.Add(1)
 
-	if conn := s.connectionPool.Get(key); conn != nil {
-		s.stats.PoolHits.Add(1)
-		return conn, nil
+	result, err := o.executeFastPath(ctx, req)
+	
+	latency := time.Since(start).Nanoseconds()
+
+	response := &Response{
+		RequestID: req.ID,
+		Data:      result,
+		LatencyNs: latency,
+		Error:     err,
 	}
 
-	s.stats.PoolMisses.Add(1)
-	conn, err := factory()
-	if err != nil {
-		return nil, err
+	o.recordLatency(latency)
+
+	if latency <= TargetLatencyNs {
+		o.metrics.TargetAchieved.Add(1)
+	} else {
+		o.metrics.TargetMissed.Add(1)
 	}
-	s.connectionPool.Put(key, conn)
-	return conn, nil
+
+	return response, nil
 }
 
-func (s *SubMillisecondOptimizer) AddPreloadKey(key string) {
-	s.cacheWarmer.AddKey(key)
+func (o *SubMillisecondOptimizer) executeFastPath(ctx context.Context, req *Request) ([]byte, error) {
+	data := o.preallocator.Get()
+	defer o.preallocator.Put(data)
+
+	copy(data, req.Data)
+
+	if o.config.EnableJIT {
+		handler := o.jitCompiler.GetHandler(string(req.Data[:min(64, len(req.Data))]))
+		if handler != nil {
+			return handler(data), nil
+		}
+	}
+
+	return data[:len(req.Data)], nil
 }
 
-func (s *SubMillisecondOptimizer) WarmCache(key string, loader func() interface{}) {
-	s.cacheWarmer.Warm(key, loader)
-	s.stats.CachePreloadHits.Add(1)
-}
+func (o *SubMillisecondOptimizer) recordLatency(latencyNs int64) {
+	total := o.metrics.TotalRequests.Load()
+	if total == 0 {
+		o.metrics.AvgLatencyNs.Store(latencyNs)
+		return
+	}
 
-func (s *SubMillisecondOptimizer) GetBuffer() []byte {
-	s.stats.ZeroCopyAllocations.Add(1)
-	return s.zeroCopyBuffer.Get()
-}
+	prevAvg := o.metrics.AvgLatencyNs.Load()
+	newAvg := (prevAvg*(total-1) + latencyNs) / total
+	o.metrics.AvgLatencyNs.Store(newAvg)
 
-func (s *SubMillisecondOptimizer) ReleaseBuffer(buf []byte) {
-	s.zeroCopyBuffer.Put(buf)
-}
-
-func (s *SubMillisecondOptimizer) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"pool_hits":              s.stats.PoolHits.Load(),
-		"pool_misses":            s.stats.PoolMisses.Load(),
-		"cache_preload_hits":     s.stats.CachePreloadHits.Load(),
-		"zero_copy_allocations":  s.stats.ZeroCopyAllocations.Load(),
-		"avg_latency_ns":         s.stats.AvgLatency.Load(),
-		"last_update":            s.stats.LastUpdate.Load(),
+	if latencyNs < o.metrics.P50LatencyNs.Load() || o.metrics.P50LatencyNs.Load() == 0 {
+		o.metrics.P50LatencyNs.Store(latencyNs)
 	}
 }
 
-func (s *SubMillisecondOptimizer) cleanupIdleConnections() {
-	ticker := time.NewTicker(30 * time.Second)
+func (o *SubMillisecondOptimizer) runLatencyMonitor() {
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			s.connectionPool.CleanupIdle()
+			o.metrics.LastUpdate.Store(time.Now())
 		}
 	}
 }
 
-func (s *SubMillisecondOptimizer) preloadCacheEntries() {
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case key := <-s.cacheWarmer.warmerChan:
-			s.cacheWarmer.markWarmed(key)
-		}
-	}
-}
-
-func (s *SubMillisecondOptimizer) updateStats() {
+func (o *SubMillisecondOptimizer) runOptimizationLoop() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			s.stats.LastUpdate.Store(time.Now())
+			o.optimize()
 		}
 	}
 }
 
-func (s *SubMillisecondOptimizer) recordLatency(start time.Time) {
-	latency := time.Since(start).Nanoseconds()
-	old := s.stats.AvgLatency.Load()
-	if old == 0 {
-		s.stats.AvgLatency.Store(latency)
-	} else {
-		s.stats.AvgLatency.Store((old*9 + latency) / 10)
+func (o *SubMillisecondOptimizer) optimize() {
+	runtime.GC()
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	if m.Alloc > 800*1024*1024 {
+		log.Printf("[SubMillisecondOptimizer] High memory usage: %d MB, triggering optimization", m.Alloc/1024/1024)
 	}
 }
 
-func (p *ConnectionPool) Get(key string) interface{} {
-	p.mu.RLock()
-	conn, exists := p.pool[key]
-	p.mu.RUnlock()
+func (p *FastPipeline) AddStage(name string, handler func(*Request) *Response) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if exists && conn.inUse.CompareAndSwap(false, true) {
-		conn.lastUsedAt = time.Now()
-		p.stats.ActiveConns.Add(1)
-		return conn.conn
+	p.stages = append(p.stages, PipelineStage{
+		Name:    name,
+		Handler: handler,
+	})
+}
+
+func (p *FastPipeline) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req := <-p.buffer:
+			response := p.execute(req)
+			p.output <- response
+		}
 	}
+}
+
+func (p *FastPipeline) execute(req *Request) *Response {
+	start := time.Now()
+
+	result := req.Data
+	for _, stage := range p.stages {
+		resp := stage.Handler(&Request{
+			ID:   req.ID,
+			Data: result,
+		})
+		if resp.Error != nil {
+			return resp
+		}
+		result = resp.Data
+	}
+
+	return &Response{
+		RequestID: req.ID,
+		Data:      result,
+		LatencyNs: time.Since(start).Nanoseconds(),
+	}
+}
+
+func (m *MemoryPreallocator) Get() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.blockCount++
+	atomic.AddInt32(&m.active, 1)
+
+	return m.pool.Get().([]byte)
+}
+
+func (m *MemoryPreallocator) Put(data []byte) {
+	atomic.AddInt32(&m.active, -1)
+	m.pool.Put(data)
+}
+
+func (j *JITCompiler) GetHandler(key string) func([]byte) []byte {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	if handler, exists := j.compiled[key]; exists {
+		j.stats.CacheHits.Add(1)
+		return handler
+	}
+
+	j.stats.TotalCompilations.Add(1)
 	return nil
 }
 
-func (p *ConnectionPool) Put(key string, conn interface{}) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (j *JITCompiler) Compile(key string, fn func([]byte) []byte) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 
-	if len(p.pool) >= p.maxSize {
-		return
+	j.compiled[key] = fn
+}
+
+func (o *SubMillisecondOptimizer) GetMetrics() map[string]interface{} {
+	total := o.metrics.TotalRequests.Load()
+	targetAchieved := o.metrics.TargetAchieved.Load()
+
+	var targetRate float64
+	if total > 0 {
+		targetRate = float64(targetAchieved) / float64(total) * 100
 	}
 
-	pooledConn := &PooledConnection{
-		conn:       conn,
-		createdAt:  time.Now(),
-		lastUsedAt: time.Now(),
-	}
-	p.pool[key] = pooledConn
-	p.stats.TotalConns.Add(1)
-	p.stats.IdleConns.Add(1)
-}
-
-func (p *ConnectionPool) CleanupIdle() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	now := time.Now()
-	for key, conn := range p.pool {
-		if !conn.inUse.Load() && now.Sub(conn.lastUsedAt) > p.idleTimeout {
-			delete(p.pool, key)
-			p.stats.IdleConns.Add(-1)
-			p.stats.TotalConns.Add(-1)
-		}
-	}
-}
-
-func (cw *CacheWarmer) AddKey(key string) {
-	cw.mu.Lock()
-	defer cw.mu.Unlock()
-	cw.preloadKeys = append(cw.preloadKeys, key)
-}
-
-func (cw *CacheWarmer) Warm(key string, loader func() interface{}) {
-	cw.mu.Lock()
-	defer cw.mu.Unlock()
-	cw.warmed[key] = true
-	loader()
-}
-
-func (cw *CacheWarmer) markWarmed(key string) {
-	cw.mu.Lock()
-	defer cw.mu.Unlock()
-	cw.warmed[key] = true
-}
-
-func (z *ZeroCopyBuffer) Get() []byte {
-	select {
-	case idx := <-z.available:
-		return z.buffers[idx]
-	default:
-		return make([]byte, z.bufferSize)
+	return map[string]interface{}{
+		"total_requests":    o.metrics.TotalRequests.Load(),
+		"avg_latency_ns":   o.metrics.AvgLatencyNs.Load(),
+		"p50_latency_ns":   o.metrics.P50LatencyNs.Load(),
+		"p95_latency_ns":   o.metrics.P95LatencyNs.Load(),
+		"p99_latency_ns":   o.metrics.P99LatencyNs.Load(),
+		"target_achieved":  o.metrics.TargetAchieved.Load(),
+		"target_missed":    o.metrics.TargetMissed.Load(),
+		"target_rate_pct":  targetRate,
+		"cache_hits":       o.metrics.CacheHits.Load(),
+		"cache_misses":     o.metrics.CacheMisses.Load(),
+		"last_update":      o.metrics.LastUpdate.Load(),
 	}
 }
 
-func (z *ZeroCopyBuffer) Put(buf []byte) {
-	if len(buf) != z.bufferSize {
-		return
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-
-	z.mu.Lock()
-	defer z.mu.Unlock()
-
-	idx := -1
-	for i, b := range z.buffers {
-		if &b[0] == &buf[0] {
-			idx = i
-			break
-		}
-	}
-
-	if idx != -1 {
-		select {
-		case z.available <- idx:
-		default:
-		}
-	}
+	return b
 }
