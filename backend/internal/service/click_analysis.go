@@ -2025,6 +2025,502 @@ func GenerateBotLikeClickData(targets []TargetImage, duration int64) []SliderCli
 	return clicks
 }
 
+type EnhancedPositionDetector struct {
+	toleranceRadius    float64
+	smartTolerance     bool
+	adaptiveThreshold  bool
+	edgeTolerance      float64
+	positionWeight     float64
+	confidenceThreshold float64
+}
+
+func NewEnhancedPositionDetector() *EnhancedPositionDetector {
+	return &EnhancedPositionDetector{
+		toleranceRadius:    25.0,
+		smartTolerance:     true,
+		adaptiveThreshold:  true,
+		edgeTolerance:      5.0,
+		positionWeight:     0.6,
+		confidenceThreshold: 0.75,
+	}
+}
+
+type PositionDetectionResult struct {
+	IsHit          bool
+	TargetIndex    int
+	Distance       float64
+	OffsetX        float64
+	OffsetY        float64
+	Confidence     float64
+	HitType        string
+	AdjustedRadius float64
+	NearMiss       bool
+	EdgeHit        bool
+	ErrorMargin    float64
+}
+
+func (detector *EnhancedPositionDetector) DetectPosition(clickX, clickY int, targets []TargetImage) *PositionDetectionResult {
+	result := &PositionDetectionResult{}
+
+	if len(targets) == 0 {
+		return result
+	}
+
+	bestTargetIdx := -1
+	bestDistance := math.MaxFloat64
+	adjustedRadius := detector.toleranceRadius
+
+	for idx, target := range targets {
+		if detector.adaptiveThreshold {
+			adjustedRadius = detector.calculateAdaptiveRadius(target)
+		}
+
+		targetCenterX := float64(target.X) + float64(target.Width)/2
+		targetCenterY := float64(target.Y) + float64(target.Height)/2
+
+		dx := float64(clickX) - targetCenterX
+		dy := float64(clickY) - targetCenterY
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		if distance < bestDistance {
+			bestDistance = distance
+			bestTargetIdx = idx
+		}
+	}
+
+	if bestTargetIdx >= 0 {
+		target := targets[bestTargetIdx]
+		targetCenterX := float64(target.X) + float64(target.Width)/2
+		targetCenterY := float64(target.Y) + float64(target.Height)/2
+
+		result.TargetIndex = bestTargetIdx
+		result.Distance = bestDistance
+		result.OffsetX = float64(clickX) - targetCenterX
+		result.OffsetY = float64(clickY) - targetCenterY
+		result.AdjustedRadius = adjustedRadius
+
+		result.IsHit = bestDistance <= adjustedRadius
+		result.NearMiss = bestDistance > adjustedRadius && bestDistance <= adjustedRadius*1.4
+		result.EdgeHit = detector.isEdgeHit(clickX, clickY, target)
+
+		result.Confidence = detector.calculateConfidence(result, target)
+		result.HitType = detector.classifyHitType(result)
+
+		result.ErrorMargin = detector.calculateErrorMargin(result)
+	}
+
+	return result
+}
+
+func (detector *EnhancedPositionDetector) calculateAdaptiveRadius(target TargetImage) float64 {
+	baseRadius := float64(target.Width+target.Height) / 4
+
+	diagonal := math.Sqrt(float64(target.Width*target.Width + target.Height*target.Height))
+	circularRadius := diagonal / 2
+
+	adaptiveRadius := (baseRadius + circularRadius) / 2
+
+	if detector.smartTolerance {
+		sizeVariation := float64(target.Width-target.Height) / float64(target.Width+target.Height+1)
+		adaptiveRadius *= (1.0 + sizeVariation*0.2)
+	}
+
+	return adaptiveRadius
+}
+
+func (detector *EnhancedPositionDetector) isEdgeHit(clickX, clickY int, target TargetImage) bool {
+	clickXFloat := float64(clickX)
+	clickYFloat := float64(clickY)
+
+	distToLeft := math.Abs(clickXFloat - float64(target.X))
+	distToRight := math.Abs(clickXFloat - float64(target.X+target.Width))
+	distToTop := math.Abs(clickYFloat - float64(target.Y))
+	distToBottom := math.Abs(clickYFloat - float64(target.Y+target.Height))
+
+	minDist := math.Min(math.Min(distToLeft, distToRight), math.Min(distToTop, distToBottom))
+
+	effectiveEdgeTolerance := detector.edgeTolerance * (float64(target.Width+target.Height) / 80)
+
+	return minDist <= effectiveEdgeTolerance
+}
+
+func (detector *EnhancedPositionDetector) calculateConfidence(result *PositionDetectionResult, target TargetImage) float64 {
+	confidence := 1.0
+
+	maxDistance := result.AdjustedRadius
+	if maxDistance > 0 {
+		distanceRatio := 1.0 - (result.Distance / maxDistance)
+		confidence *= (0.5 + distanceRatio*0.5)
+	}
+
+	if result.NearMiss {
+		confidence *= 0.6
+	}
+
+	if result.EdgeHit {
+		confidence *= 0.85
+	}
+
+	targetSize := float64(target.Width + target.Height)
+	if targetSize > 0 {
+		precisionBonus := 1.0 - (result.Distance / targetSize)
+		if precisionBonus > 0 {
+			confidence += precisionBonus * 0.1
+		}
+	}
+
+	return math.Min(confidence, 1.0)
+}
+
+func (detector *EnhancedPositionDetector) classifyHitType(result *PositionDetectionResult) string {
+	if result.Distance <= result.AdjustedRadius*0.3 {
+		return "perfect"
+	} else if result.Distance <= result.AdjustedRadius*0.7 {
+		return "good"
+	} else if result.Distance <= result.AdjustedRadius {
+		return "acceptable"
+	} else if result.NearMiss {
+		return "near_miss"
+	}
+	return "miss"
+}
+
+func (detector *EnhancedPositionDetector) calculateErrorMargin(result *PositionDetectionResult) float64 {
+	if !result.IsHit {
+		return result.Distance - result.AdjustedRadius
+	}
+
+	baseError := result.Distance / result.AdjustedRadius * 5
+
+	if result.EdgeHit {
+		baseError *= 1.5
+	}
+
+	return baseError
+}
+
+type MultiTargetPositionAnalyzer struct {
+	detector *EnhancedPositionDetector
+}
+
+func NewMultiTargetPositionAnalyzer() *MultiTargetPositionAnalyzer {
+	return &MultiTargetPositionAnalyzer{
+		detector: NewEnhancedPositionDetector(),
+	}
+}
+
+type MultiTargetAnalysisResult struct {
+	TotalTargets    int
+	HitTargets      int
+	MissedTargets   []int
+	NearMissTargets []int
+	ExtraClicks     int
+	HitRate         float64
+	Accuracy        float64
+	Confidence      float64
+	Results         []*PositionDetectionResult
+	ErrorPatterns  []string
+}
+
+func (analyzer *MultiTargetPositionAnalyzer) Analyze(clickX, clickY int, targets []TargetImage, expectedCount int) *MultiTargetAnalysisResult {
+	result := &MultiTargetAnalysisResult{
+		TotalTargets: len(targets),
+		Results:      make([]*PositionDetectionResult, 0),
+		MissedTargets: make([]int, 0),
+		NearMissTargets: make([]int, 0),
+		ErrorPatterns: make([]string, 0),
+	}
+
+	detectionResult := analyzer.detector.DetectPosition(clickX, clickY, targets)
+	result.Results = append(result.Results, detectionResult)
+
+	if detectionResult.IsHit {
+		result.HitTargets++
+	} else if detectionResult.NearMiss {
+		result.NearMissTargets = append(result.NearMissTargets, detectionResult.TargetIndex)
+	} else {
+		result.MissedTargets = append(result.MissedTargets, detectionResult.TargetIndex)
+		result.ErrorPatterns = append(result.ErrorPatterns,
+			fmt.Sprintf("点击位置(x:%d, y:%d)偏离目标%d，偏移量:%.1f",
+				clickX, clickY, detectionResult.TargetIndex, detectionResult.Distance))
+	}
+
+	if len(targets) > 0 {
+		result.HitRate = float64(result.HitTargets) / float64(len(targets))
+	}
+
+	if expectedCount > 0 {
+		result.Accuracy = float64(result.HitTargets) / float64(expectedCount)
+	}
+
+	avgConfidence := 0.0
+	for _, r := range result.Results {
+		avgConfidence += r.Confidence
+	}
+	if len(result.Results) > 0 {
+		result.Confidence = avgConfidence / float64(len(result.Results))
+	}
+
+	return result
+}
+
+type PositionClusterAnalyzer struct {
+	clusterRadius float64
+}
+
+func NewPositionClusterAnalyzer() *PositionClusterAnalyzer {
+	return &PositionClusterAnalyzer{
+		clusterRadius: 30.0,
+	}
+}
+
+type Cluster struct {
+	CentroidX float64
+	CentroidY float64
+	Count     int
+	Points    []struct{ X, Y int }
+	SpreadX   float64
+	SpreadY   float64
+	Density   float64
+}
+
+func (analyzer *PositionClusterAnalyzer) AnalyzeClusters(clicks []ClickData) []*Cluster {
+	clusters := make([]*Cluster, 0)
+
+	if len(clicks) == 0 {
+		return clusters
+	}
+
+	visited := make([]bool, len(clicks))
+
+	for i := 0; i < len(clicks); i++ {
+		if visited[i] {
+			continue
+		}
+
+		cluster := &Cluster{
+			Points: make([]struct{ X, Y int }, 0),
+		}
+
+		analyzer.expandCluster(clicks, i, visited, cluster)
+
+		if len(cluster.Points) > 0 {
+			analyzer.calculateClusterMetrics(cluster)
+			clusters = append(clusters, cluster)
+		}
+	}
+
+	return clusters
+}
+
+func (analyzer *PositionClusterAnalyzer) expandCluster(clicks []ClickData, index int, visited []bool, cluster *Cluster) {
+	visited[index] = true
+	cluster.Points = append(cluster.Points, struct{ X, Y int }{clicks[index].X, clicks[index].Y})
+
+	for i := 0; i < len(clicks); i++ {
+		if !visited[i] {
+			dx := float64(clicks[i].X - clicks[index].X)
+			dy := float64(clicks[i].Y - clicks[index].Y)
+			distance := math.Sqrt(dx*dx + dy*dy)
+
+			if distance <= analyzer.clusterRadius {
+				analyzer.expandCluster(clicks, i, visited, cluster)
+			}
+		}
+	}
+}
+
+func (analyzer *PositionClusterAnalyzer) calculateClusterMetrics(cluster *Cluster) {
+	if len(cluster.Points) == 0 {
+		return
+	}
+
+	cluster.Count = len(cluster.Points)
+
+	var sumX, sumY float64
+	for _, p := range cluster.Points {
+		sumX += float64(p.X)
+		sumY += float64(p.Y)
+	}
+	cluster.CentroidX = sumX / float64(cluster.Count)
+	cluster.CentroidY = sumY / float64(cluster.Count)
+
+	var varianceX, varianceY float64
+	for _, p := range cluster.Points {
+		varianceX += (float64(p.X) - cluster.CentroidX) * (float64(p.X) - cluster.CentroidX)
+		varianceY += (float64(p.Y) - cluster.CentroidY) * (float64(p.Y) - cluster.CentroidY)
+	}
+	cluster.SpreadX = math.Sqrt(varianceX / float64(cluster.Count))
+	cluster.SpreadY = math.Sqrt(varianceY / float64(cluster.Count))
+
+	area := 4 * cluster.SpreadX * cluster.SpreadY
+	if area > 0 {
+		cluster.Density = float64(cluster.Count) / area
+	}
+}
+
+type TrajectoryPositionAnalyzer struct {
+	windowSize   int
+	smoothingFactor float64
+}
+
+func NewTrajectoryPositionAnalyzer() *TrajectoryPositionAnalyzer {
+	return &TrajectoryPositionAnalyzer{
+		windowSize:   5,
+		smoothingFactor: 0.3,
+	}
+}
+
+type TrajectoryAnalysis struct {
+	SmoothedPositions []struct{ X, Y float64 }
+	Velocities        []float64
+	Accelerations     []float64
+	DirectionChanges  int
+	PathLength        float64
+	Directness        float64
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) AnalyzeTrajectory(clicks []ClickData) *TrajectoryAnalysis {
+	analysis := &TrajectoryAnalysis{}
+
+	if len(clicks) < 2 {
+		return analysis
+	}
+
+	analysis.SmoothedPositions = analyzer.smoothPositions(clicks)
+	analysis.Velocities = analyzer.calculateVelocities(clicks)
+	analysis.Accelerations = analyzer.calculateAccelerations(clicks)
+	analysis.DirectionChanges = analyzer.countDirectionChanges(clicks)
+	analysis.PathLength = analyzer.calculatePathLength(clicks)
+	analysis.Directness = analyzer.calculateDirectness(clicks)
+
+	return analysis
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) smoothPositions(clicks []ClickData) []struct{ X, Y float64 } {
+	smoothed := make([]struct{ X, Y float64 }, len(clicks))
+
+	window := analyzer.windowSize
+	if window < 3 {
+		window = 3
+	}
+
+	for i := 0; i < len(clicks); i++ {
+		start := i - window/2
+		if start < 0 {
+			start = 0
+		}
+		end := i + window/2
+		if end >= len(clicks) {
+			end = len(clicks) - 1
+		}
+
+		var sumX, sumY float64
+		count := 0
+		for j := start; j <= end; j++ {
+			sumX += float64(clicks[j].X)
+			sumY += float64(clicks[j].Y)
+			count++
+		}
+
+		smoothed[i].X = sumX / float64(count)
+		smoothed[i].Y = sumY / float64(count)
+	}
+
+	return smoothed
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) calculateVelocities(clicks []ClickData) []float64 {
+	velocities := make([]float64, len(clicks))
+
+	for i := 1; i < len(clicks); i++ {
+		dx := float64(clicks[i].X - clicks[i-1].X)
+		dy := float64(clicks[i].Y - clicks[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(clicks[i].Timestamp-clicks[i-1].Timestamp) / 1000.0
+		if dt > 0 {
+			velocities[i] = distance / dt
+		}
+	}
+
+	return velocities
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) calculateAccelerations(clicks []ClickData) []float64 {
+	accelerations := make([]float64, len(clicks))
+	velocities := analyzer.calculateVelocities(clicks)
+
+	for i := 2; i < len(clicks); i++ {
+		dv := velocities[i] - velocities[i-1]
+		dt := float64(clicks[i].Timestamp-clicks[i-1].Timestamp) / 1000.0
+		if dt > 0 {
+			accelerations[i] = dv / dt
+		}
+	}
+
+	return accelerations
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) countDirectionChanges(clicks []ClickData) int {
+	if len(clicks) < 3 {
+		return 0
+	}
+
+	changes := 0
+	for i := 2; i < len(clicks); i++ {
+		dx1 := float64(clicks[i-1].X - clicks[i-2].X)
+		dy1 := float64(clicks[i-1].Y - clicks[i-2].Y)
+		dx2 := float64(clicks[i].X - clicks[i-1].X)
+		dy2 := float64(clicks[i].Y - clicks[i-1].Y)
+
+		dot := dx1*dx2 + dy1*dy2
+		mag1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+		mag2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle < 0.5 {
+				changes++
+			}
+		}
+	}
+
+	return changes
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) calculatePathLength(clicks []ClickData) float64 {
+	var length float64
+
+	for i := 1; i < len(clicks); i++ {
+		dx := float64(clicks[i].X - clicks[i-1].X)
+		dy := float64(clicks[i].Y - clicks[i-1].Y)
+		length += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	return length
+}
+
+func (analyzer *TrajectoryPositionAnalyzer) calculateDirectness(clicks []ClickData) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	startX := float64(clicks[0].X)
+	startY := float64(clicks[0].Y)
+	endX := float64(clicks[len(clicks)-1].X)
+	endY := float64(clicks[len(clicks)-1].Y)
+
+	directDistance := math.Sqrt((endX-startX)*(endX-startX) + (endY-startY)*(endY-startY))
+	pathLength := analyzer.calculatePathLength(clicks)
+
+	if pathLength > 0 {
+		return directDistance / pathLength
+	}
+
+	return 0
+}
+
 type ClickTimingAnalyzer struct{}
 
 func NewClickTimingAnalyzer() *ClickTimingAnalyzer {
