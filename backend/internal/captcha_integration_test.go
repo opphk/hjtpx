@@ -13,6 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type TestTrajectoryPoint struct {
+	X         int   `json:"x"`
+	Y         int   `json:"y"`
+	Timestamp int64 `json:"timestamp"`
+}
+
 func TestIntegration_EmojiCaptchaFlow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -380,7 +386,7 @@ func TestIntegration_SeamlessCaptchaFlow(t *testing.T) {
 
 		seamlessReq := SeamlessCheckRequest{
 			DeviceFingerprint: "high_risk_fp",
-			BehaviorSequence: []TrajectoryPoint{
+			BehaviorSequence: []TestTrajectoryPoint{
 				{X: 0, Y: 0, Timestamp: time.Now().UnixMilli()},
 				{X: 500, Y: 0, Timestamp: time.Now().UnixMilli() + 100},
 			},
@@ -472,7 +478,7 @@ type EmojiInfo struct {
 type EmojiVerifyRequest struct {
 	SessionID    string           `json:"session_id"`
 	SelectedIDs  []int            `json:"selected_ids"`
-	BehaviorData []TrajectoryPoint `json:"behavior_data"`
+	BehaviorData []TestTrajectoryPoint `json:"behavior_data"`
 }
 
 type GestureCaptchaResponse struct {
@@ -526,7 +532,7 @@ type ThreeDRotation struct {
 type ThreeDVerifyRequest struct {
 	SessionID    string           `json:"session_id"`
 	Rotation     ThreeDRotation   `json:"rotation"`
-	BehaviorData []TrajectoryPoint `json:"behavior_data"`
+	BehaviorData []TestTrajectoryPoint `json:"behavior_data"`
 }
 
 type LianliankanCaptchaResponse struct {
@@ -552,7 +558,7 @@ type GridSizeInfo struct {
 type LianliankanVerifyRequest struct {
 	SessionID     string           `json:"session_id"`
 	MatchingPairs [][]int          `json:"matching_pairs"`
-	BehaviorData  []TrajectoryPoint `json:"behavior_data"`
+	BehaviorData  []TestTrajectoryPoint `json:"behavior_data"`
 }
 
 type RotateCaptchaResponse struct {
@@ -571,7 +577,7 @@ type RotateVerifyRequest struct {
 
 type SeamlessCheckRequest struct {
 	DeviceFingerprint string           `json:"device_fingerprint"`
-	BehaviorSequence  []TrajectoryPoint `json:"behavior_sequence"`
+	BehaviorSequence  []TestTrajectoryPoint `json:"behavior_sequence"`
 }
 
 type DetectCheckRequest struct {

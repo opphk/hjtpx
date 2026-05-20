@@ -127,11 +127,11 @@ type DDOSBaselineMetrics struct {
 }
 
 type AttackPatternMatcher struct {
-	patterns []*AttackPattern
+	patterns []*AttackPatternV2
 	mu       sync.RWMutex
 }
 
-type AttackPattern struct {
+type AttackPatternV2 struct {
 	Name        string
 	Pattern     *regexp.Regexp
 	Severity    float64
@@ -320,59 +320,59 @@ func (ad *DDOSAnomalyDetector) DetectAnomaly(ip string, currentInterval time.Dur
 
 func NewAttackPatternMatcher() *AttackPatternMatcher {
 	matcher := &AttackPatternMatcher{
-		patterns: make([]*AttackPattern, 0),
+		patterns: make([]*AttackPatternV2, 0),
 	}
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "SQL Injection",
 		Pattern:     regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|exec|execute|script|--|;|/\*|\*/|declare|convert|xp_)`),
 		Severity:    0.8,
 		Description: "SQL injection attack pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "XSS Attack",
 		Pattern:     regexp.MustCompile(`(?i)(<script|javascript:|onerror|onload|onclick|alert\(|eval\(|document\.|window\.|<img|<svg|<iframe|<embed|<object)`),
 		Severity:    0.7,
 		Description: "XSS attack pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "Path Traversal",
 		Pattern:     regexp.MustCompile(`(?i)(\.\./|\.\.\\|%2e%2e|/etc/passwd|c:\\windows|root:|/etc/shadow|\.\.%2f)`),
 		Severity:    0.75,
 		Description: "Path traversal attack pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "Command Injection",
 		Pattern:     regexp.MustCompile(`(?i)(;|\|\||&&|` + "`" + `|\$\(|\\x|;.*(cat|ls|wget|curl|nc|bash|sh))`),
 		Severity:    0.9,
 		Description: "Command injection pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "Scanner Activity",
 		Pattern:     regexp.MustCompile(`(?i)(nikto|nmap|gobuster|dirbuster|sqlmap|burp|hydra|wpscan|acunetix|appscan|metasploit)`),
 		Severity:    0.6,
 		Description: "Security scanner activity detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "LDAP Injection",
 		Pattern:     regexp.MustCompile(`(?i)(\(|\)|\*|%|,|;|&|\||=|\+|\\/)`),
 		Severity:    0.75,
 		Description: "LDAP injection pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "XML Injection",
 		Pattern:     regexp.MustCompile(`(?i)(<!DOCTYPE|<!ENTITY|<!ATTLIST|<!ELEMENT|<!NOTATION|<!%|<%|\%3c|\%3e)`),
 		Severity:    0.8,
 		Description: "XML injection pattern detected",
 	})
 
-	matcher.patterns = append(matcher.patterns, &AttackPattern{
+	matcher.patterns = append(matcher.patterns, &AttackPatternV2{
 		Name:        "Template Injection",
 		Pattern:     regexp.MustCompile(`(?i)(\{\{|\}\}|\{%|%7b%7d|\$\{)`),
 		Severity:    0.85,
@@ -382,7 +382,7 @@ func NewAttackPatternMatcher() *AttackPatternMatcher {
 	return matcher
 }
 
-func (apm *AttackPatternMatcher) Match(content string) (bool, *AttackPattern) {
+func (apm *AttackPatternMatcher) Match(content string) (bool, *AttackPatternV2) {
 	apm.mu.RLock()
 	defer apm.mu.RUnlock()
 

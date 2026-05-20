@@ -257,11 +257,11 @@ type DisturbanceRule struct {
 	Condition   string
 	SkipChallenge bool
 	RiskThreshold float64
-	TimeRange    *TimeRange
+	TimeRange    *TimeRangeV2
 	DeviceType   string
 }
 
-type TimeRange struct {
+type TimeRangeV2 struct {
 	Start int
 	End   int
 	Days  []int

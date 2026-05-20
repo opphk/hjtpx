@@ -185,7 +185,7 @@ func TestAlertReceiversNotificationChannels(t *testing.T) {
 	assert.Contains(t, contentStr, "email_configs:", "Should have email configs")
 	assert.Contains(t, contentStr, "slack_configs:", "Should have Slack configs")
 	assert.Contains(t, contentStr, "pagerduty_configs:", "Should have PagerDuty configs")
-	assert.Contains(t, contentPath, "webhook_configs:", "Should have webhook configs")
+	assert.Contains(t, contentStr, "webhook_configs:", "Should have webhook configs")
 }
 
 func TestPrometheusMetricRelabeling(t *testing.T) {
