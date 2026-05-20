@@ -331,6 +331,154 @@ function updateCharts(data) {
     updateAppDistributionChart(data.appDistribution);
     updateErrorRateChart(data.errorRate);
     updateGeoDistributionChart(data.geoDistribution);
+    updateStatisticsSummary(data);
+}
+
+function updateStatisticsSummary(data) {
+    const summaryEl = document.getElementById('statisticsSummary');
+    if (!summaryEl) return;
+    
+    const avgRequests = data.requestTrend.data.reduce((a, b) => a + b, 0) / data.requestTrend.data.length;
+    const peakRequests = Math.max(...data.requestTrend.data);
+    const totalSuccessRate = data.requestType.data.reduce((acc, rate, idx) => {
+        return acc + (rate * data.requestType.data[idx] / 100);
+    }, 0);
+    
+    summaryEl.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h5>平均请求量</h5>
+                    <p class="text-primary">${formatLargeNumber(Math.round(avgRequests))}</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h5>峰值请求量</h5>
+                    <p class="text-success">${formatLargeNumber(peakRequests)}</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h5>总体成功率</h5>
+                    <p class="text-info">${totalSuccessRate.toFixed(1)}%</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function aggregateDataByPeriod(data, period) {
+    if (period === 'hour') {
+        return aggregateHourly(data);
+    } else if (period === 'day') {
+        return aggregateDaily(data);
+    } else if (period === 'week') {
+        return aggregateWeekly(data);
+    } else if (period === 'month') {
+        return aggregateMonthly(data);
+    }
+    return data;
+}
+
+function aggregateHourly(data) {
+    return data.map(item => ({
+        time: item.time,
+        requests: item.requests,
+        avgLatency: item.avgLatency || 0,
+        successRate: item.successRate || 0
+    }));
+}
+
+function aggregateDaily(data) {
+    const grouped = {};
+    data.forEach(item => {
+        const date = item.time.split(' ')[0];
+        if (!grouped[date]) {
+            grouped[date] = { requests: 0, latencySum: 0, count: 0 };
+        }
+        grouped[date].requests += item.requests;
+        if (item.avgLatency) {
+            grouped[date].latencySum += item.avgLatency;
+            grouped[date].count++;
+        }
+    });
+    
+    return Object.entries(grouped).map(([date, values]) => ({
+        time: date,
+        requests: values.requests,
+        avgLatency: values.count > 0 ? Math.round(values.latencySum / values.count) : 0
+    }));
+}
+
+function aggregateWeekly(data) {
+    const grouped = {};
+    data.forEach(item => {
+        const date = new Date(item.time);
+        const weekStart = getWeekStart(date);
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!grouped[weekKey]) {
+            grouped[weekKey] = { requests: 0, latencySum: 0, count: 0 };
+        }
+        grouped[weekKey].requests += item.requests;
+        if (item.avgLatency) {
+            grouped[weekKey].latencySum += item.avgLatency;
+            grouped[weekKey].count++;
+        }
+    });
+    
+    return Object.entries(grouped).map(([week, values]) => ({
+        time: week,
+        requests: values.requests,
+        avgLatency: values.count > 0 ? Math.round(values.latencySum / values.count) : 0
+    }));
+}
+
+function aggregateMonthly(data) {
+    const grouped = {};
+    data.forEach(item => {
+        const month = item.time.substring(0, 7);
+        if (!grouped[month]) {
+            grouped[month] = { requests: 0, latencySum: 0, count: 0 };
+        }
+        grouped[month].requests += item.requests;
+        if (item.avgLatency) {
+            grouped[month].latencySum += item.avgLatency;
+            grouped[month].count++;
+        }
+    });
+    
+    return Object.entries(grouped).map(([month, values]) => ({
+        time: month,
+        requests: values.requests,
+        avgLatency: values.count > 0 ? Math.round(values.latencySum / values.count) : 0
+    }));
+}
+
+function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+}
+
+function calculateTrend(data) {
+    if (data.length < 2) return { trend: 'stable', changePercent: 0 };
+    
+    const firstHalf = data.slice(0, Math.floor(data.length / 2));
+    const secondHalf = data.slice(Math.floor(data.length / 2));
+    
+    const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+    
+    const changePercent = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg * 100) : 0;
+    
+    let trend = 'stable';
+    if (changePercent > 10) trend = 'up';
+    else if (changePercent < -10) trend = 'down';
+    
+    return { trend, changePercent };
 }
 
 function initAllCharts() {
@@ -508,13 +656,16 @@ function getChartOptions(type) {
                 labels: {
                     padding: 15,
                     usePointStyle: true,
-                    pointStyle: 'circle'
+                    pointStyle: 'circle',
+                    font: {
+                        size: 12
+                    }
                 }
             },
             tooltip: {
                 backgroundColor: 'rgba(0, 0, 0, 0.8)',
                 padding: 12,
-                titleFont: { size: 14 },
+                titleFont: { size: 14, weight: 'bold' },
                 bodyFont: { size: 13 },
                 cornerRadius: 8,
                 displayColors: true,
@@ -530,6 +681,12 @@ function getChartOptions(type) {
                             label += formatChartValue(context.parsed);
                         }
                         return label;
+                    },
+                    title: function(context) {
+                        if (context && context[0]) {
+                            return context[0].label || '';
+                        }
+                        return '';
                     }
                 }
             }
@@ -537,6 +694,10 @@ function getChartOptions(type) {
         animation: {
             duration: 800,
             easing: 'easeOutQuart'
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index'
         }
     };
 
@@ -549,13 +710,24 @@ function getChartOptions(type) {
                 },
                 ticks: {
                     maxRotation: 45,
-                    minRotation: 0
+                    minRotation: 0,
+                    font: {
+                        size: 11
+                    }
                 }
             },
             y: {
                 beginAtZero: true,
                 grid: {
                     color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                    font: {
+                        size: 11
+                    },
+                    callback: function(value) {
+                        return formatChartValue(value);
+                    }
                 }
             }
         };
@@ -620,7 +792,62 @@ function updateGeoDistributionChart(data) {
 
 function exportStatsReport() {
     const dateRange = document.getElementById('dateRange')?.value || '30d';
-    const format = prompt('请选择导出格式 (1: CSV, 2: JSON, 3: Excel):', '1');
+    const formatOptions = [
+        { value: '1', label: 'CSV', description: '通用格式，适合Excel和数据分析工具' },
+        { value: '2', label: 'JSON', description: '结构化数据，适合程序处理' },
+        { value: '3', label: 'Excel增强版', description: '包含详细说明和分析' }
+    ];
+    
+    let formatHtml = '<div class="form-group"><label>选择导出格式：</label><select id="exportFormatSelect" class="form-control">';
+    formatOptions.forEach(opt => {
+        formatHtml += `<option value="${opt.value}">${opt.label} - ${opt.description}</option>`;
+    });
+    formatHtml += '</select></div>';
+    
+    const modalHtml = `
+        <div class="modal fade" id="exportModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-download"></i> 导出统计数据</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        ${formatHtml}
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>提示：</strong>导出的数据将包含当前选择时间范围内的所有统计数据
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmExport()">
+                            <i class="fas fa-download"></i> 确认导出
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHtml;
+    document.body.appendChild(modalContainer);
+    
+    $('#exportModal').modal('show');
+    
+    $('#exportModal').on('hidden.bs.modal', function() {
+        document.body.removeChild(modalContainer);
+    });
+}
+
+function confirmExport() {
+    const dateRange = document.getElementById('dateRange')?.value || '30d';
+    const format = document.getElementById('exportFormatSelect')?.value || '1';
+    
+    $('#exportModal').modal('hide');
     
     const reportData = {
         exportTime: new Date().toLocaleString('zh-CN'),
@@ -639,12 +866,14 @@ function exportStatsReport() {
         }
     };
 
+    const timestamp = new Date().toISOString().slice(0,10);
+    
     if (format === '2' || format === 'json') {
-        exportAsJSON(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}`);
+        exportAsJSON(reportData, `stats_report_${dateRange}_${timestamp}`);
     } else if (format === '3' || format === 'excel') {
-        exportAsCSVEnhanced(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
+        exportAsCSVEnhanced(reportData, `stats_report_${dateRange}_${timestamp}.csv`);
     } else {
-        exportAsCSV(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
+        exportAsCSV(reportData, `stats_report_${dateRange}_${timestamp}.csv`);
     }
 }
 
