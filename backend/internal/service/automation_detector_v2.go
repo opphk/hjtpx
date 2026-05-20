@@ -147,6 +147,12 @@ type SeleniumDetection struct {
 	Confidence float64
 }
 
+type PhantomJSDetection struct {
+	Detected   bool
+	Methods    []string
+	Confidence float64
+}
+
 type PuppeteerDetection struct {
 	Detected   bool
 	Methods    []string
@@ -246,18 +252,157 @@ func (a *AutomationDetectorV2) DetectSelenium(userAgent string, navigator map[st
 		result.Methods = append(result.Methods, "dom_func")
 	}
 
-	automationVars := []string{"selenium", "webdriver", "callSelenium", "_selenium", "callPhantomJS"}
-	for _, varName := range automationVars {
+	seleniumIndicators := []string{
+		"selenium",
+		"webdriver",
+		"callSelenium",
+		"_selenium",
+		"callPhantomJS",
+		"__webdriver_script_function",
+		"__webdriver_script_func",
+		"__webdriver_evaluate",
+		"__webdriver_script_element",
+		"__selenium_evaluate",
+		"_driver",
+		"driver_",
+	}
+
+	detectedCount := 0
+	for _, varName := range seleniumIndicators {
 		if _, ok := navigator[varName]; ok {
 			result.Detected = true
-			result.Methods = append(result.Methods, "automation_var:"+varName)
+			result.Methods = append(result.Methods, "selenium_var:"+varName)
+			detectedCount++
+		}
+	}
+
+	if chromeDriver, ok := navigator["chromedriver"].(string); ok && chromeDriver != "" {
+		result.Detected = true
+		result.Methods = append(result.Methods, "chromedriver_detected:"+chromeDriver)
+	}
+
+	if geckoDriver, ok := navigator["geckodriver"].(string); ok && geckoDriver != "" {
+		result.Detected = true
+		result.Methods = append(result.Methods, "geckodriver_detected:"+geckoDriver)
+	}
+
+	seleniumUAIndicators := []string{
+		" chromedriver",
+		" geckodriver",
+		" webdriver",
+		" selenium",
+	}
+	uaLower := strings.ToLower(userAgent)
+	for _, indicator := range seleniumUAIndicators {
+		if strings.Contains(uaLower, indicator) {
+			result.Detected = true
+			result.Methods = append(result.Methods, "selenium_ua_pattern:"+indicator)
 			break
 		}
 	}
 
-	result.Confidence = a.calculateConfidence(result.Methods)
+	result.Confidence = a.calculateSeleniumConfidence(result.Methods, detectedCount)
 
 	return result
+}
+
+func (a *AutomationDetectorV2) calculateSeleniumConfidence(methods []string, indicatorCount int) float64 {
+	baseConfidence := math.Min(float64(len(methods))*0.25, 0.8)
+
+	if indicatorCount > 3 {
+		baseConfidence = math.Min(baseConfidence+0.2, 1.0)
+	}
+
+	criticalIndicators := []string{"webdriver", "chromedriver", "geckodriver"}
+	for _, method := range methods {
+		for _, critical := range criticalIndicators {
+			if strings.Contains(method, critical) {
+				baseConfidence = math.Min(baseConfidence+0.1, 1.0)
+				break
+			}
+		}
+	}
+
+	return baseConfidence
+}
+
+func (a *AutomationDetectorV2) DetectPhantomJS(userAgent string, navigator map[string]interface{}) PhantomJSDetection {
+	result := PhantomJSDetection{}
+
+	phantomUAIndicators := []string{
+		"phantomjs",
+		"slimerjs",
+		"phantom",
+	}
+	uaLower := strings.ToLower(userAgent)
+	for _, indicator := range phantomUAIndicators {
+		if strings.Contains(uaLower, indicator) {
+			result.Detected = true
+			result.Methods = append(result.Methods, "phantom_user_agent:"+indicator)
+			break
+		}
+	}
+
+	if phantom, ok := navigator["phantom"].(map[string]interface{}); ok {
+		result.Detected = true
+		if version, exists := phantom["version"]; exists {
+			result.Methods = append(result.Methods, fmt.Sprintf("phantom_version:%v", version))
+		}
+		if page, exists := phantom["page"]; exists {
+			if pageMap, ok := page.(map[string]interface{}); ok {
+				if _, hasContent := pageMap["content"]; hasContent {
+					result.Methods = append(result.Methods, "phantom_page_content")
+				}
+			}
+		}
+	}
+
+	phantomIndicators := []string{
+		"page",
+		"phantomjs",
+		"slimerjs",
+		"_phantom",
+		"callPhantomJS",
+	}
+	for _, indicator := range phantomIndicators {
+		if _, ok := navigator[indicator]; ok {
+			result.Detected = true
+			result.Methods = append(result.Methods, "phantom_indicator:"+indicator)
+			break
+		}
+	}
+
+	if callbacks, ok := navigator["callbacks"]; ok {
+		if cbMap, ok := callbacks.(map[string]interface{}); ok {
+			if len(cbMap) == 0 {
+				result.Detected = true
+				result.Methods = append(result.Methods, "phantom_empty_callbacks")
+			}
+		}
+	}
+
+	result.Confidence = a.calculatePhantomConfidence(result.Methods)
+
+	return result
+}
+
+func (a *AutomationDetectorV2) calculatePhantomConfidence(methods []string) float64 {
+	if len(methods) == 0 {
+		return 0.0
+	}
+
+	baseScore := 0.0
+	for _, method := range methods {
+		if strings.Contains(method, "user_agent") {
+			baseScore += 0.3
+		} else if strings.Contains(method, "phantom") && !strings.Contains(method, "indicator") {
+			baseScore += 0.5
+		} else {
+			baseScore += 0.2
+		}
+	}
+
+	return math.Min(baseScore, 1.0)
 }
 
 func (a *AutomationDetectorV2) DetectPuppeteer(userAgent string, headers map[string]string) PuppeteerDetection {
@@ -327,6 +472,18 @@ func (a *AutomationDetectorV2) DetectHeadlessChrome(navigator map[string]interfa
 		}
 	}
 
+	headlessResult := a.detectHeadlessWebdriver(navigator)
+	if headlessResult.Detected {
+		result.Detected = true
+		result.Methods = append(result.Methods, headlessResult.Methods...)
+	}
+
+	windowResult := a.detectWindowPropertyAnomalies(navigator)
+	if windowResult.Detected {
+		result.Detected = true
+		result.Methods = append(result.Methods, windowResult.Methods...)
+	}
+
 	result.Confidence = a.calculateConfidence(result.Methods)
 
 	return result
@@ -367,6 +524,12 @@ func (a *AutomationDetectorV2) AnalyzeMouseMovement(movements []MouseMovement) M
 		result.Reason = "too_linear"
 	}
 
+	mechanicalAnalysis := a.detectMechanicalMovement(movements)
+	if mechanicalAnalysis.IsMechanical {
+		result.Suspicious = true
+		result.Reason = "mechanical_pattern_detected"
+	}
+
 	pauses := a.detectPauses(movements)
 	result.PauseCount = len(pauses)
 	result.PausePattern = a.analyzePausePattern(pauses)
@@ -379,6 +542,190 @@ func (a *AutomationDetectorV2) AnalyzeMouseMovement(movements []MouseMovement) M
 	result.RiskScore = a.calculateRiskScore(result)
 
 	return result
+}
+
+type MechanicalMovementResult struct {
+	IsMechanical     bool
+	MechanicalScore  float64
+	LinearRatio      float64
+	UniformSpeedRatio float64
+	PatternType      string
+}
+
+func (a *AutomationDetectorV2) detectMechanicalMovement(movements []MouseMovement) MechanicalMovementResult {
+	result := MechanicalMovementResult{}
+
+	if len(movements) < 3 {
+		return result
+	}
+
+	linearAnalysis := a.analyzeLinearMovement(movements)
+	result.LinearRatio = linearAnalysis.LinearRatio
+	if linearAnalysis.LinearRatio > 0.95 {
+		result.MechanicalScore += 0.5
+		result.PatternType = "linear"
+	}
+
+	speedUniformity := a.analyzeSpeedUniformity(movements)
+	result.UniformSpeedRatio = speedUniformity
+	if speedUniformity > 0.95 {
+		result.MechanicalScore += 0.4
+		if result.PatternType == "linear" {
+			result.PatternType = "linear_uniform"
+		} else {
+			result.PatternType = "uniform_speed"
+		}
+	}
+
+	angleConsistency := a.analyzeAngleConsistency(movements)
+	if angleConsistency > 0.95 {
+		result.MechanicalScore += 0.3
+		result.PatternType += "_angle_consistent"
+	}
+
+	timeConsistency := a.analyzeTimeConsistency(movements)
+	if timeConsistency > 0.95 {
+		result.MechanicalScore += 0.2
+		result.PatternType += "_time_consistent"
+	}
+
+	result.IsMechanical = result.MechanicalScore > 0.6
+
+	return result
+}
+
+type LinearAnalysisResult struct {
+	LinearRatio     float64
+	DeviationPoints int
+	TotalPoints     int
+}
+
+func (a *AutomationDetectorV2) analyzeLinearMovement(movements []MouseMovement) LinearAnalysisResult {
+	result := LinearAnalysisResult{}
+
+	if len(movements) < 3 {
+		return result
+	}
+
+	start := movements[0]
+	end := movements[len(movements)-1]
+
+	totalDX := end.X - start.X
+	totalDY := end.Y - start.Y
+	totalDist := math.Sqrt(totalDX*totalDX + totalDY*totalDY)
+
+	if totalDist < 10 {
+		result.LinearRatio = 1.0
+		return result
+	}
+
+	result.TotalPoints = len(movements) - 2
+
+	for i := 1; i < len(movements)-1; i++ {
+		p := movements[i]
+		dx := p.X - start.X
+		dy := p.Y - start.Y
+
+		t := (dx*totalDX + dy*totalDY) / (totalDist * totalDist)
+
+		if t < 0 || t > 1 {
+			result.DeviationPoints++
+			continue
+		}
+
+		projX := start.X + t*totalDX
+		projY := start.Y + t*totalDY
+
+		deviation := math.Sqrt(math.Pow(p.X-projX, 2) + math.Pow(p.Y-projY, 2))
+
+		if deviation > 5 {
+			result.DeviationPoints++
+		}
+	}
+
+	if result.TotalPoints > 0 {
+		result.LinearRatio = 1.0 - (float64(result.DeviationPoints) / float64(result.TotalPoints))
+	}
+
+	return result
+}
+
+func (a *AutomationDetectorV2) analyzeSpeedUniformity(movements []MouseMovement) float64 {
+	speeds := a.calculateMovementSpeeds(movements)
+	if len(speeds) < 2 {
+		return 0.0
+	}
+
+	avg := a.calculateAverage(speeds)
+	if avg < 1.0 {
+		return 1.0
+	}
+
+	variance := a.calculateVariance(speeds, avg)
+	coefficientOfVariation := math.Sqrt(variance) / avg
+
+	return math.Max(0, 1.0-coefficientOfVariation)
+}
+
+func (a *AutomationDetectorV2) analyzeAngleConsistency(movements []MouseMovement) float64 {
+	if len(movements) < 3 {
+		return 0.0
+	}
+
+	angles := []float64{}
+	for i := 2; i < len(movements); i++ {
+		dx1 := movements[i-1].X - movements[i-2].X
+		dy1 := movements[i-1].Y - movements[i-2].Y
+		dx2 := movements[i].X - movements[i-1].X
+		dy2 := movements[i].Y - movements[i-1].Y
+
+		dot := dx1*dx2 + dy1*dy2
+		mag1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+		mag2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			angle := math.Acos(math.Max(-1, math.Min(1, cosAngle)))
+			angles = append(angles, angle)
+		}
+	}
+
+	if len(angles) == 0 {
+		return 1.0
+	}
+
+	avgAngle := a.calculateAverage(angles)
+	variance := a.calculateVariance(angles, avgAngle)
+
+	consistency := 1.0 / (1.0 + math.Sqrt(variance)*10)
+
+	return consistency
+}
+
+func (a *AutomationDetectorV2) analyzeTimeConsistency(movements []MouseMovement) float64 {
+	if len(movements) < 2 {
+		return 0.0
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(movements); i++ {
+		interval := movements[i].Timestamp.Sub(movements[i-1].Timestamp).Seconds()
+		intervals = append(intervals, interval)
+	}
+
+	if len(intervals) < 2 {
+		return 0.0
+	}
+
+	avg := a.calculateAverage(intervals)
+	if avg < 0.001 {
+		return 1.0
+	}
+
+	variance := a.calculateVariance(intervals, avg)
+	coefficientOfVariation := math.Sqrt(variance) / avg
+
+	return math.Max(0, 1.0-coefficientOfVariation)
 }
 
 func (a *AutomationDetectorV2) AnalyzeKeyboardInput(keypresses []KeyPress) KeyboardAnalysisResult {
@@ -412,6 +759,18 @@ func (a *AutomationDetectorV2) AnalyzeKeyboardInput(keypresses []KeyPress) Keybo
 		result.Reason = "mechanical_input"
 	}
 
+	pasteResult := a.detectPasteBehavior(keypresses)
+	if pasteResult.IsPasted {
+		result.Suspicious = true
+		result.Reason = "paste_detected"
+	}
+
+	speedAnalysis := a.analyzeTypingSpeed(keypresses)
+	if speedAnalysis.IsSuspicious {
+		result.Suspicious = true
+		result.Reason = speedAnalysis.SuspiciousReason
+	}
+
 	shiftCount := 0
 	for _, kp := range keypresses {
 		if kp.Key == "Shift" {
@@ -421,6 +780,145 @@ func (a *AutomationDetectorV2) AnalyzeKeyboardInput(keypresses []KeyPress) Keybo
 	result.ShiftUsage = float64(shiftCount) / float64(len(keypresses))
 
 	result.RiskScore = a.calculateKeyboardRiskScore(result)
+
+	return result
+}
+
+type PasteDetectionResult struct {
+	IsPasted          bool
+	PasteProbability float64
+	PasteIndicators  []string
+}
+
+func (a *AutomationDetectorV2) detectPasteBehavior(keypresses []KeyPress) PasteDetectionResult {
+	result := PasteDetectionResult{}
+
+	if len(keypresses) < 10 {
+		return result
+	}
+
+	intervals := a.calculateKeyIntervals(keypresses)
+	avgInterval := a.calculateAverage(intervals)
+
+	if avgInterval < 0.005 {
+		result.PasteProbability = 0.8
+		result.PasteIndicators = append(result.PasteIndicators, "instant_input")
+	}
+
+	intervalsWithoutErrors := []float64{}
+	for i, kp := range keypresses {
+		if kp.Key != "Backspace" && kp.Key != "Delete" && kp.Key != "Control" && kp.Key != "Meta" {
+			if i > 0 {
+				prevkp := keypresses[i-1]
+				if prevkp.Key != "Backspace" && prevkp.Key != "Delete" && prevkp.Key != "Control" && prevkp.Key != "Meta" {
+					interval := keypresses[i].Timestamp.Sub(keypresses[i-1].Timestamp).Seconds()
+					intervalsWithoutErrors = append(intervalsWithoutErrors, interval)
+				}
+			}
+		}
+	}
+
+	if len(intervalsWithoutErrors) > 5 {
+		avgClean := a.calculateAverage(intervalsWithoutErrors)
+		varianceClean := a.calculateVariance(intervalsWithoutErrors, avgClean)
+
+		if varianceClean < 0.0001 && avgClean < 0.01 {
+			result.PasteProbability += 0.6
+			result.PasteIndicators = append(result.PasteIndicators, "uniform_micro_timing")
+		}
+
+		medianClean := a.calculateMedian(intervalsWithoutErrors)
+		if math.Abs(avgClean-medianClean) < 0.001 {
+			result.PasteProbability += 0.4
+			result.PasteIndicators = append(result.PasteIndicators, "perfect_timing_regularity")
+		}
+	}
+
+	keyLengthVariance := 0.0
+	for i := 1; i < len(intervalsWithoutErrors); i++ {
+		diff := math.Abs(intervalsWithoutErrors[i] - intervalsWithoutErrors[i-1])
+		keyLengthVariance += diff * diff
+	}
+	if len(intervalsWithoutErrors) > 1 {
+		keyLengthVariance /= float64(len(intervalsWithoutErrors) - 1)
+	}
+
+	if keyLengthVariance < 0.00001 {
+		result.PasteProbability += 0.5
+		result.PasteIndicators = append(result.PasteIndicators, "identical_timing")
+	}
+
+	modifierCount := 0
+	for _, kp := range keypresses {
+		if kp.Key == "Control" || kp.Key == "Meta" || kp.Key == "Alt" {
+			modifierCount++
+		}
+	}
+	modifierRatio := float64(modifierCount) / float64(len(keypresses))
+
+	if modifierRatio < 0.05 && len(keypresses) > 20 {
+		result.PasteProbability += 0.3
+		result.PasteIndicators = append(result.PasteIndicators, "no_modifiers")
+	}
+
+	result.IsPasted = result.PasteProbability > 0.6
+
+	return result
+}
+
+type TypingSpeedResult struct {
+	AverageSpeed      float64
+	IsSuspicious      bool
+	SuspiciousReason  string
+	SpeedPattern      string
+}
+
+func (a *AutomationDetectorV2) analyzeTypingSpeed(keypresses []KeyPress) TypingSpeedResult {
+	result := TypingSpeedResult{}
+
+	if len(keypresses) < 3 {
+		return result
+	}
+
+	intervals := a.calculateKeyIntervals(keypresses)
+	avgInterval := a.calculateAverage(intervals)
+
+	charsPerSecond := 1.0 / (avgInterval + 0.001)
+	result.AverageSpeed = charsPerSecond
+
+	if charsPerSecond > 30 {
+		result.IsSuspicious = true
+		result.SuspiciousReason = "extremely_fast_typing"
+		result.SpeedPattern = "machine_gun"
+	} else if charsPerSecond > 15 {
+		variance := a.calculateVariance(intervals, avgInterval)
+		if variance < 0.01 {
+			result.IsSuspicious = true
+			result.SuspiciousReason = "fast_mechanical_typing"
+			result.SpeedPattern = "mechanical_fast"
+		} else {
+			result.SpeedPattern = "fast_human"
+		}
+	} else if charsPerSecond < 1 {
+		result.SpeedPattern = "very_slow"
+	} else {
+		result.SpeedPattern = "normal"
+	}
+
+	speedChanges := 0
+	for i := 1; i < len(intervals); i++ {
+		ratio := intervals[i] / (intervals[i-1] + 0.001)
+		if ratio < 0.5 || ratio > 2.0 {
+			speedChanges++
+		}
+	}
+
+	speedChangeRatio := float64(speedChanges) / float64(len(intervals))
+	if speedChangeRatio > 0.8 && result.SpeedPattern == "normal" {
+		result.IsSuspicious = true
+		result.SuspiciousReason = "erratic_speed_pattern"
+		result.SpeedPattern = "erratic"
+	}
 
 	return result
 }
@@ -672,6 +1170,127 @@ func (a *AutomationDetectorV2) userAgentFromNavigator(navigator map[string]inter
 		return ua
 	}
 	return ""
+}
+
+func (a *AutomationDetectorV2) detectHeadlessWebdriver(navigator map[string]interface{}) HeadlessDetection {
+	result := HeadlessDetection{}
+
+	if webdriver, ok := navigator["webdriver"].(bool); ok && webdriver {
+		result.Detected = true
+		result.Methods = append(result.Methods, "navigator_webdriver_true")
+	}
+
+	if chrome, ok := navigator["chrome"].(map[string]interface{}); ok {
+		if runtime, exists := chrome["runtime"]; exists {
+			if runtimeMap, ok := runtime.(map[string]interface{}); ok {
+				if _, hasConnect := runtimeMap["connect"]; !hasConnect {
+					result.Detected = true
+					result.Methods = append(result.Methods, "chrome_runtime_missing_connect")
+				}
+			}
+		}
+	}
+
+	automationIndicators := []string{
+		"__webdriver_script_function",
+		"__webdriver_script_func",
+		"__webdriver_script_element",
+		"__webdriver_evaluate",
+		"_selenium",
+		"callSelenium",
+		"_callPhantomJS",
+		"fb_xd_fragment",
+		"phantom",
+	}
+
+	for _, indicator := range automationIndicators {
+		if _, ok := navigator[indicator]; ok {
+			result.Detected = true
+			result.Methods = append(result.Methods, "automation_indicator:"+indicator)
+			break
+		}
+	}
+
+	if permissions, ok := navigator["permissions"].(string); ok {
+		if strings.ToLower(permissions) == "denied" {
+			result.Detected = true
+			result.Methods = append(result.Methods, "permissions_denied")
+		}
+	}
+
+	result.Confidence = a.calculateConfidence(result.Methods)
+	return result
+}
+
+func (a *AutomationDetectorV2) detectWindowPropertyAnomalies(navigator map[string]interface{}) HeadlessDetection {
+	result := HeadlessDetection{}
+
+	requiredWindowProps := []string{"location", "history", "navigator", "screen", "performance"}
+	missingProps := []string{}
+
+	for _, prop := range requiredWindowProps {
+		if _, ok := navigator[prop]; !ok {
+			missingProps = append(missingProps, prop)
+		}
+	}
+
+	if len(missingProps) > 2 {
+		result.Detected = true
+		result.Methods = append(result.Methods, fmt.Sprintf("missing_window_props:%s", strings.Join(missingProps, ",")))
+	}
+
+	if innerWidth, ok := navigator["innerWidth"].(float64); ok {
+		if innerWidth == 0 || innerWidth > 10000 {
+			result.Detected = true
+			result.Methods = append(result.Methods, "abnormal_innerWidth")
+		}
+	}
+
+	if innerHeight, ok := navigator["innerHeight"].(float64); ok {
+		if innerHeight == 0 || innerHeight > 10000 {
+			result.Detected = true
+			result.Methods = append(result.Methods, "abnormal_innerHeight")
+		}
+	}
+
+	if outerWidth, ok := navigator["outerWidth"].(float64); ok {
+		if outerWidth == 0 {
+			result.Detected = true
+			result.Methods = append(result.Methods, "zero_outerWidth")
+		}
+	}
+
+	if devicePixelRatio, ok := navigator["devicePixelRatio"].(float64); ok {
+		if devicePixelRatio == 0 || devicePixelRatio > 5 {
+			result.Detected = true
+			result.Methods = append(result.Methods, "abnormal_devicePixelRatio")
+		}
+	}
+
+	if statusBar, ok := navigator["statusbar"]; ok {
+		if status, ok := statusBar.(map[string]interface{}); ok {
+			if visible, exists := status["visible"]; exists {
+				if vis, ok := visible.(bool); ok && !vis {
+					result.Detected = true
+					result.Methods = append(result.Methods, "statusbar_not_visible")
+				}
+			}
+		}
+	}
+
+	if toolbar, ok := navigator["toolbar"]; ok {
+		if tool, ok := toolbar.(map[string]interface{}); ok {
+			if visible, exists := tool["visible"]; exists {
+				if vis, ok := visible.(bool); ok && !vis {
+					result.Detected = true
+					result.Methods = append(result.Methods, "toolbar_not_visible")
+				}
+			}
+		}
+	}
+
+	result.Confidence = a.calculateConfidence(result.Methods)
+	return result
 }
 
 func (a *AutomationDetectorV2) DetectAdvancedHeadless(navigator map[string]interface{}, screen map[string]interface{}) AdvancedHeadlessResult {
